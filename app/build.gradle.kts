@@ -13,9 +13,9 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
-        // Values intentionally remain unset until the existing Supabase project is wired safely.
-        buildConfigField("String", "SUPABASE_URL", "\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"")
+        // Intentionally blank until the intended Supabase project is wired safely.
+        buildConfigField("String", "SUPABASE_URL", "\"\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"\"")
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
