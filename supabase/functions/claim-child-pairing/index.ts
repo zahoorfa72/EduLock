@@ -44,6 +44,11 @@ Deno.serve(async (req) => {
     const admin = createClient(url, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    const { data: withinLimit, error: rateError } = await admin.schema("edulock").rpc("consume_pairing_attempt", {
+      p_user_id: authData.user.id,
+    });
+    if (rateError || withinLimit !== true) return json({ error: "Too many pairing attempts. Try again in 15 minutes." }, 429);
+
     const { data: childId, error: claimError } = await admin.schema("edulock").rpc("claim_child_pairing", {
       p_code_hash: await sha256(code),
       p_user_id: authData.user.id,
