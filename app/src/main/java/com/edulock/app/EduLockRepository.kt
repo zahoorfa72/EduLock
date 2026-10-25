@@ -47,7 +47,7 @@ data class TaskRow(
     val active: Boolean
 )
 
-data class AllowedApp(val id: String, val childId: String, val packageName: String, val displayName: String)
+data class AllowedApp(val id: String, val childId: String, val packageName: String, val displayName: String, val enabled: Boolean = true)
 data class AttemptRow(
     val id: String,
     val childId: String,
@@ -129,7 +129,16 @@ class EduLockRepository(context: Context) {
         val session = sessionFrom(json, accountRole)
             ?: throw IOException("Sign-in succeeded without a session. Confirm your email address and try again.")
         sessionStore.save(session)
-        return session
+        return try {
+            val profileRows = restArray("user_profiles?select=account_role&user_id=eq." + session.userId + "&limit=1")
+            val storedRole = profileRows.optJSONObject(0)?.optString("account_role")
+                ?: throw IOException("Your account profile is not ready. Apply the EduLock Supabase migrations and try again.")
+            if (storedRole != "parent" && storedRole != "child") throw IOException("Your account role is not valid.")
+            session.copy(accountRole = storedRole).also { sessionStore.save(it) }
+        } catch (e: Exception) {
+            signOut()
+            throw e
+        }
     }
 
     suspend fun restoreSession(): AuthSession? {
@@ -337,7 +346,7 @@ class EduLockRepository(context: Context) {
         val rows = restArray("allowed_apps?select=id,child_id,package_name,display_name,enabled&child_id=eq.$childId&order=display_name.asc")
         return (0 until rows.length()).mapNotNull { i ->
             rows.optJSONObject(i)?.let { row ->
-                AllowedApp(row.optString("id"), row.optString("child_id"), row.optString("package_name"), row.optString("display_name"))
+                AllowedApp(row.optString("id"), row.optString("child_id"), row.optString("package_name"), row.optString("display_name"), row.optBoolean("enabled", true))
             }
         }
     }
@@ -361,7 +370,7 @@ class EduLockRepository(context: Context) {
 
     suspend fun refreshChildDeviceRestrictions(child: ChildProfile): Int {
         requireSession("child")
-        val allowed = loadAllowedApps(child.id).map { it.packageName }.toMutableSet()
+        val allowed = loadAllowedApps(child.id).filter { it.enabled }.map { it.packageName }.toMutableSet()
         allowed += "com.edulock.app"
         val startOfDay = LocalDate.now(ZoneOffset.UTC).atStartOfDay().toInstant(ZoneOffset.UTC)
         val stamp = DateTimeFormatter.ISO_INSTANT.format(startOfDay)
@@ -424,7 +433,7 @@ class EduLockRepository(context: Context) {
                 sessionStore.save(session)
                 result = perform(path, method, body, session.accessToken, profile)
             } catch (_: Exception) {
-                sessionStore.clear()
+                signOut()
                 throw IOException("Your session expired. Sign in again.")
             }
         }
@@ -448,8 +457,8 @@ class EduLockRepository(context: Context) {
             .header("Authorization", "Bearer ${bearerToken ?: anonKey}")
             .header("Accept", "application/json")
         if (profile) {
-            if (method == "GET" || method == "DELETE") builder.header("Accept-Profile", "edulock")
-            if (method != "GET" && method != "DELETE") builder.header("Content-Profile", "edulock")
+            if (method == "GET") builder.header("Accept-Profile", "edulock")
+            if (method != "GET") builder.header("Content-Profile", "edulock")
         }
         if (method == "POST" || method == "PATCH" || method == "PUT") {
             builder.header("Content-Type", "application/json")
