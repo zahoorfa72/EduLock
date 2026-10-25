@@ -4,6 +4,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val supabaseUrl = providers.environmentVariable("SUPABASE_URL").orElse("").get()
+val supabaseAnonKey = providers.environmentVariable("SUPABASE_ANON_KEY").orElse("").get()
+fun quotedBuildConfig(value: String): String =
+    "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
 android {
     namespace = "com.edulock.app"
     compileSdk = 35
@@ -11,11 +16,10 @@ android {
         applicationId = "com.edulock.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
-        // Intentionally blank until the intended Supabase project is wired safely.
-        buildConfigField("String", "SUPABASE_URL", "\"\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"\"")
+        versionCode = 2
+        versionName = "0.2.0"
+        buildConfigField("String", "SUPABASE_URL", quotedBuildConfig(supabaseUrl))
+        buildConfigField("String", "SUPABASE_ANON_KEY", quotedBuildConfig(supabaseAnonKey))
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
@@ -33,5 +37,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
