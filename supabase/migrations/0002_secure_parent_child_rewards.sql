@@ -148,6 +148,42 @@ grant select (id, subject_id, prompt, question_type, options, image_path, audio_
   on edulock.questions to authenticated;
 grant insert, update, delete on edulock.questions to authenticated;
 
+-- Pairing code guessing protection: at most 10 claim attempts per child account every 15 minutes.
+create table if not exists edulock.pairing_claim_limits (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  window_started_at timestamptz not null default now(),
+  attempt_count integer not null default 0 check (attempt_count between 0 and 100000)
+);
+alter table edulock.pairing_claim_limits enable row level security;
+revoke all on edulock.pairing_claim_limits from public, anon, authenticated;
+
+create or replace function edulock.consume_pairing_attempt(p_user_id uuid)
+returns boolean
+language plpgsql security definer set search_path = ''
+as $
+declare v_role text; v_count integer;
+begin
+  select p.account_role into v_role from edulock.user_profiles p where p.user_id = p_user_id;
+  if v_role is distinct from 'child' then return false; end if;
+
+  insert into edulock.pairing_claim_limits(user_id, window_started_at, attempt_count)
+    values (p_user_id, now(), 1)
+  on conflict (user_id) do update set
+    window_started_at = case
+      when edulock.pairing_claim_limits.window_started_at < now() - interval '15 minutes' then now()
+      else edulock.pairing_claim_limits.window_started_at
+    end,
+    attempt_count = case
+      when edulock.pairing_claim_limits.window_started_at < now() - interval '15 minutes' then 1
+      else edulock.pairing_claim_limits.attempt_count + 1
+    end
+  returning attempt_count into v_count;
+  return v_count <= 10;
+end;
+$;
+revoke all on function edulock.consume_pairing_attempt(uuid) from public, anon, authenticated;
+grant execute on function edulock.consume_pairing_attempt(uuid) to service_role;
+
 -- Atomic, service-role-only one-time pairing claim.
 create or replace function edulock.claim_child_pairing(p_code_hash text, p_user_id uuid)
 returns uuid
