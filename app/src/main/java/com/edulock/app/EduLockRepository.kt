@@ -32,8 +32,27 @@ data class QuestionRow(
     val subjectId: String,
     val prompt: String,
     val questionType: String,
+    val options: List<String>,
+    val languageCode: String,
+    val conceptKey: String
+)
+
+data class QuestionTranslation(
+    val id: String,
+    val questionId: String,
+    val languageCode: String,
+    val prompt: String,
     val options: List<String>
 )
+
+data class ConceptProgress(
+    val conceptKey: String,
+    val languageCode: String,
+    val correct: Int,
+    val total: Int
+) {
+    val percent: Int get() = if (total == 0) 0 else (correct * 100) / total
+}
 
 data class TaskRow(
     val id: String,
@@ -240,10 +259,15 @@ class EduLockRepository(context: Context) {
         return SubjectRow(row.getString("id"), row.getString("family_id"), row.getString("title"), row.optString("language_code", "en"))
     }
 
-    suspend fun addQuestion(subjectId: String, prompt: String, type: String, options: List<String>, answer: String) {
+    suspend fun addQuestion(
+        subjectId: String, prompt: String, type: String, options: List<String>, answer: String,
+        languageCode: String, conceptKey: String
+    ) {
         requireSession("parent")
         require(prompt.trim().isNotEmpty()) { "Enter the question" }
         require(answer.trim().isNotEmpty()) { "Enter the correct answer" }
+        require(languageCode.matches(Regex("[A-Za-z][A-Za-z0-9-]{1,15}"))) { "Use a language code such as en, ur or sd." }
+        require(conceptKey.trim().isNotEmpty()) { "Enter a concept tag. Reuse the same tag for questions that test the same idea." }
         require(type in setOf("multiple_choice", "true_false", "short_answer", "numeric")) { "Select a valid question type" }
         if (type == "multiple_choice") {
             require(options.size >= 2) { "Add at least two answer options" }
@@ -262,21 +286,97 @@ class EduLockRepository(context: Context) {
                 .put("prompt", prompt.trim().take(10_000))
                 .put("question_type", type)
                 .put("options", JSONArray(options.map { it.trim().take(500) }.filter { it.isNotEmpty() }))
-                .put("answer_key", JSONObject().put("answer", answer.trim().take(1000))))
+                .put("answer_key", JSONObject().put("answer", answer.trim().take(1000)))
+                .put("language_code", languageCode.trim().lowercase())
+                .put("concept_key", conceptKey.trim().replace(Regex("\\s+"), " ").take(160)))
     }
 
     suspend fun loadQuestions(subjectId: String, limit: Int = 500): List<QuestionRow> {
-        val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,created_at&subject_id=eq.$subjectId&order=created_at.asc,id.asc&limit=${limit.coerceIn(1, 500)}")
+        requireSession()
+        val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,created_at&subject_id=eq.$subjectId&order=created_at.asc,id.asc&limit=${limit.coerceIn(1, 500)}")
         return (0 until rows.length()).mapNotNull { i ->
-            rows.optJSONObject(i)?.let { row ->
-                val opts = row.optJSONArray("options") ?: JSONArray()
-                QuestionRow(
-                    row.optString("id"), row.optString("subject_id"), row.optString("prompt"),
-                    row.optString("question_type", "short_answer"),
-                    (0 until opts.length()).map { opts.optString(it) }
-                )
+            rows.optJSONObject(i)?.let { row -> row.toQuestionRow() }
+        }
+    }
+
+    suspend fun loadQuestionTranslations(questionIds: List<String>): Map<String, List<QuestionTranslation>> {
+        requireSession()
+        val ids = questionIds.distinct().filter { it.matches(Regex("[0-9a-fA-F-]{36}")) }
+        if (ids.isEmpty()) return emptyMap()
+        val rows = restArray(
+            "question_translations?select=id,question_id,language_code,prompt,options,created_at" +
+                "&question_id=in.(" + ids.joinToString(",") + ")&order=language_code.asc"
+        )
+        val result = linkedMapOf<String, MutableList<QuestionTranslation>>()
+        for (i in 0 until rows.length()) {
+            val row = rows.optJSONObject(i) ?: continue
+            val opts = row.optJSONArray("options") ?: JSONArray()
+            val translation = QuestionTranslation(
+                row.optString("id"), row.optString("question_id"), row.optString("language_code"),
+                row.optString("prompt"), (0 until opts.length()).map { opts.optString(it) }
+            )
+            result.getOrPut(translation.questionId) { mutableListOf() }.add(translation)
+        }
+        return result.mapValues { it.value.toList() }
+    }
+
+    suspend fun saveQuestionTranslation(
+        question: QuestionRow, languageCode: String, prompt: String,
+        options: List<String>, acceptedAnswers: List<String>
+    ) {
+        requireSession("parent")
+        val lang = languageCode.trim().lowercase()
+        require(lang.matches(Regex("[a-z][a-z0-9-]{1,15}"))) { "Use a language code such as en, ur or sd." }
+        require(!lang.equals(question.languageCode, ignoreCase = true)) {
+            "Choose a different language from the question's original language."
+        }
+        require(prompt.trim().isNotEmpty()) { "Enter the translated question." }
+        val accepted = acceptedAnswers.map { it.trim().take(1000) }.filter { it.isNotEmpty() }.distinct()
+        require(accepted.isNotEmpty() && accepted.size <= 30) { "Enter between 1 and 30 accepted answers, one per line." }
+        val cleanOptions = options.map { it.trim().take(500) }.filter { it.isNotEmpty() }
+        if (question.questionType == "multiple_choice") {
+            require(cleanOptions.size >= 2) { "Add at least two translated answer options." }
+            require(accepted.any { answer -> cleanOptions.any { it.equals(answer, ignoreCase = true) } }) {
+                "At least one accepted answer must match a translated option."
             }
         }
+        val body = JSONObject()
+            .put("question_id", question.id)
+            .put("language_code", lang)
+            .put("prompt", prompt.trim().take(10000))
+            .put("options", JSONArray(cleanOptions))
+            .put("accepted_answers", JSONArray(accepted))
+            .put("updated_at", java.time.Instant.now().toString())
+        val existing = restArray(
+            "question_translations?select=id&question_id=eq.${question.id}&language_code=eq.$lang&limit=1"
+        )
+        if (existing.length() > 0) {
+            restArray(
+                "question_translations?question_id=eq.${question.id}&language_code=eq.$lang",
+                "PATCH", body
+            )
+        } else {
+            restArray("question_translations?select=id", "POST", body)
+        }
+    }
+
+    suspend fun loadConceptProgress(): List<ConceptProgress> {
+        requireSession("parent")
+        val rows = restArray(
+            "attempt_answers?select=concept_key,language_code,is_correct,created_at&order=created_at.desc&limit=1000"
+        )
+        data class Accumulator(var correct: Int = 0, var total: Int = 0)
+        val grouped = linkedMapOf<Pair<String, String>, Accumulator>()
+        for (i in 0 until rows.length()) {
+            val row = rows.optJSONObject(i) ?: continue
+            val key = row.optString("concept_key").ifBlank { "general" }
+            val language = row.optString("language_code").ifBlank { "und" }
+            val acc = grouped.getOrPut(key to language) { Accumulator() }
+            acc.total++
+            if (row.optBoolean("is_correct")) acc.correct++
+        }
+        return grouped.map { (key, acc) -> ConceptProgress(key.first, key.second, acc.correct, acc.total) }
+            .sortedWith(compareBy<ConceptProgress> { it.conceptKey.lowercase() }.thenBy { it.languageCode })
     }
 
     suspend fun addTask(
@@ -311,11 +411,20 @@ class EduLockRepository(context: Context) {
         return (0 until rows.length()).mapNotNull { i -> rows.optJSONObject(i)?.toTaskRow() }
     }
 
-    suspend fun submitTask(taskId: String, answers: Map<String, String>): TaskResult {
+    suspend fun submitTask(
+        taskId: String, answers: Map<String, String>, answerLanguages: Map<String, String>
+    ): TaskResult {
         requireSession("child")
         val payload = JSONArray()
         answers.forEach { (questionId, answer) ->
-            payload.put(JSONObject().put("question_id", questionId).put("answer", answer))
+            val languageCode = answerLanguages[questionId].orEmpty()
+            require(languageCode.matches(Regex("[A-Za-z][A-Za-z0-9-]{1,15}"))) {
+                "Select a valid language for every answer."
+            }
+            payload.put(JSONObject()
+                .put("question_id", questionId)
+                .put("answer", answer)
+                .put("language_code", languageCode))
         }
         val result = requestFunction("submit-task-attempt", JSONObject().put("task_id", taskId).put("answers", payload))
         return TaskResult(
@@ -457,8 +566,8 @@ class EduLockRepository(context: Context) {
             .header("Authorization", "Bearer ${bearerToken ?: anonKey}")
             .header("Accept", "application/json")
         if (profile) {
-            if (method == "GET") builder.header("Accept-Profile", "edulock")
-            if (method != "GET") builder.header("Content-Profile", "edulock")
+            if (method == "GET" || method == "DELETE") builder.header("Accept-Profile", "edulock")
+            else builder.header("Content-Profile", "edulock")
         }
         if (method == "POST" || method == "PATCH" || method == "PUT") {
             builder.header("Content-Type", "application/json")
@@ -537,6 +646,19 @@ class EduLockRepository(context: Context) {
         dailyCapMinutes = optInt("daily_cap_minutes").coerceIn(0, 1440),
         active = optBoolean("active", true)
     )
+
+    private fun JSONObject.toQuestionRow(): QuestionRow {
+        val opts = optJSONArray("options") ?: JSONArray()
+        return QuestionRow(
+            id = optString("id"),
+            subjectId = optString("subject_id"),
+            prompt = optString("prompt"),
+            questionType = optString("question_type", "short_answer"),
+            options = (0 until opts.length()).map { opts.optString(it) },
+            languageCode = optString("language_code", "en"),
+            conceptKey = optString("concept_key", "general")
+        )
+    }
 
     private fun ensureConfiguredIfNeeded() = ensureConfigured()
 
