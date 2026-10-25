@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="edulock_accessibility_service_name">EduLock app restrictions</string>
+    <string name="edulock_accessibility_service_description">With the parent’s permission, EduLock restricts unapproved apps and limits approved app time. It observes app changes only and does not read screen text.</string>
+</resources>
