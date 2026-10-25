@@ -52,7 +52,7 @@ import kotlinx.coroutines.launch
 
 private enum class AppScreen {
     AUTH, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD,
-    SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ASSIGN_TASK,
+    SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
     REPORTS, ALLOWED_APPS, PLAY_TASK, TASK_RESULT
 }
 
@@ -77,6 +77,10 @@ private fun EduLockApp(repository: EduLockRepository) {
     var selectedChild by remember { mutableStateOf<ChildProfile?>(null) }
     var selectedSubject by remember { mutableStateOf<SubjectRow?>(null) }
     var questions by remember { mutableStateOf(emptyList<QuestionRow>()) }
+    var questionTranslations by remember { mutableStateOf<Map<String, List<QuestionTranslation>>>(emptyMap()) }
+    var answerLanguages by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var conceptProgress by remember { mutableStateOf(emptyList<ConceptProgress>()) }
+    var selectedQuestionForTranslation by remember { mutableStateOf<QuestionRow?>(null) }
     var tasks by remember { mutableStateOf(emptyList<TaskRow>()) }
     var attempts by remember { mutableStateOf(emptyList<AttemptRow>()) }
     var allowedApps by remember { mutableStateOf(emptyList<AllowedApp>()) }
@@ -98,6 +102,12 @@ private fun EduLockApp(repository: EduLockRepository) {
     var questionType by remember { mutableStateOf("multiple_choice") }
     var questionOptions by remember { mutableStateOf("") }
     var questionAnswer by remember { mutableStateOf("") }
+    var questionLanguage by remember { mutableStateOf("en") }
+    var questionConceptKey by remember { mutableStateOf("") }
+    var translationLanguage by remember { mutableStateOf("ur") }
+    var translationPrompt by remember { mutableStateOf("") }
+    var translationOptions by remember { mutableStateOf("") }
+    var translationAcceptedAnswers by remember { mutableStateOf("") }
     var taskTitle by remember { mutableStateOf("") }
     var taskQuestionCount by remember { mutableStateOf("5") }
     var taskPassPercent by remember { mutableStateOf("70") }
@@ -372,19 +382,35 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.QUESTIONS -> ScreenFrame(selectedSubject?.title ?: "Questions", onBack = { screen = AppScreen.SUBJECTS }, notice = notice, busy = busy) {
                     val subject = selectedSubject
                     if (subject != null) {
-                        Text("Question language: " + subject.languageCode + ". Use the chosen language's script; Urdu and Sindhi text are supported.")
+                        Text("Create a question in " + subject.languageCode + " and give related questions the same concept tag. The tag lets Concept Bridge report understanding separately from language.")
                         Button(onClick = {
                             questionPrompt = ""; questionOptions = ""; questionAnswer = ""; questionType = "multiple_choice"
+                            questionLanguage = subject.languageCode
+                            questionConceptKey = ""
                             screen = AppScreen.ADD_QUESTION
                         }, modifier = Modifier.fillMaxWidth()) { Text("Add question") }
                         if (questions.isEmpty()) Text("No questions yet.")
                         questions.forEachIndexed { index, question ->
-                            CompositionLocalProvider(LocalLayoutDirection provides directionFor(subject.languageCode)) {
+                            CompositionLocalProvider(LocalLayoutDirection provides directionFor(question.languageCode)) {
                                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                         Text((index + 1).toString() + ". " + question.prompt, fontWeight = FontWeight.SemiBold)
                                         Text("Type: " + readableQuestionType(question.questionType))
+                                        Text("Language: " + question.languageCode + " • Concept tag: " + question.conceptKey)
                                         if (question.options.isNotEmpty()) Text("Options: " + question.options.joinToString(" • "))
+                                        Text("Translations: " + (questionTranslations[question.id]?.size ?: 0))
+                                        OutlinedButton(onClick = {
+                                            selectedQuestionForTranslation = question
+                                            translationLanguage = when (question.languageCode.lowercase()) {
+                                                "en" -> "ur"
+                                                "ur" -> "sd"
+                                                else -> "en"
+                                            }
+                                            translationPrompt = ""
+                                            translationOptions = ""
+                                            translationAcceptedAnswers = ""
+                                            screen = AppScreen.ADD_TRANSLATION
+                                        }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Add / edit translation") }
                                     }
                                 }
                             }
@@ -393,10 +419,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                 }
 
                 AppScreen.ADD_QUESTION -> ScreenFrame("Add question", onBack = { screen = AppScreen.QUESTIONS }, notice = notice, busy = busy) {
-                    val lang = selectedSubject?.languageCode ?: "en"
-                    Text("Language: " + lang + ". You can paste or type Urdu, Sindhi, English or another language.")
+                    val lang = questionLanguage
+                    Text("Question language: " + lang + ". Type in Urdu, Sindhi, English or another Unicode language.")
                     CompositionLocalProvider(LocalLayoutDirection provides directionFor(lang)) {
                         Field(questionPrompt, { questionPrompt = it }, "Question prompt")
+                        Field(questionConceptKey, { questionConceptKey = it }, "Concept tag (reuse for same idea across questions)")
+                        Field(questionLanguage, { questionLanguage = it }, "Question language code (en, ur, sd, etc.)")
                         Text("Question type")
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             OutlinedButton(onClick = { questionType = "multiple_choice" }) { Text(if (questionType == "multiple_choice") "✓ MCQ" else "MCQ") }
@@ -409,20 +437,55 @@ private fun EduLockApp(repository: EduLockRepository) {
                         if (questionType == "multiple_choice") {
                             Field(questionOptions, { questionOptions = it }, "Options (one per line)")
                         } else if (questionType == "true_false") {
-                            Text("For a true/false question, the correct answer must be true or false.")
+                            Text("Save the canonical answer as true or false. A translation can use localized labels and accepted answers.")
                         }
-                        Field(questionAnswer, { questionAnswer = it }, "Correct answer (stored privately; never sent to child devices)")
+                        Field(questionAnswer, { questionAnswer = it }, "Canonical correct answer (private)")
                     }
                     Button(onClick = {
                         execute {
                             val subject = selectedSubject ?: throw IllegalStateException("Choose a subject first.")
                             val options = questionOptions.lines().map { it.trim() }.filter { it.isNotEmpty() }
-                            repository.addQuestion(subject.id, questionPrompt, questionType, options, questionAnswer)
+                            repository.addQuestion(subject.id, questionPrompt, questionType, options, questionAnswer, questionLanguage, questionConceptKey)
                             questions = repository.loadQuestions(subject.id)
+                            questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
                             screen = AppScreen.QUESTIONS
-                            notice = "Question saved. The answer key stays server-side for grading."
+                            notice = "Question saved. Add translations from the question card to activate Concept Bridge."
                         }
-                    }, enabled = !busy && questionPrompt.isNotBlank() && questionAnswer.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Save question") }
+                    }, enabled = !busy && questionPrompt.isNotBlank() && questionAnswer.isNotBlank() && questionConceptKey.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Save question") }
+                }
+
+                AppScreen.ADD_TRANSLATION -> ScreenFrame("Concept Bridge — translation", onBack = { screen = AppScreen.QUESTIONS }, notice = notice, busy = busy) {
+                    val original = selectedQuestionForTranslation
+                    if (original == null) {
+                        Text("Choose a question first.")
+                    } else {
+                        Text("Original: " + original.prompt)
+                        Text("Concept tag: " + original.conceptKey + " • Original language: " + original.languageCode)
+                        Text("Save each translated question with its translated options and accepted correct answers. The child can switch between these language versions without changing the underlying question or concept.")
+                        Field(translationLanguage, { translationLanguage = it }, "Target language code (en, ur, sd, etc.)")
+                        CompositionLocalProvider(LocalLayoutDirection provides directionFor(translationLanguage)) {
+                            Field(translationPrompt, { translationPrompt = it }, "Translated question prompt")
+                            if (original.questionType == "multiple_choice" || original.questionType == "true_false") {
+                                Field(translationOptions, { translationOptions = it }, "Translated options (one per line)")
+                            }
+                            Field(translationAcceptedAnswers, { translationAcceptedAnswers = it }, "Accepted correct answers (one per line)")
+                        }
+                        Button(onClick = {
+                            execute {
+                                val question = selectedQuestionForTranslation ?: throw IllegalStateException("Choose a question first.")
+                                val opts = translationOptions.lines().map { it.trim() }.filter { it.isNotEmpty() }
+                                val accepted = translationAcceptedAnswers.lines().map { it.trim() }.filter { it.isNotEmpty() }
+                                repository.saveQuestionTranslation(question, translationLanguage, translationPrompt, opts, accepted)
+                                selectedSubject?.let { subject ->
+                                    questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
+                                }
+                                screen = AppScreen.QUESTIONS
+                                notice = "Translation saved. Concept Bridge now tracks answers in this language separately."
+                            }
+                        }, enabled = !busy && translationPrompt.isNotBlank() && translationAcceptedAnswers.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+                            Text("Save translation")
+                        }
+                    }
                 }
 
                 AppScreen.ASSIGN_TASK -> ScreenFrame("Assign task & reward", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
@@ -469,7 +532,26 @@ private fun EduLockApp(repository: EduLockRepository) {
                     SummaryCard("Completed tasks", total.toString(), "Only submitted attempts appear here.")
                     SummaryCard("Average score", average.toString() + "%", "Calculated from the recorded task attempts.")
                     SummaryCard("Reward minutes", attempts.sumOf { it.awardedMinutes }.toString(), "Total awarded minutes for the listed attempts.")
-                    OutlinedButton(onClick = { execute { attempts = repository.loadAttempts() } }, modifier = Modifier.fillMaxWidth()) { Text("Refresh report") }
+                    Text("Concept Bridge — concept understanding by language", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text("The same concept tag is grouped across translated question versions. Accuracy is shown separately for each language; a translated question remains the same underlying question.")
+                    OutlinedButton(onClick = {
+                        execute {
+                            attempts = repository.loadAttempts()
+                            conceptProgress = repository.loadConceptProgress()
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Refresh report") }
+                    if (conceptProgress.isEmpty()) Text("No concept-level answers yet. Create a question with a concept tag, add a translation, and complete a task.")
+                    conceptProgress.forEach { item ->
+                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text(item.conceptKey, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Text("Language: " + languageLabel(item.languageCode))
+                                Text("Correct: " + item.correct + " / " + item.total + " • " + item.percent + "%")
+                                LinearProgressIndicator(progress = { item.percent / 100f }, modifier = Modifier.fillMaxWidth())
+                            }
+                        }
+                    }
+                    Text("Task history", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     if (attempts.isEmpty()) Text("No submitted task attempts yet.")
                     attempts.forEach { attempt ->
                         val child = children.firstOrNull { it.id == attempt.childId }
@@ -551,9 +633,18 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 Button(onClick = {
                                     execute {
                                         val subjectId = task.subjectId ?: throw IllegalStateException("This task has no subject.")
-                                        questions = repository.loadQuestions(subjectId, task.questionCount)
-                                        if (questions.isEmpty()) throw IllegalStateException("This task has no questions. Ask your parent to add some.")
-                                        if (questions.size < task.questionCount) notice = "The task has fewer remaining questions than configured; you can answer the available questions."
+                                        val loadedQuestions = repository.loadQuestions(subjectId, task.questionCount)
+                                        if (loadedQuestions.size != task.questionCount) {
+                                            throw IllegalStateException("This task needs " + task.questionCount + " questions, but only " + loadedQuestions.size + " are available. Ask your parent to repair the task.")
+                                        }
+                                        val loadedTranslations = repository.loadQuestionTranslations(loadedQuestions.map { it.id })
+                                        questions = loadedQuestions
+                                        questionTranslations = loadedTranslations
+                                        answerLanguages = loadedQuestions.associate { item ->
+                                            val preferred = childProfile?.preferredLanguage ?: item.languageCode
+                                            val translated = loadedTranslations[item.id].orEmpty().any { it.languageCode.equals(preferred, ignoreCase = true) }
+                                            item.id to if (translated) preferred.lowercase() else item.languageCode
+                                        }
                                         activeTask = task
                                         questionIndex = 0
                                         answers = emptyMap()
@@ -573,12 +664,34 @@ private fun EduLockApp(repository: EduLockRepository) {
                     val task = activeTask
                     val question = questions.getOrNull(questionIndex)
                     if (task != null && question != null) {
+                        val selectedLanguage = answerLanguages[question.id] ?: question.languageCode
+                        val translated = questionTranslations[question.id].orEmpty().firstOrNull {
+                            it.languageCode.equals(selectedLanguage, ignoreCase = true)
+                        }
+                        val promptForLanguage = translated?.prompt ?: question.prompt
+                        val questionOptions = translated?.options?.takeIf { it.isNotEmpty() } ?: question.options
+                        val languageOptions = (listOf(question.languageCode) + questionTranslations[question.id].orEmpty().map { it.languageCode })
+                            .distinctBy { it.lowercase() }.sortedWith(compareBy<String> { if (it.equals(selectedLanguage, true)) 0 else 1 }.thenBy { it })
                         Text("Question " + (questionIndex + 1) + " of " + questions.size, style = MaterialTheme.typography.titleMedium)
                         LinearProgressIndicator(progress = { (questionIndex + 1).toFloat() / questions.size.toFloat() }, modifier = Modifier.fillMaxWidth())
-                        CompositionLocalProvider(LocalLayoutDirection provides directionFor(childProfile?.preferredLanguage ?: "en")) {
-                            Text(question.prompt, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Concept: " + question.conceptKey, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text("Try this same concept in another language:", style = MaterialTheme.typography.bodyMedium)
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            languageOptions.forEach { lang ->
+                                if (lang.equals(selectedLanguage, ignoreCase = true)) {
+                                    Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) { Text("✓ " + languageLabel(lang)) }
+                                } else {
+                                    OutlinedButton(onClick = {
+                                        answerLanguages = answerLanguages + (question.id to lang)
+                                        answers = answers - question.id
+                                    }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(languageLabel(lang)) }
+                                }
+                            }
+                        }
+                        CompositionLocalProvider(LocalLayoutDirection provides directionFor(selectedLanguage)) {
+                            Text(promptForLanguage, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                             if (question.questionType == "multiple_choice") {
-                                question.options.forEach { option ->
+                                questionOptions.forEach { option ->
                                     Row(
                                         modifier = Modifier.fillMaxWidth().clickable { answers = answers + (question.id to option) }.padding(vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically
@@ -588,13 +701,25 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     }
                                 }
                             } else if (question.questionType == "true_false") {
-                                listOf("true", "false").forEach { value ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().clickable { answers = answers + (question.id to value) }.padding(vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        RadioButton(selected = answers[question.id] == value, onClick = { answers = answers + (question.id to value) })
-                                        Text(if (value == "true") "True / صحيح" else "False / غلط")
+                                if (translated != null && translated.options.size >= 2) {
+                                    translated.options.take(2).forEach { option ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().clickable { answers = answers + (question.id to option) }.padding(vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            RadioButton(selected = answers[question.id] == option, onClick = { answers = answers + (question.id to option) })
+                                            Text(option)
+                                        }
+                                    }
+                                } else {
+                                    listOf("true", "false").forEach { value ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().clickable { answers = answers + (question.id to value) }.padding(vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            RadioButton(selected = answers[question.id] == value, onClick = { answers = answers + (question.id to value) })
+                                            Text(if (value == "true") "True / صحيح" else "False / غلط")
+                                        }
                                     }
                                 }
                             } else {
@@ -614,7 +739,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     execute {
                                         val unanswered = questions.firstOrNull { answers[it.id].isNullOrBlank() }
                                         if (unanswered != null) throw IllegalArgumentException("Please answer every question before submitting.")
-                                        val submitted = repository.submitTask(task.id, answers)
+                                        val submitted = repository.submitTask(task.id, answers, answerLanguages)
                                         taskResult = submitted
                                         val linked = childProfile
                                         if (linked != null) {
@@ -704,6 +829,18 @@ private fun SummaryCard(title: String, value: String, explanation: String) {
             Text(explanation, style = MaterialTheme.typography.bodySmall)
         }
     }
+}
+
+private fun languageLabel(code: String): String = when (code.lowercase()) {
+    "en" -> "English (en)"
+    "ur" -> "اردو (ur)"
+    "sd" -> "سنڌي (sd)"
+    "ar" -> "العربية (ar)"
+    "fa" -> "فارسی (fa)"
+    "ps" -> "پښتو (ps)"
+    "fr" -> "Français (fr)"
+    "es" -> "Español (es)"
+    else -> code
 }
 
 private fun readableQuestionType(type: String): String = when (type) {
