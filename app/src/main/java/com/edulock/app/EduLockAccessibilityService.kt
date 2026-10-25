@@ -1,0 +1,214 @@
+package com.edulock.app
+
+import android.accessibilityservice.AccessibilityService
+import android.graphics.PixelFormat
+import android.graphics.Typeface
+import android.os.Handler
+import android.os.Looper
+import android.view.Gravity
+import android.view.WindowManager
+import android.view.accessibility.AccessibilityEvent
+import android.graphics.Color
+import android.content.Intent
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
+import java.time.LocalDate
+import java.time.ZoneOffset
+import kotlin.math.max
+import kotlin.math.min
+
+/**
+ * Opt-in parental restriction service. It observes package changes only; it does not read screen text.
+ * A parent must explicitly enable this service in Android Accessibility settings on the child's device.
+ */
+class EduLockAccessibilityService : AccessibilityService() {
+    private val handler = Handler(Looper.getMainLooper())
+    private var windowManager: WindowManager? = null
+    private var blocker: LinearLayout? = null
+    private var lastPackage = ""
+    private var lastEventAt = 0L
+
+    private val ticker = object : Runnable {
+        override fun run() {
+            val now = System.currentTimeMillis()
+            accountForegroundUsage(now)
+            val current = lastPackage
+            if (current.isNotBlank()) applyRestriction(current)
+            handler.postDelayed(this, TICK_MILLIS)
+        }
+    }
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        val prefs = lockPrefs()
+        val today = utcDay()
+        if (prefs.getString(KEY_DAY, null) != today) {
+            prefs.edit().putString(KEY_DAY, today).putLong(KEY_USED_MS, 0L).apply()
+        }
+        lastPackage = ""
+        lastEventAt = System.currentTimeMillis()
+        handler.removeCallbacks(ticker)
+        handler.post(ticker)
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null) return
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            event.eventType != AccessibilityEvent.TYPE_WINDOWS_CHANGED) return
+        val packageName = event.packageName?.toString() ?: return
+        if (packageName.isBlank()) return
+        val now = System.currentTimeMillis()
+        accountForegroundUsage(now)
+        lastPackage = packageName
+        lastEventAt = now
+        applyRestriction(packageName)
+    }
+
+    override fun onInterrupt() {
+        hideBlocker()
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacks(ticker)
+        hideBlocker()
+        super.onDestroy()
+    }
+
+    private fun accountForegroundUsage(now: Long) {
+        val prefs = lockPrefs()
+        val today = utcDay()
+        if (prefs.getString(KEY_DAY, null) != today) {
+            prefs.edit().putString(KEY_DAY, today).putLong(KEY_USED_MS, 0L).apply()
+        }
+        if (!prefs.getBoolean(KEY_CHILD_ACTIVE, false) || !isAllowedPackageForUsage(lastPackage)) {
+            lastEventAt = now
+            return
+        }
+        val delta = (now - lastEventAt).coerceIn(0L, MAX_SINGLE_DELTA_MS)
+        if (delta > 0) prefs.edit().putLong(KEY_USED_MS, prefs.getLong(KEY_USED_MS, 0L) + delta).apply()
+        lastEventAt = now
+    }
+
+    private fun isAllowedPackageForUsage(packageName: String): Boolean {
+        if (packageName == applicationContext.packageName || packageName in essentialPackages()) return false
+        return lockPrefs().getStringSet(KEY_ALLOWED_PACKAGES, emptySet()).orEmpty().contains(packageName)
+    }
+
+    private fun applyRestriction(packageName: String) {
+        val prefs = lockPrefs()
+        if (!prefs.getBoolean(KEY_CHILD_ACTIVE, false) || packageName == applicationContext.packageName ||
+            packageName in essentialPackages()) {
+            hideBlocker()
+            return
+        }
+        val allowed = prefs.getStringSet(KEY_ALLOWED_PACKAGES, emptySet()).orEmpty().contains(packageName)
+        val used = prefs.getLong(KEY_USED_MS, 0L)
+        val earned = prefs.getInt(KEY_EARNED_MINUTES, 0).coerceAtLeast(0) * MILLIS_PER_MINUTE
+        val blockedForTime = allowed && used >= earned
+        if (!allowed || blockedForTime) {
+            showBlocker(if (blockedForTime) "Today's earned screen time has been used." else "This app has not been approved by your parent.")
+        } else {
+            hideBlocker()
+        }
+    }
+
+    private fun showBlocker(message: String) {
+        if (blocker != null) {
+            val text = blocker?.getChildAt(0) as? TextView
+            text?.text = message
+            return
+        }
+        val manager = windowManager ?: return
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(28), dp(36), dp(28), dp(36))
+            setBackgroundColor(Color.rgb(12, 24, 43))
+            isClickable = true
+            isFocusable = true
+        }
+        val title = TextView(this).apply {
+            text = "EduLock"
+            setTextColor(Color.WHITE)
+            textSize = 30f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+        }
+        val detail = TextView(this).apply {
+            text = message
+            setTextColor(Color.rgb(222, 231, 245))
+            textSize = 18f
+            gravity = Gravity.CENTER
+            setPadding(0, dp(20), 0, dp(28))
+        }
+        val button = Button(this).apply {
+            text = "Return to learning"
+            setOnClickListener {
+                val launch = packageManager.getLaunchIntentForPackage(applicationContext.packageName)
+                if (launch != null) {
+                    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    startActivity(launch)
+                }
+            }
+        }
+        panel.addView(title, LinearLayout.LayoutParams(-1, -2))
+        panel.addView(detail, LinearLayout.LayoutParams(-1, -2))
+        panel.addView(button, LinearLayout.LayoutParams(-1, -2))
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.TOP or Gravity.START }
+        try {
+            manager.addView(panel, params)
+            blocker = panel
+        } catch (_: Exception) {
+            // If Android rejects an overlay, leave the app usable and retry on the next foreground event.
+        }
+    }
+
+    private fun hideBlocker() {
+        val view = blocker ?: return
+        blocker = null
+        try {
+            windowManager?.removeView(view)
+        } catch (_: Exception) {
+            // View may already have been detached by Android.
+        }
+    }
+
+    private fun lockPrefs() = getSharedPreferences(LOCK_PREFS, MODE_PRIVATE)
+    private fun utcDay() = LocalDate.now(ZoneOffset.UTC).toString()
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
+    private fun essentialPackages(): Set<String> = setOf(
+        "com.android.settings",
+        "com.android.systemui",
+        "com.android.permissioncontroller",
+        "com.google.android.permissioncontroller",
+        "com.android.packageinstaller",
+        "com.google.android.packageinstaller",
+        "com.android.launcher3",
+        "com.google.android.apps.nexuslauncher",
+        "com.miui.home",
+        "com.samsung.android.oneui.home",
+        "com.oplus.launcher",
+        "com.huawei.android.launcher"
+    )
+
+    private companion object {
+        const val LOCK_PREFS = "edulock_lock_state"
+        const val KEY_CHILD_ACTIVE = "child_active"
+        const val KEY_ALLOWED_PACKAGES = "allowed_packages"
+        const val KEY_EARNED_MINUTES = "earned_minutes_today"
+        const val KEY_USED_MS = "used_millis_today"
+        const val KEY_DAY = "budget_day"
+        const val MILLIS_PER_MINUTE = 60_000L
+        const val MAX_SINGLE_DELTA_MS = 20_000L
+        const val TICK_MILLIS = 10_000L
+    }
+}
