@@ -60,6 +60,13 @@ Deno.serve(async (req) => {
       return json({ error: "You cannot pair a child outside your family" }, 403);
     }
 
+    // Issuing a replacement invalidates any earlier, still-unused code for this child.
+    const { error: invalidateError } = await admin.schema("edulock").from("child_pairing_codes")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("child_id", child.id)
+      .is("consumed_at", null);
+    if (invalidateError) return json({ error: "Could not rotate the pairing code" }, 500);
+
     // The code is shown only once. Only its SHA-256 digest is stored.
     for (let tries = 0; tries < 5; tries++) {
       const value = crypto.getRandomValues(new Uint32Array(1))[0] % 1000000;
