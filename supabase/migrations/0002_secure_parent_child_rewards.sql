@@ -166,16 +166,16 @@ begin
   select p.account_role into v_role from edulock.user_profiles p where p.user_id = p_user_id;
   if v_role is distinct from 'child' then return false; end if;
 
-  insert into edulock.pairing_claim_limits(user_id, window_started_at, attempt_count)
+  insert into edulock.pairing_claim_limits as current_limit(user_id, window_started_at, attempt_count)
     values (p_user_id, now(), 1)
   on conflict (user_id) do update set
     window_started_at = case
-      when edulock.pairing_claim_limits.window_started_at < now() - interval '15 minutes' then now()
-      else edulock.pairing_claim_limits.window_started_at
+      when current_limit.window_started_at < now() - interval '15 minutes' then now()
+      else current_limit.window_started_at
     end,
     attempt_count = case
-      when edulock.pairing_claim_limits.window_started_at < now() - interval '15 minutes' then 1
-      else edulock.pairing_claim_limits.attempt_count + 1
+      when current_limit.window_started_at < now() - interval '15 minutes' then 1
+      else current_limit.attempt_count + 1
     end
   returning attempt_count into v_count;
   return v_count <= 10;
