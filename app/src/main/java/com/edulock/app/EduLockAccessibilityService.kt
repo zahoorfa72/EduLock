@@ -26,6 +26,7 @@ class EduLockAccessibilityService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private var windowManager: WindowManager? = null
     private var blocker: LinearLayout? = null
+    private var blockerDetail: TextView? = null
     private var lastPackage = ""
     private var lastEventAt = 0L
 
@@ -116,8 +117,7 @@ class EduLockAccessibilityService : AccessibilityService() {
 
     private fun showBlocker(message: String) {
         if (blocker != null) {
-            val text = blocker?.getChildAt(0) as? TextView
-            text?.text = message
+            blockerDetail?.text = message
             return
         }
         val manager = windowManager ?: return
@@ -166,6 +166,7 @@ class EduLockAccessibilityService : AccessibilityService() {
         try {
             manager.addView(panel, params)
             blocker = panel
+            blockerDetail = detail
         } catch (_: Exception) {
             // If Android rejects an overlay, leave the app usable and retry on the next foreground event.
         }
@@ -174,6 +175,7 @@ class EduLockAccessibilityService : AccessibilityService() {
     private fun hideBlocker() {
         val view = blocker ?: return
         blocker = null
+        blockerDetail = null
         try {
             windowManager?.removeView(view)
         } catch (_: Exception) {
