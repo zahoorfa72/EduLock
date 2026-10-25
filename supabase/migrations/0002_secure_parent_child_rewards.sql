@@ -33,6 +33,14 @@ create trigger on_auth_user_created_edulock
   after insert on auth.users
   for each row execute function edulock.handle_new_auth_user();
 
+-- Backfill users who signed up before this migration was applied.
+insert into edulock.user_profiles(user_id, account_role, display_name)
+select u.id,
+  case when u.raw_user_meta_data ->> 'account_role' = 'child' then 'child' else 'parent' end,
+  coalesce(nullif(u.raw_user_meta_data ->> 'display_name', ''), '')
+from auth.users u
+on conflict (user_id) do nothing;
+
 create or replace function edulock.is_parent()
 returns boolean
 language sql stable security definer set search_path = ''
