@@ -204,12 +204,17 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Field(email, { email = it }, "Email", keyboardType = KeyboardType.Email)
                     Field(password, { password = it }, "Password (minimum 8 characters)", password = true)
                     if (accountRole == "child") {
-                        Field(pairingCode, { pairingCode = it.filter(Char::isDigit).take(6) }, "Parent's 6-digit pairing code", keyboardType = KeyboardType.Number)
-                        Text("If your email needs confirmation, confirm it first, then sign in and enter the pairing code.")
+                        Text("CHILD SETUP • Parent link required", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                        Text("First, ask your parent to create your child profile in their EduLock account and generate a one-time code. A child account cannot enter the learning space until this code links it to that profile.")
+                        Field(pairingCode, { pairingCode = it.filter(Char::isDigit).take(6) }, "Parent’s 6-digit pairing code", keyboardType = KeyboardType.Number)
+                        Text("The code expires after 10 minutes and works once. If email confirmation is enabled, confirm your email, sign in, then enter the same code on the link screen.")
                     }
                     Button(
                         onClick = {
                             execute {
+                                if (accountRole == "child" && pairingCode.filter(Char::isDigit).length != 6) {
+                                    throw IllegalArgumentException("A child account must be linked to a parent. Enter the six-digit code from the parent before creating the account.")
+                                }
                                 val result = repository.signUp(email, password, displayName, accountRole)
                                 if (result.session == null) {
                                     notice = result.message
@@ -225,6 +230,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Button(
                         onClick = {
                             execute {
+                                if (accountRole == "child" && pairingCode.isNotBlank() && pairingCode.filter(Char::isDigit).length != 6) {
+                                    throw IllegalArgumentException("Enter all six digits of the parent pairing code, or leave it blank if this account is already linked.")
+                                }
                                 val signedIn = repository.signIn(email, password, accountRole)
                                 resolveSignedIn(signedIn, pairingCode)
                             }
