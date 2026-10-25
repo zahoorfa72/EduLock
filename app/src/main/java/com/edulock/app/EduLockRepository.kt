@@ -142,7 +142,8 @@ class EduLockRepository(context: Context) {
         }
         return try {
             val json = send("auth/v1/token?grant_type=refresh_token", "POST",
-                JSONObject().put("refresh_token", existing.refreshToken), authenticated = false, profile = false)
+                JSONObject().put("refresh_token", existing.refreshToken), authenticated = false, profile = false) as? JSONObject
+                ?: throw IOException("Unexpected session refresh response")
             val refreshed = sessionFrom(json, existing.accountRole, existing.userId)
                 ?: throw IOException("Could not refresh session")
             sessionStore.save(refreshed)
