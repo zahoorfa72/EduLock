@@ -334,7 +334,7 @@ class EduLockRepository(context: Context) {
         val accepted = acceptedAnswers.map { it.trim().take(1000) }.filter { it.isNotEmpty() }.distinct()
         require(accepted.isNotEmpty() && accepted.size <= 30) { "Enter between 1 and 30 accepted answers, one per line." }
         val cleanOptions = options.map { it.trim().take(500) }.filter { it.isNotEmpty() }
-        if (question.questionType == "multiple_choice") {
+        if (question.questionType == "multiple_choice" || question.questionType == "true_false") {
             require(cleanOptions.size >= 2) { "Add at least two translated answer options." }
             require(accepted.any { answer -> cleanOptions.any { it.equals(answer, ignoreCase = true) } }) {
                 "At least one accepted answer must match a translated option."
@@ -352,7 +352,7 @@ class EduLockRepository(context: Context) {
         )
         if (existing.length() > 0) {
             restArray(
-                "question_translations?question_id=eq.${question.id}&language_code=eq.$lang",
+                "question_translations?select=id,question_id,language_code,prompt,options,created_at,updated_at&question_id=eq.${question.id}&language_code=eq.$lang",
                 "PATCH", body
             )
         } else {
