@@ -160,7 +160,7 @@ revoke all on edulock.pairing_claim_limits from public, anon, authenticated;
 create or replace function edulock.consume_pairing_attempt(p_user_id uuid)
 returns boolean
 language plpgsql security definer set search_path = ''
-as $
+as $pairing$
 declare v_role text; v_count integer;
 begin
   select p.account_role into v_role from edulock.user_profiles p where p.user_id = p_user_id;
@@ -180,7 +180,7 @@ begin
   returning attempt_count into v_count;
   return v_count <= 10;
 end;
-$;
+$pairing$;
 revoke all on function edulock.consume_pairing_attempt(uuid) from public, anon, authenticated;
 grant execute on function edulock.consume_pairing_attempt(uuid) to service_role;
 
