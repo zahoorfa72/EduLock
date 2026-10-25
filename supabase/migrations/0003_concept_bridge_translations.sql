@@ -5,8 +5,7 @@ grant usage on schema edulock to service_role;
 -- Edge Functions use the service-role key only on the server; direct table access is narrowly granted.
 grant select, insert, update on edulock.user_profiles, edulock.children, edulock.family_profiles,
   edulock.child_pairing_codes, edulock.pairing_claim_limits to service_role;
-grant select, insert, update, delete on edulock.questions, edulock.question_translations,
-  edulock.attempts, edulock.attempt_answers, edulock.screen_time_ledger to service_role;
+grant select, insert, update, delete on edulock.questions, edulock.attempts, edulock.screen_time_ledger to service_role;
 grant select, insert, update, delete on edulock.tasks, edulock.subjects, edulock.allowed_apps to service_role;
 
 alter table edulock.questions
