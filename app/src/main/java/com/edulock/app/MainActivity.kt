@@ -24,6 +24,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -40,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -185,7 +187,20 @@ private fun EduLockApp(repository: EduLockRepository) {
         }
     }
 
-    MaterialTheme {
+    val eduLockColors = lightColorScheme(
+        primary = Color(0xFF173B67),
+        onPrimary = Color.White,
+        secondary = Color(0xFF087E8B),
+        onSecondary = Color.White,
+        tertiary = Color(0xFFD69E36),
+        background = Color(0xFFF4F7FB),
+        surface = Color.White,
+        surfaceVariant = Color(0xFFE8EEF6),
+        onSurface = Color(0xFF172638),
+        onSurfaceVariant = Color(0xFF42566D),
+        error = Color(0xFFB42318)
+    )
+    MaterialTheme(colorScheme = eduLockColors) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
