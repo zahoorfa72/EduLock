@@ -140,7 +140,7 @@ class EduLockRepository(context: Context) {
         ensureConfigured()
         require(email.trim().contains("@")) { "Enter a valid email address" }
         val code = token.filter(Char::isDigit)
-        require(code.length == 6) { "Enter the six-digit code from your email" }
+        require(code.length == 8) { "Enter the eight-digit code from your email" }
         require(accountRole == "parent" || accountRole == "child") { "Select a valid account type" }
         val json = authRequest(
             "auth/v1/verify",
