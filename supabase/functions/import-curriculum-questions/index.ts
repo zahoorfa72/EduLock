@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
     if (profileError || profile?.account_role !== "parent") return json({ error: "Parent access is required" }, 403);
 
     const { data: child, error: childError } = await admin.schema("edulock")
-      .from("children").select("id,family_id").eq("id", childId).maybeSingle();
+      .from("children").select("id,family_id,daily_cap_minutes").eq("id", childId).maybeSingle();
     if (childError || !child) return json({ error: "Child profile was not found" }, 404);
     const { data: family, error: familyError } = await admin.schema("edulock")
       .from("family_profiles").select("id,owner_user_id").eq("id", child.family_id).maybeSingle();
@@ -122,13 +122,68 @@ Deno.serve(async (req) => {
       return json({ error: "Could not import these curriculum questions" }, 500);
     }
 
+    // Make the selected curriculum usable immediately on the child's device:
+    // create or refresh one active task for this child's country/grade/subject.
+    const { count: totalQuestions, error: countError } = await admin.schema("edulock")
+      .from("questions").select("id", { count: "exact", head: true }).eq("subject_id", subject.id);
+    if (countError) {
+      console.error("Curriculum question count failed", countError.code, countError.message);
+      return json({ error: "Questions were imported, but the learning task could not be prepared. Open Assign Task to create it." }, 500);
+    }
+    const questionCount = Math.max(1, Math.min(totalQuestions ?? questions.length, 500));
+    const taskTitle = "Curriculum practice — " + String(first.subject_name) + " — Grade " + String(grade);
+    const dailyCap = Math.max(0, Math.min(Number(child.daily_cap_minutes ?? 60), 1440));
+    const { data: existingTask, error: taskLookupError } = await admin.schema("edulock")
+      .from("tasks").select("id").eq("family_id", child.family_id).eq("child_id", childId)
+      .eq("subject_id", subject.id).eq("title", taskTitle).eq("active", true).limit(1).maybeSingle();
+    if (taskLookupError) {
+      console.error("Curriculum task lookup failed", taskLookupError.code, taskLookupError.message);
+      return json({ error: "Questions were imported, but the learning task could not be loaded. Open Assign Task to create it." }, 500);
+    }
+
+    let taskId = existingTask?.id as string | undefined;
+    if (taskId) {
+      const { error: taskUpdateError } = await admin.schema("edulock").from("tasks").update({
+        question_count: questionCount,
+        pass_percent: 70,
+        reward_minutes: Math.min(10, dailyCap),
+        daily_cap_minutes: dailyCap,
+        active: true,
+      }).eq("id", taskId);
+      if (taskUpdateError) {
+        console.error("Curriculum task update failed", taskUpdateError.code, taskUpdateError.message);
+        return json({ error: "Questions were imported, but the learning task could not be updated. Open Assign Task to create it." }, 500);
+      }
+    } else {
+      const { data: createdTask, error: taskInsertError } = await admin.schema("edulock").from("tasks")
+        .insert({
+          family_id: child.family_id,
+          child_id: childId,
+          subject_id: subject.id,
+          title: taskTitle,
+          question_count: questionCount,
+          pass_percent: 70,
+          reward_minutes: Math.min(10, dailyCap),
+          daily_cap_minutes: dailyCap,
+          active: true,
+        }).select("id").single();
+      if (taskInsertError || !createdTask) {
+        console.error("Curriculum task create failed", taskInsertError?.code, taskInsertError?.message);
+        return json({ error: "Questions were imported, but the learning task could not be created. Open Assign Task to create it." }, 500);
+      }
+      taskId = createdTask.id;
+    }
+
     return json({
       subject_id: subject.id,
       subject_title: subject.title,
+      task_id: taskId,
+      task_title: taskTitle,
       language_code: subject.language_code,
       imported_count: imported?.length ?? 0,
       selected_count: questions.length,
-      message: "Questions added to your subject. Return to Subjects & Questions to review them and assign a learning task."
+      question_count: questionCount,
+      message: "Questions were added to the subject and an active learning task was assigned to the child. The child device will see it after syncing."
     });
   } catch (error) {
     console.error("Curriculum import failed", error);
