@@ -1158,7 +1158,16 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                     }
                     if (childInstalledApps.isNotEmpty() && allowedApps.isEmpty()) Text("No saved app rules were returned. Apps remain allowed by default; check the database migration if you cannot save a limit.")
-                    allowedApps.filter { app -> childInstalledApps.none { it.packageName == app.packageName } }.forEach { app ->
+                    allowedApps.filter { app ->
+                        childInstalledApps.none { it.packageName == app.packageName } &&
+                            !app.packageName.startsWith("com.android.internal.") &&
+                            !app.packageName.startsWith("com.android.providers.") &&
+                            app.packageName != "com.google.android.adservices.api" &&
+                            !app.packageName.contains("agingfunction", ignoreCase = true) &&
+                            !app.displayName.equals("3 Button Navigation Bar", ignoreCase = true) &&
+                            !app.displayName.equals("Ad Privacy", ignoreCase = true) &&
+                            !app.displayName.equals("AgingFunction", ignoreCase = true)
+                    }.forEach { app ->
                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 Text(app.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
