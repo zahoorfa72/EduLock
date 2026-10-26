@@ -36,7 +36,7 @@ jobs:
       - name: Apply database migrations
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase db push --linked --yes
+        run: supabase db push --linked --yes --include-all
 
       - name: Deploy child pairing code function
         env:
