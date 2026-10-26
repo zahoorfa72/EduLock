@@ -879,7 +879,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                             modifier = Modifier.fillMaxWidth().clickable {
                                 selectedSubject = subject
                                 screen = AppScreen.QUESTIONS
-                                execute { questions = repository.loadQuestions(subject.id) }
+                                execute {
+                                    questions = repository.loadQuestions(subject.id)
+                                    questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
+                                    questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
+                                }
                             },
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                         ) {
@@ -909,10 +913,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                     val subject = selectedSubject
                     if (subject != null) {
                         Text("Create a question in " + subject.languageCode + " and give related questions the same concept tag. The tag lets Concept Bridge report understanding separately from language.")
+                        OutlinedButton(
+                            onClick = { templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("✨ Browse ready-made templates") }
                         Button(onClick = {
                             questionPrompt = ""; questionOptions = ""; questionAnswer = ""; questionType = "multiple_choice"
                             questionLanguage = subject.languageCode
                             questionConceptKey = ""
+                            questionSolution = ""
                             screen = AppScreen.ADD_QUESTION
                         }, modifier = Modifier.fillMaxWidth()) { Text("Add question") }
                         if (questions.isEmpty()) Text("No questions yet.")
@@ -925,6 +934,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         Text("Language: " + question.languageCode + " • Concept tag: " + question.conceptKey)
                                         if (question.options.isNotEmpty()) Text("Options: " + question.options.joinToString(" • "))
                                         Text("Translations: " + (questionTranslations[question.id]?.size ?: 0))
+                                        questionSolutions[question.id]?.let { solution ->
+                                            Text("Worked solution", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                            Text(solution)
+                                        }
                                         OutlinedButton(onClick = {
                                             selectedQuestionForTranslation = question
                                             translationLanguage = when (question.languageCode.lowercase()) {
@@ -966,16 +979,20 @@ private fun EduLockApp(repository: EduLockRepository) {
                             Text("Save the canonical answer as true or false. A translation can use localized labels and accepted answers.")
                         }
                         Field(questionAnswer, { questionAnswer = it }, "Canonical correct answer (private)")
+                        Field(questionSolution, { questionSolution = it }, "Parent-only worked solution / experiment explanation")
+                        Text("Worked solutions are stored separately from child-visible questions.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Button(onClick = {
                         execute {
                             val subject = selectedSubject ?: throw IllegalStateException("Choose a subject first.")
                             val options = questionOptions.lines().map { it.trim() }.filter { it.isNotEmpty() }
-                            repository.addQuestion(subject.id, questionPrompt, questionType, options, questionAnswer, questionLanguage, questionConceptKey)
+                            repository.addQuestion(subject.id, questionPrompt, questionType, options, questionAnswer, questionLanguage, questionConceptKey, questionSolution)
                             questions = repository.loadQuestions(subject.id)
                             questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
+                            questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
+                            questionSolution = ""
                             screen = AppScreen.QUESTIONS
-                            notice = "Question saved. Add translations from the question card to activate Concept Bridge."
+                            notice = "Question and parent-only worked solution saved. The solution is not sent to the child."
                         }
                     }, enabled = !busy && questionPrompt.isNotBlank() && questionAnswer.isNotBlank() && questionConceptKey.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Save question") }
                 }
