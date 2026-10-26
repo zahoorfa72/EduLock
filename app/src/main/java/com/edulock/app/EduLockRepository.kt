@@ -681,10 +681,13 @@ class EduLockRepository(context: Context) {
 
     suspend fun refreshChildDeviceRestrictions(child: ChildProfile): Int {
         requireSession("child")
-        val appRules = loadAllowedApps(child.id).filter { it.enabled }
-        val allowed = appRules.map { it.packageName }.toMutableSet()
+        val appRules = loadAllowedApps(child.id)
+        // Allow every app by default; only explicit parent restrictions block access.
+        val allowed = appRules.filter { it.enabled }.map { it.packageName }.toMutableSet()
         allowed += "com.edulock.app"
-        val appLimits = appRules.map { it.packageName + "=" + it.dailyLimitMinutes }.toSet()
+        val blocked = appRules.filter { !it.enabled }.map { it.packageName }.toSet()
+        val appLimits = appRules.filter { it.enabled }
+            .map { it.packageName + "=" + it.dailyLimitMinutes }.toSet()
         val startOfDay = LocalDate.now(ZoneOffset.UTC).atStartOfDay().toInstant(ZoneOffset.UTC)
         val stamp = DateTimeFormatter.ISO_INSTANT.format(startOfDay)
         val ledger = restArray("screen_time_ledger?select=minutes_delta&child_id=eq.${child.id}&created_at=gte.$stamp")
@@ -695,6 +698,7 @@ class EduLockRepository(context: Context) {
             .putBoolean("child_active", true)
             .putString("child_id", child.id)
             .putStringSet("allowed_packages", allowed)
+            .putStringSet("blocked_packages", blocked)
             .putStringSet("app_daily_limits", appLimits)
             .putInt("earned_minutes_today", earned)
             .putInt("daily_cap_minutes", child.dailyCapMinutes)
@@ -702,7 +706,6 @@ class EduLockRepository(context: Context) {
             .apply()
         return earned
     }
-
     suspend fun syncAppUsage(childId: String) {
         requireSession("child")
         require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
