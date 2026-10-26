@@ -134,6 +134,8 @@ private fun EduLockApp(repository: EduLockRepository) {
     var childSchoolGrade by remember { mutableStateOf("1") }
     var childAgeYears by remember { mutableStateOf("8") }
     var countryPickerOpen by remember { mutableStateOf(false) }
+    var languagePickerOpen by remember { mutableStateOf(false) }
+    var languageSearch by remember { mutableStateOf("") }
     var countryPickerTarget by remember { mutableStateOf("child") }
     var countrySearch by remember { mutableStateOf("") }
     var curriculumCountryCode by remember { mutableStateOf("PK") }
@@ -651,6 +653,45 @@ private fun EduLockApp(repository: EduLockRepository) {
                 confirmButton = { TextButton(onClick = { countryPickerOpen = false }) { Text("Close") } }
             )
         }
+        if (languagePickerOpen) {
+            val languageOptions = remember(languageSearch) {
+                Locale.getISOLanguages().distinct().map { code ->
+                    val languageLocale = Locale.forLanguageTag(code)
+                    code to languageLocale.getDisplayLanguage(Locale.ENGLISH).ifBlank { code }
+                }.filter { (code, name) ->
+                    name.contains(languageSearch, ignoreCase = true) ||
+                        code.contains(languageSearch, ignoreCase = true)
+                }.sortedBy { it.second.lowercase(Locale.ENGLISH) }
+            }
+            AlertDialog(
+                onDismissRequest = { languagePickerOpen = false },
+                title = { Text("Choose a learning language") },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Field(languageSearch, { languageSearch = it }, "Search language or code")
+                        languageOptions.forEach { (code, name) ->
+                            TextButton(
+                                onClick = {
+                                    curriculumLanguageCode = code.lowercase(Locale.ROOT)
+                                    curriculumSearchResult = null
+                                    curriculumSelectedIds = emptySet()
+                                    languagePickerOpen = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("$name ($code)", modifier = Modifier.fillMaxWidth())
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { languagePickerOpen = false }) { Text("Close") }
+                }
+            )
+        }
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
@@ -1012,30 +1053,20 @@ private fun EduLockApp(repository: EduLockRepository) {
                         )
 
                         Text("Learning language", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        listOf(
-                            "en" to "English",
-                            "ur" to "اردو",
-                            "sd" to "سنڌي",
-                            "ar" to "العربية",
-                            "fa" to "فارسی",
-                            "ps" to "پښتو",
-                            "fr" to "Français",
-                            "es" to "Español",
-                            "id" to "Bahasa Indonesia",
-                            "zh" to "中文"
-                        ).forEach { (code, label) ->
-                            if (curriculumLanguageCode.equals(code, true)) {
-                                Button(
-                                    onClick = { curriculumLanguageCode = code; curriculumSearchResult = null; curriculumSelectedIds = emptySet() },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { Text("✓  $label ($code)") }
-                            } else {
-                                OutlinedButton(
-                                    onClick = { curriculumLanguageCode = code; curriculumSearchResult = null; curriculumSelectedIds = emptySet() },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { Text("$label ($code)") }
-                            }
+                        OutlinedButton(
+                            onClick = { languageSearch = ""; languagePickerOpen = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "🌐  " + displayLanguageName(curriculumLanguageCode) +
+                                    " (" + curriculumLanguageCode.uppercase() + ")  •  Change"
+                            )
                         }
+                        Text(
+                            "All standard ISO language codes are searchable. The question bank reports when it uses an English or international starter fallback.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
 
                         Text("Subject", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         listOf(
@@ -2331,6 +2362,9 @@ private fun ScreenFrame(
         Spacer(Modifier.height(14.dp))
     }
 }
+
+private fun displayLanguageName(code: String): String =
+    Locale.forLanguageTag(code).getDisplayLanguage(Locale.ENGLISH).ifBlank { code.lowercase(Locale.ROOT) }
 
 private fun displayCountryName(code: String): String =
     Locale("", code.uppercase()).getDisplayCountry(Locale.ENGLISH).ifBlank { code.uppercase() }
