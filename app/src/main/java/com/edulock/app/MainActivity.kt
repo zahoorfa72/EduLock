@@ -471,11 +471,21 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                     val visibleApps = installedApps.mapNotNull { info ->
                         val pkg = info.packageName
-                        if (pkg == context.packageName) return@mapNotNull null
+                        if (pkg == context.packageName ||
+                            pkg.startsWith("com.android.internal.") ||
+                            pkg.startsWith("com.android.providers.") ||
+                            pkg == "com.google.android.adservices.api" ||
+                            pkg.contains("agingfunction", ignoreCase = true)) return@mapNotNull null
+                        // Only include apps a child can actually open. This removes navigation
+                        // components, hidden providers and background-only services from the list.
+                        if (context.packageManager.getLaunchIntentForPackage(pkg) == null) return@mapNotNull null
                         val label = try {
                             info.loadLabel(context.packageManager)?.toString()?.trim().orEmpty()
                         } catch (_: Exception) { "" }
-                        if (label.isBlank() || pkg.startsWith("com.android.providers.")) null else pkg to label
+                        if (label.isBlank() ||
+                            label.equals("3 Button Navigation Bar", ignoreCase = true) ||
+                            label.equals("Ad Privacy", ignoreCase = true) ||
+                            label.equals("AgingFunction", ignoreCase = true)) null else pkg to label
                     }.distinctBy { it.first }.take(500)
                     repository.syncInstalledApps(child.id, visibleApps)
                 } catch (_: Exception) {
@@ -1071,7 +1081,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.ALLOWED_APPS -> ScreenFrame("Allowed apps", onBack = { screen = AppScreen.CHILDREN }, notice = notice, busy = busy) {
                     val child = selectedChild
                     Text("Child: " + (child?.displayName ?: "Not selected"))
-                    Text("Choose from apps detected on the child's paired phone. Allow or disable an app and set its daily limit here; the child's EduLock checks the rules when it next syncs.")
+                    Text("User-facing apps from the child's phone. Apps start allowed. Disable an app or set a daily limit to restrict it; changes sync while EduLock is open on the child's phone.")
                     OutlinedButton(
                         onClick = {
                             execute {
@@ -1084,7 +1094,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("↻ Refresh apps from child's phone") }
                     if (childInstalledApps.isEmpty()) {
-                        Text("No app list has arrived yet. Open EduLock on the child's phone, sign in to the paired child profile, and keep it connected to the internet. EduLock will send the launchable app list.")
+                        Text("No apps received yet. Open EduLock on the paired child phone and keep it online. Its user-facing app list refreshes automatically every five minutes while EduLock is open.")
                     }
                     childInstalledApps.forEach { installed ->
                         val existingRule = allowedApps.firstOrNull { it.packageName == installed.packageName }
@@ -1096,31 +1106,31 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 Text(installed.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
                                 Text(installed.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 if (existingRule == null) {
-                                    var limitText = installedAppLimitEdits[installed.packageName] ?: "60"
+                                    var limitText = installedAppLimitEdits[installed.packageName] ?: "1440"
                                     Field(limitText, { value ->
                                         installedAppLimitEdits = installedAppLimitEdits + (installed.packageName to value.filter(Char::isDigit).take(4))
-                                    }, "Daily limit in minutes (1–1440)", keyboardType = KeyboardType.Number)
+                                    }, "Daily limit in minutes (1–1440; 1440 = no practical cap)", keyboardType = KeyboardType.Number)
                                     Button(
                                         onClick = {
                                             execute {
-                                                val limit = (installedAppLimitEdits[installed.packageName] ?: "60").toIntOrNull()
+                                                val limit = (installedAppLimitEdits[installed.packageName] ?: "1440").toIntOrNull()
                                                     ?: throw IllegalArgumentException("Enter a daily limit from 1 to 1440 minutes.")
                                                 require(limit in 1..1440) { "Daily limit must be between 1 and 1440 minutes." }
                                                 val selected = child ?: throw IllegalStateException("Select a child profile first.")
                                                 repository.allowInstalledApp(selected.id, installed, limit)
                                                 allowedApps = repository.loadAllowedApps(selected.id)
-                                                notice = "App allowed with a $limit-minute daily limit. The child's phone applies the rule after syncing."
+                                                notice = "App rule saved with a $limit-minute daily limit. It remains allowed unless you disable it; the child phone applies updates after syncing."
                                             }
                                         },
                                         enabled = !busy,
                                         modifier = Modifier.fillMaxWidth()
-                                    ) { Text("Allow on child's phone") }
+                                    ) { Text("Save app limit") }
                                 } else {
-                                    Text(if (existingRule.enabled) "Allowed • ${existingRule.dailyLimitMinutes} minutes/day" else "Disabled")
+                                    Text(if (!existingRule.enabled) "Blocked by parent" else if (existingRule.dailyLimitMinutes >= 1440) "Allowed • no practical daily cap" else "Allowed • ${existingRule.dailyLimitMinutes} minutes/day")
                                     Field(
                                         installedAppLimitEdits[installed.packageName] ?: existingRule.dailyLimitMinutes.toString(),
                                         { value -> installedAppLimitEdits = installedAppLimitEdits + (installed.packageName to value.filter(Char::isDigit).take(4)) },
-                                        "Daily limit in minutes (1–1440)",
+                                        "Daily limit in minutes (1–1440; 1440 = no practical cap)",
                                         keyboardType = KeyboardType.Number
                                     )
                                     Button(onClick = {
@@ -1147,8 +1157,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                             }
                         }
                     }
-                    if (allowedApps.isEmpty()) Text("No apps are allowed yet. EduLock will keep restricted apps blocked once Accessibility is enabled on the child's phone.")
-                    allowedApps.forEach { app ->
+                    if (childInstalledApps.isNotEmpty() && allowedApps.isEmpty()) Text("No saved app rules were returned. Apps remain allowed by default; check the database migration if you cannot save a limit.")
+                    allowedApps.filter { app -> childInstalledApps.none { it.packageName == app.packageName } }.forEach { app ->
                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 Text(app.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
