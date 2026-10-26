@@ -13,7 +13,10 @@ Native Android parental-control and learning app built with Kotlin, Jetpack Comp
 - Task assignment, question answering, scores and reward ledger entries.
 - Server-side answer grading. Correct-answer keys are not granted to clients. Rewards are written by a trusted database function, not calculated by the client, with a per-child daily cap and a task cap enforced in the same transaction.
 - Progress reports with score, pass/fail and awarded minutes.
-- Opt-in Android Accessibility service that observes app/package changes only (not screen text), blocks unapproved apps and blocks approved apps when earned time is used up. This requires a parent-approved one-time activation on the child's physical device.
+- Parent-facing daily usage reports for approved apps, showing package/display name and total foreground time only. Usage is synced from the child's device while EduLock is open; it is not a live screen view.
+- Per-app daily usage limits are configurable from the parent account and applied locally when the child syncs device rules.
+- Opt-in Android Accessibility service observes app/package changes only (not screen text), blocks unapproved apps and blocks approved apps when earned time is used up. This requires a parent-approved one-time activation on the child's physical device.
+- Shared rounded, high-contrast kid-friendly styling across app screens, with a colorful gradient header and clearer status cards.
 
 ## Important limitations
 
@@ -39,6 +42,8 @@ Use the intended EduLock Supabase project. EduLock uses its own `edulock` schema
    - `supabase/migrations/0001_edulock_foundation.sql`
    - `supabase/migrations/0002_secure_parent_child_rewards.sql`
    - `supabase/migrations/0003_concept_bridge_translations.sql`
+   - `supabase/migrations/0004_per_app_daily_limits.sql`
+   - `supabase/migrations/0005_app_usage_reporting.sql`
 3. Deploy these functions from the repository using the Supabase CLI linked to the intended project:
    - `supabase functions deploy create-child-pairing-code`
    - `supabase functions deploy claim-child-pairing`
