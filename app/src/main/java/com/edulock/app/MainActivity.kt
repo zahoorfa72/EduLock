@@ -630,11 +630,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         Text(if (isRegistering) "Already registered? Sign in" else "New to EduLock? Create parent account")
                     }
                     OutlinedButton(
-                        onClick = {
-                            pairingCode = ""
-                            notice = null
-                            screen = AppScreen.PAIR_CHILD
-                        },
+                        onClick = { chooseChildDevice() },
                         enabled = !busy,
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Set up a child's device with pairing code") }
