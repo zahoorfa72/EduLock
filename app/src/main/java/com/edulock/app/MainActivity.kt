@@ -77,7 +77,7 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 
 private enum class AppScreen {
-    AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD,
+    DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD,
     SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
     REPORTS, ALLOWED_APPS, PROTECTION_STATUS, CHILD_LOCATIONS, APP_USAGE_REPORT, PLAY_TASK, TASK_RESULT
 }
@@ -86,8 +86,11 @@ private enum class AppScreen {
 private fun EduLockApp(repository: EduLockRepository) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var screen by remember { mutableStateOf(AppScreen.AUTH) }
-    var session by remember { mutableStateOf<AuthSession?>(repository.currentSession()) }
+    val devicePreferences = remember { context.getSharedPreferences("edulock_device_mode", Context.MODE_PRIVATE) }
+    var deviceMode by remember { mutableStateOf(devicePreferences.getString("mode", "unknown") ?: "unknown") }
+    var screen by remember { mutableStateOf(if (deviceMode == "unknown") AppScreen.DEVICE_SETUP else AppScreen.AUTH) }
+    // Never populate the UI from an unverified cached session.
+    var session by remember { mutableStateOf<AuthSession?>(null) }
     var accountRole by remember { mutableStateOf("parent") }
     var isRegistering by remember { mutableStateOf(true) }
     var email by remember { mutableStateOf("") }
@@ -158,44 +161,6 @@ private fun EduLockApp(repository: EduLockRepository) {
     var protectionAccessibilityEnabled by remember { mutableStateOf(isAccessibilityServiceEnabled(context)) }
     var protectionDeviceAdminEnabled by remember { mutableStateOf(isDeviceAdminActive(context)) }
     var protectionManagedEnabled by remember { mutableStateOf(isManagedDeviceProtectionActive(context)) }
-
-    pendingChildAction?.let { (targetChild, action) ->
-        val isDelete = action == "delete"
-        AlertDialog(
-            onDismissRequest = { pendingChildAction = null },
-            title = { Text(if (isDelete) "Delete child profile?" else "Deactivate device link?") },
-            text = {
-                Text(
-                    if (isDelete)
-                        "Permanently delete ${targetChild.displayName}'s profile and its linked EduLock records. This cannot be undone."
-                    else
-                        "Unlink ${targetChild.displayName}'s device. The current device will lose access to this child profile; a new pairing code can link a device again."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingChildAction = null
-                    execute {
-                        if (isDelete) {
-                            repository.deleteChildProfile(targetChild.id)
-                            if (selectedChild?.id == targetChild.id) selectedChild = null
-                            if (childProfile?.id == targetChild.id) childProfile = null
-                            notice = "Child profile deleted."
-                        } else {
-                            repository.deactivateChildLink(targetChild.id)
-                            notice = "Device link deactivated. Generate a new pairing code to link a device again."
-                        }
-                        children = repository.loadChildren(familyId)
-                        childInstalledApps = emptyList()
-                        allowedApps = emptyList()
-                    }
-                }) { Text(if (isDelete) "Delete permanently" else "Deactivate link") }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingChildAction = null }) { Text("Cancel") }
-            }
-        )
-    }
 
     fun refreshProtectionStatus() {
         protectionAccessibilityEnabled = isAccessibilityServiceEnabled(context)
@@ -307,6 +272,45 @@ private fun EduLockApp(repository: EduLockRepository) {
         }
     }
 
+
+    pendingChildAction?.let { (targetChild, action) ->
+        val isDelete = action == "delete"
+        AlertDialog(
+            onDismissRequest = { pendingChildAction = null },
+            title = { Text(if (isDelete) "Delete child profile?" else "Deactivate device link?") },
+            text = {
+                Text(
+                    if (isDelete)
+                        "Permanently delete ${targetChild.displayName}'s profile and its linked EduLock records. This cannot be undone."
+                    else
+                        "Unlink ${targetChild.displayName}'s device. The current device will lose access to this child profile; a new pairing code can link a device again."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingChildAction = null
+                    execute {
+                        if (isDelete) {
+                            repository.deleteChildProfile(targetChild.id)
+                            if (selectedChild?.id == targetChild.id) selectedChild = null
+                            if (childProfile?.id == targetChild.id) childProfile = null
+                            notice = "Child profile deleted."
+                        } else {
+                            repository.deactivateChildLink(targetChild.id)
+                            notice = "Device link deactivated. Generate a new pairing code to link a device again."
+                        }
+                        children = repository.loadChildren(familyId)
+                        childInstalledApps = emptyList()
+                        allowedApps = emptyList()
+                    }
+                }) { Text(if (isDelete) "Delete permanently" else "Deactivate link") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingChildAction = null }) { Text("Cancel") }
+            }
+        )
+    }
+
     suspend fun refreshParentData() {
         familyId = repository.ensureParentFamily(displayName.ifBlank { "My family" })
         children = repository.loadChildren(familyId)
@@ -350,6 +354,24 @@ private fun EduLockApp(repository: EduLockRepository) {
     }
 
     suspend fun resolveSignedIn(newSession: AuthSession, suppliedCode: String = "") {
+        if (deviceMode == "unknown") {
+            repository.signOut()
+            session = null
+            screen = AppScreen.DEVICE_SETUP
+            notice = "Choose whether this is a parent phone or a child phone before continuing."
+            return
+        }
+        if (newSession.accountRole != deviceMode) {
+            repository.signOut()
+            session = null
+            childProfile = null
+            screen = if (deviceMode == "child") AppScreen.PAIR_CHILD else AppScreen.AUTH
+            notice = if (deviceMode == "child")
+                "This is configured as a child phone. A parent session was cleared; enter the parent's six-digit pairing code."
+            else
+                "This is configured as a parent phone. Sign in with the parent's email and password."
+            return
+        }
         session = newSession
         accountRole = newSession.accountRole
         if (newSession.accountRole == "parent") {
@@ -363,6 +385,53 @@ private fun EduLockApp(repository: EduLockRepository) {
             finishChildLogin(newSession, suppliedCode)
         }
     }
+
+
+    fun chooseParentDevice() {
+        devicePreferences.edit().putString("mode", "parent").apply()
+        deviceMode = "parent"
+        screen = AppScreen.AUTH
+        execute {
+            val restored = repository.restoreSession()
+            if (restored != null && restored.accountRole == "parent") {
+                session = restored
+                accountRole = "parent"
+                resolveSignedIn(restored)
+            } else {
+                repository.signOut()
+                session = null
+                childProfile = null
+                screen = AppScreen.AUTH
+            }
+        }
+    }
+
+    fun chooseChildDevice() {
+        devicePreferences.edit().putString("mode", "child").apply()
+        deviceMode = "child"
+        screen = AppScreen.PAIR_CHILD
+        pairingCode = ""
+        execute {
+            val restored = repository.restoreSession()
+            if (restored != null && restored.accountRole == "child") {
+                session = restored
+                accountRole = "child"
+                resolveSignedIn(restored)
+                if (screen != AppScreen.CHILD_HOME) {
+                    screen = AppScreen.PAIR_CHILD
+                    notice = "Enter the six-digit code generated in the parent's profile to finish pairing."
+                }
+            } else {
+                repository.signOut()
+                session = null
+                childProfile = null
+                pairingCode = ""
+                screen = AppScreen.PAIR_CHILD
+                notice = "This phone is now in child mode. Enter the six-digit code generated in the parent's profile. Parent dashboard access is disabled on this phone."
+            }
+        }
+    }
+
 
     LaunchedEffect(resendSeconds) {
         if (resendSeconds > 0) { delay(1000); resendSeconds -= 1 }
@@ -429,25 +498,49 @@ private fun EduLockApp(repository: EduLockRepository) {
     }
 
     LaunchedEffect(Unit) {
+        if (deviceMode == "unknown") {
+            screen = AppScreen.DEVICE_SETUP
+            if (!repository.isConfigured) {
+                notice = "Configuration needed: set the public Supabase URL and anon/publishable key in GitHub Actions secrets before building."
+            }
+            return@LaunchedEffect
+        }
+
         val restored = repository.restoreSession()
-        if (restored != null) {
+        if (restored != null && restored.accountRole == deviceMode) {
             session = restored
             accountRole = restored.accountRole
             try {
                 resolveSignedIn(restored)
             } catch (e: Exception) {
                 notice = e.message ?: "Could not restore the session. Please sign in again."
-                screen = if (restored.accountRole == "child") AppScreen.PAIR_CHILD else AppScreen.AUTH
+                screen = if (deviceMode == "child") AppScreen.PAIR_CHILD else AppScreen.AUTH
             }
-        } else if (!repository.isConfigured) {
-            notice = "Supabase is not configured yet. Add SUPABASE_URL and SUPABASE_ANON_KEY to the GitHub Actions secrets before building."
+        } else {
+            if (restored != null) repository.signOut()
+            session = null
+            childProfile = null
+            screen = if (deviceMode == "child") AppScreen.PAIR_CHILD else AppScreen.AUTH
+            if (deviceMode == "child") {
+                notice = "Enter the six-digit code generated by the parent to link this child phone."
+            }
+        }
+        if (!repository.isConfigured) {
+            notice = "Supabase is not configured yet. Add SUPABASE_URL and SUPABASE_ANON_KEY to GitHub Actions secrets before building."
         }
     }
-
     BackHandler(enabled = screen != AppScreen.AUTH) {
         screen = when (screen) {
+            AppScreen.DEVICE_SETUP -> AppScreen.DEVICE_SETUP
             AppScreen.VERIFY_OTP -> AppScreen.AUTH
-            AppScreen.PAIR_CHILD -> { repository.signOut(); session = null; childProfile = null; AppScreen.AUTH }
+            AppScreen.PAIR_CHILD -> {
+                repository.signOut()
+                session = null
+                childProfile = null
+                devicePreferences.edit().remove("mode").apply()
+                deviceMode = "unknown"
+                AppScreen.DEVICE_SETUP
+            }
             AppScreen.PARENT_HOME, AppScreen.CHILD_HOME, AppScreen.AUTH -> AppScreen.AUTH
             AppScreen.CHILDREN, AppScreen.SUBJECTS, AppScreen.ASSIGN_TASK, AppScreen.REPORTS, AppScreen.PROTECTION_STATUS, AppScreen.CHILD_LOCATIONS -> AppScreen.PARENT_HOME
             AppScreen.ADD_CHILD, AppScreen.APP_USAGE_REPORT, AppScreen.ALLOWED_APPS -> AppScreen.CHILDREN
@@ -482,6 +575,20 @@ private fun EduLockApp(repository: EduLockRepository) {
             color = MaterialTheme.colorScheme.background
         ) {
             when (screen) {
+                AppScreen.DEVICE_SETUP -> ScreenFrame("Set up this phone", notice = notice, busy = busy) {
+                    Text("Choose how this phone will use EduLock.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("A parent phone signs in with the parent's email and password. A child phone must be linked using the six-digit, one-time code generated from the parent's child profile.")
+                    Button(
+                        onClick = { chooseParentDevice() },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("This is the parent's phone") }
+                    OutlinedButton(
+                        onClick = { chooseChildDevice() },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("This is the child's phone — pair with code") }
+                }
                 AppScreen.AUTH -> ScreenFrame("EduLock", notice = notice, busy = busy) {
                     Text("Learn first. Play with purpose.", style = MaterialTheme.typography.titleMedium)
                     Text("A parent manages the family. A child device joins securely with a one-time pairing code.")
@@ -575,8 +682,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                     repository.signOut()
                     session = null
                     childProfile = null
-                    accountRole = "parent"
-                    screen = AppScreen.AUTH
+                    devicePreferences.edit().remove("mode").apply()
+                    deviceMode = "unknown"
+                    screen = AppScreen.DEVICE_SETUP
                 }, notice = notice, busy = busy) {
                     Text("Enter the six-digit, one-time code generated by the parent. No child email address or password is needed.")
                     Text("The code expires after 10 minutes and can be used once. Keep this device's app data intact after pairing; anonymous child sessions cannot be recovered if app data is cleared.")
