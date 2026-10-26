@@ -63,7 +63,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $$
 begin
   insert into edulock.allowed_apps(child_id, package_name, display_name, enabled, daily_limit_minutes)
   values (new.child_id, new.package_name, new.display_name, true, 1440)
@@ -71,7 +71,7 @@ begin
     set display_name = excluded.display_name;
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists child_installed_apps_default_allow on edulock.child_installed_apps;
 create trigger child_installed_apps_default_allow
