@@ -60,8 +60,9 @@ Deno.serve(async (req) => {
 
     const { data: bankQuestions, error: bankError } = await admin.schema("edulock")
       .from("curriculum_questions").select("*").in("id", ids).eq("active", true)
-      .in("country_code", [countryCode, "ZZ"]).eq("grade_level", grade)
-      .eq("subject_code", subjectCode).in("language_code", [language, "en"])
+      .in("country_code", [countryCode, "ZZ"])
+      .gte("grade_level", 0).lte("grade_level", 13)
+      .eq("subject_code", subjectCode).in("language_code", [...new Set(language === "en" ? ["en"] : [language, "en"])])
       .lte("age_min", age).gte("age_max", age);
     if (bankError) {
       console.error("Curriculum import lookup failed", bankError.code, bankError.message);

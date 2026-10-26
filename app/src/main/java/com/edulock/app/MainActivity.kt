@@ -78,7 +78,7 @@ import java.time.Instant
 import java.util.Locale
 
 private enum class AppScreen {
-    DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES,
+    DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ,
     SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
     REPORTS, ALLOWED_APPS, PROTECTION_STATUS, CHILD_LOCATIONS, APP_USAGE_REPORT, PLAY_TASK, TASK_RESULT
 }
@@ -90,6 +90,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     val devicePreferences = remember { context.getSharedPreferences("edulock_device_mode", Context.MODE_PRIVATE) }
     var deviceMode by remember { mutableStateOf(devicePreferences.getString("mode", "unknown") ?: "unknown") }
     var screen by remember { mutableStateOf(if (deviceMode == "unknown") AppScreen.DEVICE_SETUP else AppScreen.AUTH) }
+    var solarQuizReturnScreen by remember { mutableStateOf(AppScreen.PARENT_HOME) }
     // Never populate the UI from an unverified cached session.
     var session by remember { mutableStateOf<AuthSession?>(null) }
     var accountRole by remember { mutableStateOf("parent") }
@@ -593,6 +594,7 @@ private fun EduLockApp(repository: EduLockRepository) {
             AppScreen.LEARNING_TEMPLATES -> if (selectedSubject != null) AppScreen.QUESTIONS else AppScreen.PARENT_HOME
             AppScreen.ADD_QUESTION, AppScreen.ADD_TRANSLATION -> AppScreen.QUESTIONS
             AppScreen.PLAY_TASK, AppScreen.TASK_RESULT -> AppScreen.CHILD_HOME
+            AppScreen.SOLAR_SYSTEM_QUIZ -> solarQuizReturnScreen
         }
         notice = null
     }
@@ -852,7 +854,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                     SummaryCard("Learning", subjects.size.toString() + " subject(s)", "Create questions in Urdu, Sindhi, English or another language.")
                     Button(onClick = { screen = AppScreen.CHILDREN; execute { children = repository.loadChildren(familyId) } }, modifier = Modifier.fillMaxWidth()) { Text("Manage child profiles") }
                     Button(onClick = { screen = AppScreen.SUBJECTS; execute { subjects = repository.loadSubjects(familyId) } }, modifier = Modifier.fillMaxWidth()) { Text("Subjects & questions") }
-                    OutlinedButton(onClick = { selectedSubject = null; templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES }, modifier = Modifier.fillMaxWidth()) { Text("🧪 Math, physics & chemistry templates") }
+                    OutlinedButton(onClick = { selectedSubject = null; templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES }, modifier = Modifier.fillMaxWidth()) { Text("🧪 Learning templates for all subjects") }
+                    OutlinedButton(onClick = { solarQuizReturnScreen = AppScreen.PARENT_HOME; screen = AppScreen.SOLAR_SYSTEM_QUIZ }, modifier = Modifier.fillMaxWidth()) { Text("🌌 Preview the 3D Solar System quiz") }
                     Button(onClick = { selectedChild = null; selectedSubject = null; screen = AppScreen.ASSIGN_TASK }, modifier = Modifier.fillMaxWidth()) { Text("Assign learning task & reward") }
                     OutlinedButton(onClick = { screen = AppScreen.REPORTS; execute { attempts = repository.loadAttempts(); conceptProgress = repository.loadConceptProgress() } }, modifier = Modifier.fillMaxWidth()) { Text("🏆  Learning progress reports") }
                     OutlinedButton(onClick = {
@@ -1076,13 +1079,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                             Triple("social", "Social Studies", "Community, geography and civic life"),
                             Triple("computer", "Computer Skills", "Devices, digital skills and online safety"),
                             Triple("urdu", "Urdu", "Urdu vocabulary, opposites and reading practice"),
-                            Triple("sindhi", "Sindhi", "Sindhi vocabulary, reading and language practice")
+                            Triple("sindhi", "Sindhi", "Sindhi vocabulary, reading and language practice"),
+                            Triple("hindi", "Hindi", "Hindi vocabulary, reading and language practice")
                         ).forEach { (code, name, detail) ->
                             Card(
                                 modifier = Modifier.fillMaxWidth().clickable {
                                     curriculumSubjectCode = code
                                     if (code == "urdu") curriculumLanguageCode = "ur"
                                     if (code == "sindhi") curriculumLanguageCode = "sd"
+                                    if (code == "hindi") curriculumLanguageCode = "hi"
                                     curriculumSearchResult = null
                                     curriculumSelectedIds = emptySet()
                                 },
@@ -1267,24 +1272,33 @@ private fun EduLockApp(repository: EduLockRepository) {
                 }
 
                 AppScreen.LEARNING_TEMPLATES -> ScreenFrame(
-                    "Math & science templates",
+                    "Learning templates",
                     onBack = { screen = if (selectedSubject != null) AppScreen.QUESTIONS else AppScreen.PARENT_HOME },
                     notice = notice,
                     busy = busy
                 ) {
                     Text(
-                        "Ready-to-use questions with worked solutions. Physics and chemistry activities include materials, steps, expected observations and safety notes.",
+                        "Ready-to-use question templates for core school subjects. Practical science activities include worked solutions, steps and safety notes.",
                         style = MaterialTheme.typography.bodyMedium
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("Mathematics", "Physics", "Chemistry").forEach { category ->
-                            OutlinedButton(
-                                onClick = { templateCategory = category },
-                                enabled = !busy
-                            ) {
-                                Text(if (templateCategory == category) "✓ $category" else category)
+                    OutlinedButton(
+                        onClick = { solarQuizReturnScreen = AppScreen.LEARNING_TEMPLATES; screen = AppScreen.SOLAR_SYSTEM_QUIZ },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("🌌 Play interactive 3D Solar System quiz") }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("Mathematics", "Physics", "Chemistry", "Biology", "General Science", "English", "Urdu", "Sindhi", "Hindi", "Social Studies", "Computer Skills")
+                            .chunked(2).forEach { categories ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    categories.forEach { category ->
+                                        OutlinedButton(
+                                            onClick = { templateCategory = category },
+                                            enabled = !busy,
+                                            modifier = Modifier.weight(1f)
+                                        ) { Text(if (templateCategory == category) "✓ $category" else category) }
+                                    }
+                                }
                             }
-                        }
                     }
                     val filteredTemplates = LearningTemplates.all.filter { it.category == templateCategory }
                     filteredTemplates.forEach { template ->
@@ -1315,6 +1329,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     }
                                 }
                                 Text("Question preview", fontWeight = FontWeight.Bold)
+                                if (template.conceptKey == "solar-system-planet-id") SolarSystemModelPreview()
                                 Text(template.prompt)
                                 if (template.options.isNotEmpty()) {
                                     Text("Answer choices: " + template.options.joinToString(" • "))
@@ -1811,6 +1826,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.CHILD_HOME -> ScreenFrame("Your learning space", notice = notice, busy = busy) {
                     val child = childProfile
                     Text("Hello, " + (child?.displayName ?: "learner") + "!")
+                    Button(onClick = { solarQuizReturnScreen = AppScreen.CHILD_HOME; screen = AppScreen.SOLAR_SYSTEM_QUIZ }, modifier = Modifier.fillMaxWidth()) { Text("🚀 Play the 3D Solar System planet quiz") }
                     SummaryCard("Learning rewards earned today", earnedToday.toString() + " minutes", "Successful tasks add reward minutes. Rewards are tracked separately from app access.")
                     SummaryCard(
                         "App access",
@@ -2157,6 +2173,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         Text("Question " + (questionIndex + 1) + " of " + questions.size, style = MaterialTheme.typography.titleMedium)
                         LinearProgressIndicator(progress = { (questionIndex + 1).toFloat() / questions.size.toFloat() }, modifier = Modifier.fillMaxWidth())
                         Text("Concept: " + question.conceptKey, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        if (question.conceptKey == "solar-system-planet-id") SolarSystemModelPreview()
                         Text("Try this same concept in another language:", style = MaterialTheme.typography.bodyMedium)
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             languageOptions.forEach { lang ->
@@ -2236,6 +2253,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                     } else {
                         Text("No question is available. Return to your task list and sync again.")
                     }
+                }
+
+                AppScreen.SOLAR_SYSTEM_QUIZ -> ScreenFrame("3D Solar System Quiz", onBack = { screen = solarQuizReturnScreen }, notice = notice, busy = busy) {
+                    Text("Explore the moving solar system. Tap the planet described by the clue, then type its name. Your practice score stays on this device.")
+                    SolarSystemQuizContent()
                 }
 
                 AppScreen.TASK_RESULT -> ScreenFrame("Task result", onBack = { screen = AppScreen.CHILD_HOME }, notice = notice, busy = busy) {

@@ -16,8 +16,9 @@ android {
         applicationId = "com.edulock.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        // New CI APKs have a higher code so Android recognises them as upgrades.
+        versionCode = maxOf(3, (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1) + 2)
+        versionName = "0.2.${System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 3}"
         buildConfigField("String", "SUPABASE_URL", quotedBuildConfig(supabaseUrl))
         buildConfigField("String", "SUPABASE_ANON_KEY", quotedBuildConfig(supabaseAnonKey))
     }

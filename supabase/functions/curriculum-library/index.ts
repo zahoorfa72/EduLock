@@ -59,45 +59,40 @@ Deno.serve(async (req) => {
     }
 
     const selectFields = "id,country_code,curriculum_name,grade_level,age_min,age_max,subject_code,subject_name,language_code,topic,prompt,question_type,options,concept_key,source_note";
-    const { data: exact, error: exactError } = await admin.schema("edulock")
+    // Keep age-band matching strict. If exact locale/grade content is sparse, rank useful
+    // questions across the selected country and international bank, nearby grades, and English.
+    const languages = [...new Set(language === "en" ? ["en"] : [language, "en"])];
+    const { data: candidates, error: candidateError } = await admin.schema("edulock")
       .from("curriculum_questions").select(selectFields)
-      .eq("active", true).eq("country_code", countryCode).eq("grade_level", grade)
-      .eq("subject_code", subjectCode).eq("language_code", language)
-      .lte("age_min", age).gte("age_max", age).order("topic").limit(80);
-    if (exactError) {
-      console.error("Curriculum lookup failed", exactError.code, exactError.message);
+      .eq("active", true).in("country_code", [countryCode, "ZZ"])
+      .gte("grade_level", 0).lte("grade_level", 13)
+      .eq("subject_code", subjectCode).in("language_code", languages)
+      .lte("age_min", age).gte("age_max", age)
+      .order("grade_level").order("topic").limit(400);
+    if (candidateError) {
+      console.error("Curriculum lookup failed", candidateError.code, candidateError.message);
       return json({ error: "Curriculum library is unavailable. Apply the latest EduLock database migrations." }, 500);
     }
-
-    let questions = exact ?? [];
-    let fallbackUsed = false;
-    if (questions.length < 10 && countryCode !== "ZZ") {
-      const { data: fallback, error: fallbackError } = await admin.schema("edulock")
-        .from("curriculum_questions").select(selectFields)
-        .eq("active", true).eq("country_code", "ZZ").eq("grade_level", grade)
-        .eq("subject_code", subjectCode).eq("language_code", language)
-        .lte("age_min", age).gte("age_max", age).order("topic").limit(80);
-      if (fallbackError) {
-        console.error("Starter curriculum lookup failed", fallbackError.code, fallbackError.message);
-        return json({ error: "Could not load starter questions" }, 500);
-      }
-      if ((fallback ?? []).length > 0) {
-        const existing = new Set(questions.map((q: any) => q.id));
-        questions = [...questions, ...(fallback ?? []).filter((q: any) => !existing.has(q.id))].slice(0, 80);
-        fallbackUsed = true;
+    const ranked = [...(candidates ?? [])].sort((a: any, b: any) => {
+      const score = (q: any) =>
+        Math.abs(Number(q.grade_level) - grade) * 4 +
+        (q.language_code === language ? 0 : 2) +
+        (q.country_code === countryCode ? 0 : 1);
+      return score(a) - score(b) || String(a.topic).localeCompare(String(b.topic));
+    });
+    const uniqueQuestions: any[] = [];
+    const seenQuestions = new Set<string>();
+    for (const q of ranked) {
+      const key = [q.language_code, q.concept_key, q.prompt].join("|");
+      if (!seenQuestions.has(key)) {
+        seenQuestions.add(key);
+        uniqueQuestions.push(q);
       }
     }
-
-    if (questions.length === 0 && language !== "en") {
-      const { data: english, error: englishError } = await admin.schema("edulock")
-        .from("curriculum_questions").select(selectFields)
-        .eq("active", true).in("country_code", [countryCode, "ZZ"])
-        .eq("grade_level", grade).eq("subject_code", subjectCode).eq("language_code", "en")
-        .lte("age_min", age).gte("age_max", age).order("topic").limit(80);
-      if (englishError) return json({ error: "Could not load English starter questions" }, 500);
-      questions = english ?? [];
-      fallbackUsed = questions.length > 0;
-    }
+    const questions = uniqueQuestions.slice(0, 80);
+    const fallbackUsed = questions.some((q: any) =>
+      Number(q.grade_level) !== grade || q.language_code !== language || q.country_code === "ZZ"
+    );
 
     return json({
       questions: questions.map((q: any) => ({
@@ -112,8 +107,8 @@ Deno.serve(async (req) => {
       requested_country: countryCode,
       requested_language: language,
       message: fallbackUsed
-        ? "Some questions use the international starter bank or English because a reviewed local-language bank is not yet available. This is practice content, not a complete official syllabus."
-        : "Questions are filtered by country, grade and age. Verify board-specific alignment with your child's current school syllabus."
+        ? "Found age-matched questions. Some use English, international starter content or a nearby grade because reviewed local material is not available for every combination. Check alignment with your child's school board."
+        : "Questions match the selected country, grade, age and language. Verify board-specific alignment with your child's current school syllabus."
     });
   } catch (error) {
     console.error("Curriculum library request failed", error);

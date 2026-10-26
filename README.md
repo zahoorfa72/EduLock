@@ -39,16 +39,15 @@ This code does not include an APK signing/release configuration, a deployed Supa
 Use the intended EduLock Supabase project. EduLock uses its own `edulock` schema and does not change HumanMesh's `public` tables, but do not run these migrations in an unintended project.
 
 1. In Supabase Dashboard → **Project Settings → API → Exposed schemas**, add `edulock` while preserving all existing exposed schemas. PostgREST needs to expose the custom schema for this app and the Edge Functions.
-2. Apply migrations in numerical order:
-   - `supabase/migrations/0001_edulock_foundation.sql`
-   - `supabase/migrations/0002_secure_parent_child_rewards.sql`
-   - `supabase/migrations/0003_concept_bridge_translations.sql`
-   - `supabase/migrations/0004_per_app_daily_limits.sql`
-   - `supabase/migrations/0005_app_usage_reporting.sql`
+2. Apply **all** SQL migrations in numerical order through the latest numbered file in `supabase/migrations/`. The repository includes country-aware curriculum, Urdu/Sindhi/Hindi starter content and expanded grade-banded question sets. Do not stop at migration 0005.
+
+   When the `edulock-supabase` GitHub environment and its secrets are configured, pushes to `main` that change migrations or Edge Functions automatically run the deployment workflow to apply pending migrations and deploy functions.
 3. Deploy these functions from the repository using the Supabase CLI linked to the intended project:
    - `supabase functions deploy create-child-pairing-code`
    - `supabase functions deploy claim-child-pairing`
    - `supabase functions deploy submit-task-attempt`
+   - `supabase functions deploy curriculum-library`
+   - `supabase functions deploy import-curriculum-questions`
 4. Confirm the Edge Function environment has Supabase's server-provided `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. The service-role key is used only inside Edge Functions; it must never be copied into Android, GitHub Actions build variables, or chat.
 5. In Supabase Auth, choose the appropriate email-confirmation policy for parent accounts. Child device pairing does not use email confirmation, because child devices do not create email/password accounts.
 6. In Supabase Auth settings, enable **Anonymous Sign-Ins** for the EduLock project. Create a parent account in EduLock, add a child profile and generate a pairing code. On the child's device, choose **Set up a child's device with pairing code** and enter the six-digit code. No child email/password account is created. Codes expire after ten minutes and work once.

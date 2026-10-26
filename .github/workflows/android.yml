@@ -19,6 +19,28 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      # Persist a single debug certificate across hosted-runner instances.
+      - name: Restore stable debug signing key
+        id: debug-keystore-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: edulock-stable-debug-keystore-v1
+      - name: Generate stable debug signing key on first build
+        if: steps.debug-keystore-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$HOME/.android"
+          keytool -genkeypair -v -storetype JKS \
+            -keystore "$HOME/.android/debug.keystore" \
+            -storepass android -alias androiddebugkey -keypass android \
+            -dname "CN=Android Debug,O=EduLock,C=PK" \
+            -keyalg RSA -keysize 2048 -validity 10000
+      - name: Cache stable debug signing key
+        if: steps.debug-keystore-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: edulock-stable-debug-keystore-v1
       - name: Build debug APK
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
