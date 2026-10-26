@@ -67,6 +67,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -1169,6 +1172,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 if (snapshot?.batteryPercent != null) Text("Child-device battery: ${snapshot.batteryPercent}%")
                                 if (snapshot?.latitude != null && snapshot.longitude != null) {
                                     Text("Last saved location: ${snapshot.latitude}, ${snapshot.longitude}", fontWeight = FontWeight.SemiBold)
+                                    ChildLocationMap(snapshot.latitude, snapshot.longitude)
                                     if (snapshot.accuracyMeters != null) Text("Reported accuracy: about ${snapshot.accuracyMeters.toInt()} m")
                                     Text(
                                         "Location fix time: " + (snapshot.recordedAt?.replace("T", " ")?.take(19) ?: "not available"),
@@ -1347,6 +1351,56 @@ private fun EduLockApp(repository: EduLockRepository) {
             }
         }
     }
+}
+
+@Composable
+private fun ChildLocationMap(latitude: Double, longitude: Double) {
+    val html = remember(latitude, longitude) {
+        """
+        <!doctype html>
+        <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=3">
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://unpkg.com; style-src https://unpkg.com 'unsafe-inline'; img-src https://tile.openstreetmap.org https://unpkg.com data:; connect-src https://tile.openstreetmap.org;">
+          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+          <style>html,body,#map{height:100%;width:100%;margin:0;padding:0} .leaflet-container{font-family:sans-serif}</style>
+        </head>
+        <body>
+          <div id="map"></div>
+          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+          <script>
+            const point = [${latitude}, ${longitude}];
+            const map = L.map('map').setView(point, 15);
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              maxZoom: 19,
+              attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+            L.marker(point).addTo(map).bindPopup('Latest reported location').openPopup();
+          </script>
+        </body>
+        </html>
+        """.trimIndent()
+    }
+    AndroidView(
+        modifier = Modifier.fillMaxWidth().height(240.dp),
+        factory = { viewContext ->
+            WebView(viewContext).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = false
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                webViewClient = WebViewClient()
+                tag = html
+                loadDataWithBaseURL("https://edulock.local/", html, "text/html", "UTF-8", null)
+            }
+        },
+        update = { webView ->
+            if (webView.tag != html) {
+                webView.tag = html
+                webView.loadDataWithBaseURL("https://edulock.local/", html, "text/html", "UTF-8", null)
+            }
+        }
+    )
 }
 
 @Composable
