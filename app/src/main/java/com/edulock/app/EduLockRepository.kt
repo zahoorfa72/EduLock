@@ -245,25 +245,40 @@ class EduLockRepository(context: Context) {
     suspend fun restoreSession(): AuthSession? {
         if (!isConfigured) return null
         val existing = sessionStore.read() ?: return null
-        if (existing.expiresAtMillis > System.currentTimeMillis() + 60_000) return existing
-        if (existing.refreshToken.isBlank()) {
-            signOut()
-            return null
-        }
         return try {
-            val json = send("auth/v1/token?grant_type=refresh_token", "POST",
-                JSONObject().put("refresh_token", existing.refreshToken), authenticated = false, profile = false) as? JSONObject
-                ?: throw IOException("Unexpected session refresh response")
-            val refreshed = sessionFrom(json, existing.accountRole, existing.userId)
-                ?: throw IOException("Could not refresh session")
-            sessionStore.save(refreshed)
-            refreshed
+            val candidate = if (existing.expiresAtMillis > System.currentTimeMillis() + 60_000) {
+                existing
+            } else {
+                if (existing.refreshToken.isBlank()) throw IOException("Session expired. Please sign in again.")
+                val json = send(
+                    "auth/v1/token?grant_type=refresh_token",
+                    "POST",
+                    JSONObject().put("refresh_token", existing.refreshToken),
+                    authenticated = false,
+                    profile = false
+                ) as? JSONObject ?: throw IOException("Unexpected session refresh response")
+                sessionFrom(json, existing.accountRole, existing.userId)
+                    ?: throw IOException("Could not refresh session")
+            }
+
+            // Verify the role on the server; never trust a cached role to choose a dashboard.
+            sessionStore.save(candidate)
+            val profileRows = restArray(
+                "user_profiles?select=account_role&user_id=eq." + candidate.userId + "&limit=1"
+            )
+            val serverRole = profileRows.optJSONObject(0)?.optString("account_role")
+                ?.takeIf { it == "parent" || it == "child" }
+                ?: throw IOException("This session has no valid EduLock profile. Please sign in again.")
+            if (serverRole != candidate.accountRole) {
+                throw IOException("Account role mismatch. Please sign in again and pair this device using the parent code.")
+            }
+            candidate
         } catch (_: Exception) {
+            // Invalid/stale sessions must not open the wrong account dashboard.
             signOut()
             null
         }
     }
-
     suspend fun ensureParentFamily(displayName: String): String {
         val session = requireSession("parent")
         val profiles = restArray(
