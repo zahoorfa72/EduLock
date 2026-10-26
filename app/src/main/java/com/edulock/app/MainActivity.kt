@@ -461,20 +461,22 @@ private fun EduLockApp(repository: EduLockRepository) {
         val child = childProfile
         if (screen == AppScreen.CHILD_HOME && child != null && repository.currentSession()?.accountRole == "child") {
             try {
-                val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-                val resolved = if (Build.VERSION.SDK_INT >= 33) {
-                    context.packageManager.queryIntentActivities(launcherIntent, PackageManager.ResolveInfoFlags.of(0L))
+                // Include installed packages without a launcher icon as well; parents need a
+                // complete inventory, not only apps that happen to expose a launcher activity.
+                val installedApps = if (Build.VERSION.SDK_INT >= 33) {
+                    context.packageManager.getInstalledApplications(PackageManager.ApplicationInfoFlags.of(0L))
                 } else {
                     @Suppress("DEPRECATION")
-                    context.packageManager.queryIntentActivities(launcherIntent, 0)
+                    context.packageManager.getInstalledApplications(0)
                 }
-                val visibleApps = resolved.mapNotNull { info ->
-                    val activityInfo = info.activityInfo ?: return@mapNotNull null
-                    val pkg = activityInfo.packageName
+                val visibleApps = installedApps.mapNotNull { info ->
+                    val pkg = info.packageName
                     if (pkg == context.packageName) return@mapNotNull null
-                    val label = activityInfo.loadLabel(context.packageManager)?.toString()?.trim().orEmpty()
-                    if (label.isBlank()) null else pkg to label
-                }.distinctBy { it.first }.take(300)
+                    val label = try {
+                        info.loadLabel(context.packageManager)?.toString()?.trim().orEmpty()
+                    } catch (_: Exception) { "" }
+                    if (label.isBlank() || pkg.startsWith("com.android.providers.")) null else pkg to label
+                }.distinctBy { it.first }.take(500)
                 repository.syncInstalledApps(child.id, visibleApps)
             } catch (_: Exception) {
                 // Keep the child experience available if inventory sync is temporarily unavailable.
