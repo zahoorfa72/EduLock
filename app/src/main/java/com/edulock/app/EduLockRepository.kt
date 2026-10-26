@@ -297,6 +297,18 @@ class EduLockRepository(context: Context) {
         return rows.optJSONObject(0)?.toChildProfile() ?: throw IOException("Could not create this child profile")
     }
 
+    suspend fun deactivateChildLink(childId: String) {
+        requireSession("parent")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        restArray("children?id=eq.$childId", "PATCH", JSONObject().put("child_user_id", JSONObject.NULL))
+    }
+
+    suspend fun deleteChildProfile(childId: String) {
+        requireSession("parent")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        send("rest/v1/children?id=eq.$childId", "DELETE", null, authenticated = true, profile = true)
+    }
+
     suspend fun loadCurrentChild(): ChildProfile? {
         val session = requireSession("child")
         val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes&child_user_id=eq.${session.userId}&limit=1")
