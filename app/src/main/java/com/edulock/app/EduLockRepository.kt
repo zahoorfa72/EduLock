@@ -735,6 +735,10 @@ class EduLockRepository(context: Context) {
             val message = listOf("msg", "message", "error_description", "error", "hint")
                 .firstNotNullOfOrNull { key -> json.optString(key).takeIf { it.isNotBlank() && it != "null" } }
             if (message != null) {
+                if (message.contains("anonymous_provider_disabled", ignoreCase = true) ||
+                    message.contains("anonymous sign-ins are disabled", ignoreCase = true)) {
+                    return "Child pairing needs Anonymous Sign-Ins enabled in the EduLock Supabase project: Authentication → Sign In / Providers → Anonymous."
+                }
                 if (message.contains("invalid schema: edulock", ignoreCase = true)) {
                     return "EduLock database is installed, but the edulock schema is not exposed to the Supabase Data API. In Integrations > Data API > Settings > Exposed schemas, select edulock and Save."
                 }
