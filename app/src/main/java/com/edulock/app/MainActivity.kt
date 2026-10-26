@@ -962,6 +962,241 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }, enabled = !busy && childName.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Save learning profile") }
                 }
 
+                AppScreen.CURRICULUM_LIBRARY -> ScreenFrame(
+                    "Country curriculum",
+                    onBack = { screen = AppScreen.CHILDREN },
+                    notice = notice,
+                    busy = busy
+                ) {
+                    val child = selectedChild
+                    if (child == null) {
+                        Text("Choose a child profile first.")
+                    } else {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF0FF))
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Text(child.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                Text(
+                                    displayCountryName(curriculumCountryCode) + " • " +
+                                        (curriculumGradeLevel.toIntOrNull()?.let { if (it == 0) "Kindergarten" else "Grade $it" } ?: "Choose grade") +
+                                        " • Age " + curriculumAgeYears + " • " + curriculumLanguageCode.uppercase(),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text("Choose the child's learning context and import ready-made questions. The answer key stays server-side; you do not need to write questions yourself.")
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                countryPickerTarget = "curriculum"
+                                countrySearch = ""
+                                countryPickerOpen = true
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("🌍  Country: ${displayCountryName(curriculumCountryCode)}") }
+
+                        Field(
+                            curriculumGradeLevel,
+                            { curriculumGradeLevel = it.filter(Char::isDigit).take(2); curriculumSearchResult = null; curriculumSelectedIds = emptySet() },
+                            "School grade (0 = Kindergarten, 1–13)",
+                            keyboardType = KeyboardType.Number
+                        )
+                        Field(
+                            curriculumAgeYears,
+                            { curriculumAgeYears = it.filter(Char::isDigit).take(2); curriculumSearchResult = null; curriculumSelectedIds = emptySet() },
+                            "Child age (3–19 years)",
+                            keyboardType = KeyboardType.Number
+                        )
+
+                        Text("Learning language", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        listOf(
+                            "en" to "English",
+                            "ur" to "اردو",
+                            "sd" to "سنڌي",
+                            "ar" to "العربية",
+                            "fa" to "فارسی",
+                            "ps" to "پښتو",
+                            "fr" to "Français",
+                            "es" to "Español",
+                            "id" to "Bahasa Indonesia",
+                            "zh" to "中文"
+                        ).forEach { (code, label) ->
+                            if (curriculumLanguageCode.equals(code, true)) {
+                                Button(
+                                    onClick = { curriculumLanguageCode = code; curriculumSearchResult = null; curriculumSelectedIds = emptySet() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("✓  $label ($code)") }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { curriculumLanguageCode = code; curriculumSearchResult = null; curriculumSelectedIds = emptySet() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("$label ($code)") }
+                            }
+                        }
+
+                        Text("Subject", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        listOf(
+                            Triple("math", "Mathematics", "Number sense, arithmetic, fractions and problem solving"),
+                            Triple("english", "English", "Vocabulary, reading and grammar"),
+                            Triple("science", "General Science", "Living things, health, matter and Earth science")
+                        ).forEach { (code, name, detail) ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    curriculumSubjectCode = code
+                                    curriculumSearchResult = null
+                                    curriculumSelectedIds = emptySet()
+                                },
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (curriculumSubjectCode == code) Color(0xFFE0F7EF) else MaterialTheme.colorScheme.surfaceVariant
+                                ),
+                                border = BorderStroke(
+                                    if (curriculumSubjectCode == code) 2.dp else 1.dp,
+                                    if (curriculumSubjectCode == code) MaterialTheme.colorScheme.secondary else Color(0xFFDDE2F2)
+                                )
+                            ) {
+                                Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text((if (curriculumSubjectCode == code) "✓  " else "") + name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                                    Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                execute {
+                                    val grade = curriculumGradeLevel.toIntOrNull()
+                                        ?: throw IllegalArgumentException("Enter a grade from 0 to 13.")
+                                    val age = curriculumAgeYears.toIntOrNull()
+                                        ?: throw IllegalArgumentException("Enter an age from 3 to 19.")
+                                    require(grade in 0..13) { "Grade must be between Kindergarten (0) and 13." }
+                                    require(age in 3..19) { "Age must be between 3 and 19." }
+                                    val targetChild = selectedChild ?: throw IllegalStateException("Choose a child profile first.")
+                                    val result = repository.updateChildCurriculum(targetChild.id, curriculumCountryCode, grade, age)
+                                    selectedChild = targetChild.copy(countryCode = curriculumCountryCode, schoolGrade = grade, ageYears = age)
+                                    children = children.map { if (it.id == targetChild.id) selectedChild!! else it }
+                                    notice = "Country, grade and age saved for ${targetChild.displayName}."
+                                }
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Save learning profile") }
+
+                        Button(
+                            onClick = {
+                                execute {
+                                    val grade = curriculumGradeLevel.toIntOrNull()
+                                        ?: throw IllegalArgumentException("Enter a grade from 0 to 13.")
+                                    val age = curriculumAgeYears.toIntOrNull()
+                                        ?: throw IllegalArgumentException("Enter an age from 3 to 19.")
+                                    require(grade in 0..13) { "Grade must be between Kindergarten (0) and 13." }
+                                    require(age in 3..19) { "Age must be between 3 and 19." }
+                                    val targetChild = selectedChild ?: throw IllegalStateException("Choose a child profile first.")
+                                    val result = repository.loadCurriculumQuestions(
+                                        targetChild.id, curriculumCountryCode, grade, age,
+                                        curriculumSubjectCode, curriculumLanguageCode
+                                    )
+                                    curriculumSearchResult = result
+                                    curriculumSelectedIds = result.questions.map { it.id }.toSet()
+                                    notice = if (result.questions.isEmpty())
+                                        "No questions match this grade and age yet. Try another subject or grade."
+                                    else result.message
+                                }
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("✨  Find age-matched questions") }
+
+                        curriculumSearchResult?.let { result ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF8F4))
+                            ) {
+                                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                    Text(
+                                        if (result.questions.isEmpty()) "No questions found" else "${result.questions.size} questions for this learning profile",
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Text(result.message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (result.questions.isNotEmpty()) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                curriculumSelectedIds = if (curriculumSelectedIds.size == result.questions.size) emptySet()
+                                                    else result.questions.map { it.id }.toSet()
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(if (curriculumSelectedIds.size == result.questions.size) "Clear selection" else "Select all questions")
+                                        }
+                                    }
+                                }
+                            }
+                            result.questions.forEach { item ->
+                                val chosen = item.id in curriculumSelectedIds
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        curriculumSelectedIds = if (chosen) curriculumSelectedIds - item.id
+                                            else curriculumSelectedIds + item.id
+                                    },
+                                    shape = RoundedCornerShape(18.dp),
+                                    border = BorderStroke(
+                                        if (chosen) 2.dp else 1.dp,
+                                        if (chosen) MaterialTheme.colorScheme.secondary else Color(0xFFDDE2F2)
+                                    ),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (chosen) Color(0xFFE4F7F0) else MaterialTheme.colorScheme.surface
+                                    )
+                                ) {
+                                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text(
+                                            (if (chosen) "✓ SELECTED  " else "TAP TO SELECT  ") + item.topic,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(item.prompt, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                        if (item.options.isNotEmpty()) Text("Choices: " + item.options.joinToString("   •   "))
+                                        Text(
+                                            "Grade ${item.gradeLevel} • Age ${item.ageMin}–${item.ageMax} • ${item.languageCode.uppercase()} • " + item.curriculumName,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                        Text(item.sourceNote, style = MaterialTheme.typography.bodySmall, color = Color(0xFF88601B))
+                                    }
+                                }
+                            }
+                            Button(
+                                onClick = {
+                                    execute {
+                                        val grade = curriculumGradeLevel.toIntOrNull() ?: throw IllegalArgumentException("Enter a valid grade.")
+                                        val age = curriculumAgeYears.toIntOrNull() ?: throw IllegalArgumentException("Enter a valid age.")
+                                        val targetChild = selectedChild ?: throw IllegalStateException("Choose a child profile first.")
+                                        val imported = repository.importCurriculumQuestions(
+                                            targetChild.id, curriculumCountryCode, grade, age,
+                                            curriculumSubjectCode, curriculumLanguageCode, curriculumSelectedIds.toList()
+                                        )
+                                        subjects = repository.loadSubjects(familyId)
+                                        selectedSubject = subjects.firstOrNull { it.id == imported.subjectId }
+                                        val targetSubject = selectedSubject
+                                            ?: throw IllegalStateException("Questions imported, but the subject could not be reloaded.")
+                                        questions = repository.loadQuestions(targetSubject.id)
+                                        questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
+                                        questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
+                                        screen = AppScreen.QUESTIONS
+                                        notice = imported.message + " Selected: ${imported.selectedCount}; newly added: ${imported.importedCount}."
+                                    }
+                                },
+                                enabled = !busy && curriculumSelectedIds.isNotEmpty() && curriculumSelectedIds.size <= 50,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Add selected questions to Subjects") }
+                        }
+                    }
+                }
+
                 AppScreen.SUBJECTS -> ScreenFrame("Subjects & questions", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
                     Button(onClick = { subjectTitle = ""; subjectLanguage = "en"; screen = AppScreen.ADD_SUBJECT }, modifier = Modifier.fillMaxWidth()) { Text("Create subject") }
                     if (subjects.isEmpty()) Text("Create a subject first, for example Mathematics (en), رياضي (ur) or a Sindhi subject.")
