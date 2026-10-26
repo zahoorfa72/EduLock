@@ -75,9 +75,10 @@ import android.webkit.WebViewClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.util.Locale
 
 private enum class AppScreen {
-    DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, LEARNING_TEMPLATES,
+    DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES,
     SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
     REPORTS, ALLOWED_APPS, PROTECTION_STATUS, CHILD_LOCATIONS, APP_USAGE_REPORT, PLAY_TASK, TASK_RESULT
 }
@@ -129,6 +130,19 @@ private fun EduLockApp(repository: EduLockRepository) {
     var childName by remember { mutableStateOf("") }
     var childLanguage by remember { mutableStateOf("en") }
     var childDailyCap by remember { mutableStateOf("60") }
+    var childCountryCode by remember { mutableStateOf("PK") }
+    var childSchoolGrade by remember { mutableStateOf("1") }
+    var childAgeYears by remember { mutableStateOf("8") }
+    var countryPickerOpen by remember { mutableStateOf(false) }
+    var countryPickerTarget by remember { mutableStateOf("child") }
+    var countrySearch by remember { mutableStateOf("") }
+    var curriculumCountryCode by remember { mutableStateOf("PK") }
+    var curriculumGradeLevel by remember { mutableStateOf("1") }
+    var curriculumAgeYears by remember { mutableStateOf("8") }
+    var curriculumSubjectCode by remember { mutableStateOf("math") }
+    var curriculumLanguageCode by remember { mutableStateOf("en") }
+    var curriculumSearchResult by remember { mutableStateOf<CurriculumSearchResult?>(null) }
+    var curriculumSelectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var subjectTitle by remember { mutableStateOf("") }
     var subjectLanguage by remember { mutableStateOf("en") }
     var questionPrompt by remember { mutableStateOf("") }
@@ -572,7 +586,7 @@ private fun EduLockApp(repository: EduLockRepository) {
             // Keep a child device out of the parent login/dashboard route.
             AppScreen.CHILD_HOME -> AppScreen.CHILD_HOME
             AppScreen.CHILDREN, AppScreen.SUBJECTS, AppScreen.ASSIGN_TASK, AppScreen.REPORTS, AppScreen.PROTECTION_STATUS, AppScreen.CHILD_LOCATIONS -> AppScreen.PARENT_HOME
-            AppScreen.ADD_CHILD, AppScreen.APP_USAGE_REPORT, AppScreen.ALLOWED_APPS -> AppScreen.CHILDREN
+            AppScreen.ADD_CHILD, AppScreen.APP_USAGE_REPORT, AppScreen.ALLOWED_APPS, AppScreen.CURRICULUM_LIBRARY -> AppScreen.CHILDREN
             AppScreen.ADD_SUBJECT, AppScreen.QUESTIONS -> AppScreen.SUBJECTS
             AppScreen.LEARNING_TEMPLATES -> if (selectedSubject != null) AppScreen.QUESTIONS else AppScreen.PARENT_HOME
             AppScreen.ADD_QUESTION, AppScreen.ADD_TRANSLATION -> AppScreen.QUESTIONS
@@ -600,6 +614,43 @@ private fun EduLockApp(repository: EduLockRepository) {
         large = RoundedCornerShape(29.dp)
     )
     MaterialTheme(colorScheme = eduLockColors, shapes = eduLockShapes) {
+        if (countryPickerOpen) {
+            val countryOptions = remember(countrySearch) {
+                Locale.getISOCountries().map { code ->
+                    code to Locale("", code).getDisplayCountry(Locale.ENGLISH).ifBlank { code }
+                }.filter { (_, name) -> name.contains(countrySearch, ignoreCase = true) }
+                    .sortedBy { it.second }
+            }
+            AlertDialog(
+                onDismissRequest = { countryPickerOpen = false },
+                title = { Text("Choose a country") },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Field(countrySearch, { countrySearch = it }, "Search countries")
+                        countryOptions.forEach { (code, name) ->
+                            TextButton(
+                                onClick = {
+                                    if (countryPickerTarget == "child") childCountryCode = code
+                                    else {
+                                        curriculumCountryCode = code
+                                        curriculumSearchResult = null
+                                        curriculumSelectedIds = emptySet()
+                                    }
+                                    countryPickerOpen = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(name + if (countryPickerTarget == "curriculum") " ($code)" else "", modifier = Modifier.fillMaxWidth())
+                            }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { countryPickerOpen = false }) { Text("Close") } }
+            )
+        }
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
@@ -799,6 +850,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.CHILDREN -> ScreenFrame("Child profiles", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
                     Button(onClick = {
                         childName = ""; childLanguage = "en"; childDailyCap = "60"
+                        childCountryCode = "PK"; childSchoolGrade = "1"; childAgeYears = "8"
                         screen = AppScreen.ADD_CHILD
                     }, modifier = Modifier.fillMaxWidth()) { Text("Add child profile") }
                     if (children.isEmpty()) Text("No child profiles yet. Add a child to create the protected parent-child link.")
@@ -810,6 +862,27 @@ private fun EduLockApp(repository: EduLockRepository) {
                             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                 Text(child.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                                 Text("Language: " + child.preferredLanguage + " • Daily cap: " + child.dailyCapMinutes + " minutes")
+                                Text(
+                                    displayCountryName(child.countryCode) + " • Grade " +
+                                        if (child.schoolGrade == 0) "Kindergarten" else child.schoolGrade.toString() +
+                                        " • Age " + child.ageYears,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                OutlinedButton(
+                                    onClick = {
+                                        selectedChild = child
+                                        curriculumCountryCode = child.countryCode
+                                        curriculumGradeLevel = child.schoolGrade.toString()
+                                        curriculumAgeYears = child.ageYears.toString()
+                                        curriculumLanguageCode = child.preferredLanguage
+                                        curriculumSubjectCode = "math"
+                                        curriculumSearchResult = null
+                                        curriculumSelectedIds = emptySet()
+                                        screen = AppScreen.CURRICULUM_LIBRARY
+                                    },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("📚  Country syllabus & question bank") }
                                 Text("Device link: generate a one-time code on the child's first setup.")
                                 OutlinedButton(onClick = {
                                     selectedChild = child
@@ -856,20 +929,37 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                 }
 
-                AppScreen.ADD_CHILD -> ScreenFrame("Add child", onBack = { screen = AppScreen.CHILDREN }, notice = notice, busy = busy) {
-                    Field(childName, { childName = it }, "Child's display name")
-                    Field(childLanguage, { childLanguage = it }, "Preferred language code: en, ur, sd or another code")
-                    Text("Language is a preference; questions can also be written in any Unicode language.")
+                AppScreen.ADD_CHILD -> ScreenFrame("Create your child's learning profile", onBack = { screen = AppScreen.CHILDREN }, notice = notice, busy = busy) {
+                    Text("Personalize lessons to the child's country, grade and age. You can update these later from the curriculum screen.")
+                    Field(childName, { childName = it }, "Child's name")
+                    OutlinedButton(onClick = {
+                        countryPickerTarget = "child"
+                        countrySearch = ""
+                        countryPickerOpen = true
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        Text("🌍  Country: ${displayCountryName(childCountryCode)}")
+                    }
+                    Field(childSchoolGrade, { childSchoolGrade = it.filter(Char::isDigit).take(2) }, "School grade (0 = Kindergarten, 1–13)", keyboardType = KeyboardType.Number)
+                    Field(childAgeYears, { childAgeYears = it.filter(Char::isDigit).take(2) }, "Child age (3–19 years)", keyboardType = KeyboardType.Number)
+                    Field(childLanguage, { childLanguage = it.trim().take(16) }, "Preferred learning language (en, ur, sd...)")
+                    Text("The question bank filters by country, grade, age and language. When a reviewed local-language set isn't available, EduLock clearly labels the starter-bank fallback.")
                     Field(childDailyCap, { childDailyCap = it.filter(Char::isDigit).take(4) }, "Maximum reward minutes per day (0–1440)", keyboardType = KeyboardType.Number)
                     Button(onClick = {
                         execute {
-                            val created = repository.addChild(familyId, childName, childLanguage, childDailyCap.toIntOrNull() ?: 60)
+                            val grade = childSchoolGrade.toIntOrNull() ?: throw IllegalArgumentException("Enter a grade from 0 to 13.")
+                            val age = childAgeYears.toIntOrNull() ?: throw IllegalArgumentException("Enter an age from 3 to 19.")
+                            require(grade in 0..13) { "Grade must be between Kindergarten (0) and 13." }
+                            require(age in 3..19) { "Age must be between 3 and 19." }
+                            val created = repository.addChild(
+                                familyId, childName, childLanguage, childDailyCap.toIntOrNull() ?: 60,
+                                childCountryCode, grade, age
+                            )
                             children = repository.loadChildren(familyId)
                             selectedChild = created
                             screen = AppScreen.CHILDREN
-                            notice = "Child profile saved. Generate a pairing code so the child can sign in on their own device."
+                            notice = "Learning profile saved. Open Country syllabus & question bank to choose age-matched questions."
                         }
-                    }, enabled = !busy && childName.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Save child profile") }
+                    }, enabled = !busy && childName.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Save learning profile") }
                 }
 
                 AppScreen.SUBJECTS -> ScreenFrame("Subjects & questions", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
