@@ -53,7 +53,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
 private enum class AppScreen {
-    AUTH, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD,
+    AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD,
     SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
     REPORTS, ALLOWED_APPS, PLAY_TASK, TASK_RESULT
 }
@@ -68,6 +68,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var isRegistering by remember { mutableStateOf(true) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var emailOtp by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
     var pairingCode by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -232,7 +233,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 }
                                 val result = repository.signUp(email, password, displayName, accountRole)
                                 if (result.session == null) {
-                                    notice = result.message
+                                    emailOtp = ""
+                                    screen = AppScreen.VERIFY_OTP
+                                    notice = "We sent a six-digit verification code to $email. Enter it below to verify your email."
                                 } else {
                                     resolveSignedIn(result.session, pairingCode)
                                     if (screen == AppScreen.PARENT_HOME || screen == AppScreen.CHILD_HOME) notice = result.message
@@ -263,6 +266,29 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                 }
 
+                AppScreen.VERIFY_OTP -> ScreenFrame("Verify your email", onBack = {
+                    screen = AppScreen.AUTH
+                    isRegistering = true
+                    notice = "Enter the six-digit code sent to $email to finish creating your account."
+                }, notice = notice, busy = busy) {
+                    Text("Enter the six-digit code sent to:")
+                    Text(email, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                    Field(emailOtp, { emailOtp = it.filter(Char::isDigit).take(6) }, "6-digit email verification code", keyboardType = KeyboardType.Number)
+                    Button(onClick = {
+                        execute {
+                            val verified = repository.verifySignupOtp(email, emailOtp, accountRole)
+                            resolveSignedIn(verified, pairingCode)
+                            if (screen == AppScreen.PARENT_HOME || screen == AppScreen.CHILD_HOME) notice = "Email verified successfully."
+                        }
+                    }, enabled = !busy && emailOtp.length == 6, modifier = Modifier.fillMaxWidth()) { Text("Verify email") }
+                    TextButton(onClick = {
+                        execute {
+                            repository.resendSignupOtp(email)
+                            notice = "A new verification code has been sent. Check your inbox and spam folder."
+                        }
+                    }, enabled = !busy) { Text("Resend code") }
+                    Text("In Supabase, set Authentication > Email Templates > Confirm signup to send a code using the Token template variable.")
+                }
                 AppScreen.PAIR_CHILD -> ScreenFrame("Link child account", onBack = {
                     repository.signOut(); session = null; screen = AppScreen.AUTH
                 }, notice = notice, busy = busy) {
