@@ -1112,10 +1112,17 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     require(grade in 0..13) { "Grade must be between Kindergarten (0) and 13." }
                                     require(age in 3..19) { "Age must be between 3 and 19." }
                                     val targetChild = selectedChild ?: throw IllegalStateException("Choose a child profile first.")
-                                    val result = repository.updateChildCurriculum(targetChild.id, curriculumCountryCode, grade, age)
-                                    selectedChild = targetChild.copy(countryCode = curriculumCountryCode, schoolGrade = grade, ageYears = age)
+                                    repository.updateChildCurriculum(
+                                        targetChild.id, curriculumCountryCode, grade, age, curriculumLanguageCode
+                                    )
+                                    selectedChild = targetChild.copy(
+                                        countryCode = curriculumCountryCode,
+                                        schoolGrade = grade,
+                                        ageYears = age,
+                                        preferredLanguage = curriculumLanguageCode
+                                    )
                                     children = children.map { if (it.id == targetChild.id) selectedChild!! else it }
-                                    notice = "Country, grade and age saved for ${targetChild.displayName}."
+                                    notice = "Country, grade, age and preferred language saved for ${targetChild.displayName}."
                                 }
                             },
                             enabled = !busy,
