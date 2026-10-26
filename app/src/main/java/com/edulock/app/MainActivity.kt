@@ -367,7 +367,27 @@ private fun EduLockApp(repository: EduLockRepository) {
                             resolveSignedIn(current)
                         }
                     }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Continue with an already linked device") }
-                    Text("If pairing reports that anonymous sign-ins are disabled, enable Authentication → Sign In / Providers → Anonymous in the EduLock Supabase project.")
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF4D8)),
+                        shape = MaterialTheme.shapes.large
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("One-time setup for the parent", fontWeight = FontWeight.Bold, color = Color(0xFF704B00))
+                            Text(
+                                "If pairing says anonymous sign-ins are disabled, enable this setting in the parent-managed Supabase project: Dashboard → Authentication → Sign In / Providers → Anonymous. Save the setting, then retry pairing. Reinstalling the app will not enable this project setting.",
+                                color = Color(0xFF704B00)
+                            )
+                            Text(
+                                "Never put a Supabase service-role key in the Android app. The child session is linked only after the parent-generated one-time code is claimed.",
+                                color = Color(0xFF704B00),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
                 }
 
                 AppScreen.PARENT_HOME -> ScreenFrame("Parent dashboard", notice = notice, busy = busy) {
