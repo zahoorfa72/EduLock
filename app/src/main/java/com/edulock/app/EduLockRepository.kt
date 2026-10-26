@@ -75,6 +75,13 @@ data class AllowedApp(
     val dailyLimitMinutes: Int = 60
 )
 
+data class ChildInstalledApp(
+    val childId: String,
+    val packageName: String,
+    val displayName: String,
+    val lastSeenAt: String? = null
+)
+
 data class AppUsageReport(
     val childId: String,
     val usageDate: String,
@@ -548,6 +555,52 @@ class EduLockRepository(context: Context) {
             sharingEnabled = status?.optBoolean("sharing_enabled", false) ?: false,
             batteryPercent = if (status != null && !status.isNull("battery_percent")) status.optInt("battery_percent").coerceIn(0, 100) else null
         )
+    }
+
+    suspend fun syncInstalledApps(childId: String, apps: List<Pair<String, String>>) {
+        requireSession("child")
+        val normalized = apps.mapNotNull { (packageName, displayName) ->
+            val pkg = packageName.trim()
+            val name = displayName.trim().take(120)
+            if (pkg.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+")) && name.isNotBlank())
+                pkg to name else null
+        }.distinctBy { it.first }.take(300)
+        normalized.forEach { (pkg, name) ->
+            restArray(
+                "child_installed_apps?on_conflict=child_id,package_name",
+                "POST",
+                JSONObject().put("child_id", childId).put("package_name", pkg).put("display_name", name).put("last_seen_at", java.time.Instant.now().toString()),
+                prefer = "resolution=merge-duplicates,return=minimal"
+            )
+        }
+    }
+
+    suspend fun loadInstalledApps(childId: String): List<ChildInstalledApp> {
+        requireSession("parent")
+        val rows = restArray("child_installed_apps?select=child_id,package_name,display_name,last_seen_at&child_id=eq.$childId&order=display_name.asc")
+        return (0 until rows.length()).mapNotNull { i ->
+            rows.optJSONObject(i)?.let { row ->
+                ChildInstalledApp(
+                    row.optString("child_id"), row.optString("package_name"),
+                    row.optString("display_name"),
+                    row.optString("last_seen_at").takeIf { it.isNotBlank() && it != "null" }
+                )
+            }
+        }
+    }
+
+    suspend fun allowInstalledApp(childId: String, app: ChildInstalledApp, limitMinutes: Int) {
+        requireSession("parent")
+        require(limitMinutes in 1..1440) { "Daily app limit must be between 1 and 1440 minutes." }
+        val existing = restArray("allowed_apps?select=id&child_id=eq.$childId&package_name=eq.${app.packageName}")
+        if (existing.length() > 0) {
+            val id = existing.optJSONObject(0)?.optString("id")
+            if (!id.isNullOrBlank()) {
+                restArray("allowed_apps?id=eq.$id", "PATCH", JSONObject().put("enabled", true).put("daily_limit_minutes", limitMinutes))
+                return
+            }
+        }
+        addAllowedApp(childId, app.packageName, app.displayName, limitMinutes)
     }
 
     suspend fun loadAllowedApps(childId: String): List<AllowedApp> {
