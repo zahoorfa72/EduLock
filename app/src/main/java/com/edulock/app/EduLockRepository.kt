@@ -74,6 +74,14 @@ data class AllowedApp(
     val enabled: Boolean = true,
     val dailyLimitMinutes: Int = 60
 )
+
+data class AppUsageReport(
+    val childId: String,
+    val usageDate: String,
+    val packageName: String,
+    val displayName: String,
+    val usedSeconds: Long
+)
 data class AttemptRow(
     val id: String,
     val childId: String,
@@ -540,6 +548,63 @@ class EduLockRepository(context: Context) {
             .putString("budget_day", LocalDate.now(ZoneOffset.UTC).toString())
             .apply()
         return earned
+    }
+
+    suspend fun syncAppUsage(childId: String) {
+        requireSession("child")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        val allowedApps = loadAllowedApps(childId).filter { it.enabled }.associateBy { it.packageName }
+        if (allowedApps.isEmpty()) return
+        val prefs = appContext.getSharedPreferences(LOCK_PREFS, Context.MODE_PRIVATE)
+        val today = LocalDate.now(ZoneOffset.UTC).toString()
+        val packageKeys = prefs.all.keys.filter { it.startsWith(APP_USED_PREFIX) }
+        for (key in packageKeys) {
+            val packageName = key.removePrefix(APP_USED_PREFIX)
+            val allowed = allowedApps[packageName] ?: continue
+            val usedMillis = (prefs.all[key] as? Long ?: 0L).coerceAtLeast(0L)
+            val usedSeconds = (usedMillis / 1000L).coerceAtMost(86400L)
+            if (usedSeconds <= 0L) continue
+            val existing = restArray(
+                "app_usage_daily?select=id&child_id=eq.$childId&usage_date=eq.$today&package_name=eq.$packageName&limit=1"
+            )
+            val payload = JSONObject()
+                .put("child_id", childId)
+                .put("usage_date", today)
+                .put("package_name", packageName)
+                .put("display_name", allowed.displayName)
+                .put("used_seconds", usedSeconds)
+                .put("updated_at", java.time.Instant.now().toString())
+            if (existing.length() > 0) {
+                restArray(
+                    "app_usage_daily?child_id=eq.$childId&usage_date=eq.$today&package_name=eq.$packageName",
+                    "PATCH",
+                    payload
+                )
+            } else {
+                restArray("app_usage_daily?select=id", "POST", payload)
+            }
+        }
+    }
+
+    suspend fun loadAppUsageReports(childId: String, days: Int = 7): List<AppUsageReport> {
+        requireSession("parent")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        val startDate = LocalDate.now(ZoneOffset.UTC).minusDays((days.coerceIn(1, 30) - 1).toLong()).toString()
+        val rows = restArray(
+            "app_usage_daily?select=child_id,usage_date,package_name,display_name,used_seconds" +
+                "&child_id=eq.$childId&usage_date=gte.$startDate&order=usage_date.desc,display_name.asc&limit=300"
+        )
+        return (0 until rows.length()).mapNotNull { index ->
+            rows.optJSONObject(index)?.let { row ->
+                AppUsageReport(
+                    childId = row.optString("child_id"),
+                    usageDate = row.optString("usage_date"),
+                    packageName = row.optString("package_name"),
+                    displayName = row.optString("display_name"),
+                    usedSeconds = row.optLong("used_seconds", 0L).coerceAtLeast(0L)
+                )
+            }
+        }
     }
 
     private suspend fun requestFunction(name: String, body: JSONObject): JSONObject {
