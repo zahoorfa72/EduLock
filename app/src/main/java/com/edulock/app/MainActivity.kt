@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.UserManager
 import android.provider.Settings
-import android.os.UserManager
 import android.provider.Settings.Secure
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
