@@ -594,6 +594,14 @@ class EduLockRepository(context: Context) {
                 pkg to name else null
         }.distinctBy { it.first }.take(500)
         if (normalized.isEmpty()) return
+        val fingerprintInput = normalized.sortedBy { it.first }
+            .joinToString("\n") { (pkg, name) -> "$pkg\t$name" }
+        val fingerprint = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(fingerprintInput.toByteArray(Charsets.UTF_8))
+            .joinToString("") { byte -> "%02x".format(byte) }
+        val inventoryPrefs = appContext.getSharedPreferences("edulock_app_inventory", Context.MODE_PRIVATE)
+        val hashKey = "uploaded_inventory_hash_$childId"
+        if (inventoryPrefs.getString(hashKey, null) == fingerprint) return
         val timestamp = java.time.Instant.now().toString()
         val payload = JSONArray()
         normalized.forEach { (pkg, name) ->
@@ -603,6 +611,7 @@ class EduLockRepository(context: Context) {
         // One PostgREST upsert avoids hundreds of sequential network requests on child startup.
         restArray("child_installed_apps?on_conflict=child_id,package_name", "POST", payload,
             prefer = "resolution=merge-duplicates,return=representation")
+        inventoryPrefs.edit().putString(hashKey, fingerprint).apply()
     }
     suspend fun loadInstalledApps(childId: String): List<ChildInstalledApp> {
         requireSession("parent")
