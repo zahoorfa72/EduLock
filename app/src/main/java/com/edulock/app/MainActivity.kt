@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.UserManager
 import android.provider.Settings
 import android.provider.Settings.Secure
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -226,6 +227,20 @@ private fun EduLockApp(repository: EduLockRepository) {
         } else if (!repository.isConfigured) {
             notice = "Supabase is not configured yet. Add SUPABASE_URL and SUPABASE_ANON_KEY to the GitHub Actions secrets before building."
         }
+    }
+
+    BackHandler(enabled = screen != AppScreen.AUTH) {
+        screen = when (screen) {
+            AppScreen.VERIFY_OTP -> AppScreen.AUTH
+            AppScreen.PAIR_CHILD -> { repository.signOut(); session = null; childProfile = null; AppScreen.AUTH }
+            AppScreen.PARENT_HOME, AppScreen.CHILD_HOME, AppScreen.AUTH -> AppScreen.AUTH
+            AppScreen.CHILDREN, AppScreen.SUBJECTS, AppScreen.ASSIGN_TASK, AppScreen.REPORTS, AppScreen.PROTECTION_STATUS -> AppScreen.PARENT_HOME
+            AppScreen.ADD_CHILD, AppScreen.APP_USAGE_REPORT, AppScreen.ALLOWED_APPS -> AppScreen.CHILDREN
+            AppScreen.ADD_SUBJECT, AppScreen.QUESTIONS -> AppScreen.SUBJECTS
+            AppScreen.ADD_QUESTION, AppScreen.ADD_TRANSLATION -> AppScreen.QUESTIONS
+            AppScreen.PLAY_TASK, AppScreen.TASK_RESULT -> AppScreen.CHILD_HOME
+        }
+        notice = null
     }
 
     val eduLockColors = lightColorScheme(
@@ -745,6 +760,18 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         notice = "Daily limit updated. Sync the child's device to apply the change."
                                     }
                                 }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Save daily limit") }
+                                OutlinedButton(
+                                    onClick = {
+                                        execute {
+                                            repository.updateAllowedAppEnabled(app.id, !app.enabled)
+                                            allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
+                                            notice = if (app.enabled) "App disabled for this child. Sync the child's device to apply the change."
+                                                else "App enabled for this child. Sync the child's device to apply the change."
+                                        }
+                                    },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text(if (app.enabled) "Disable this app on child's device" else "Allow this app on child's device") }
                                 OutlinedButton(onClick = {
                                     execute {
                                         repository.deleteAllowedApp(app.id)
