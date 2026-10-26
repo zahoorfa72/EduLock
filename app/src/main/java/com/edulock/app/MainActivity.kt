@@ -246,8 +246,8 @@ private fun EduLockApp(repository: EduLockRepository) {
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        notice = if (granted) "Offline-device notifications are enabled." else
-            "Notifications are disabled. EduLock can show offline status in the app, but Android may suppress alerts."
+        notice = if (granted) "EduLock notifications are enabled." else
+            "Notifications are disabled. EduLock can show status in the app, but Android may suppress notifications."
     }
 
     fun execute(action: suspend () -> Unit) {
@@ -285,6 +285,12 @@ private fun EduLockApp(repository: EduLockRepository) {
             locationPrefs.edit()
                 .putString(ChildLocationService.KEY_CHILD_ID, linked.id)
                 .putBoolean(ChildLocationService.KEY_SHARING_ENABLED, false)
+                // Never carry a previous child's locally queued point into a new pairing.
+                .remove(ChildLocationService.KEY_PENDING)
+                .remove(ChildLocationService.KEY_LATITUDE)
+                .remove(ChildLocationService.KEY_LONGITUDE)
+                .remove(ChildLocationService.KEY_ACCURACY)
+                .remove(ChildLocationService.KEY_POINT_TIME)
                 .apply()
             childLocationSharing = false
         } else {
@@ -997,6 +1003,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 Button(onClick = { requestChildLocationSharing() }, modifier = Modifier.fillMaxWidth()) {
                                     Text("Enable location sharing")
                                 }
+                            }
+                            if (Build.VERSION.SDK_INT >= 33 &&
+                                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                OutlinedButton(
+                                    onClick = { notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Enable location status notification") }
                             }
                             Text("Only the latest location is retained on the server. If offline, the previous server location stays visible and new fixes queue locally until connection returns.")
                         }
