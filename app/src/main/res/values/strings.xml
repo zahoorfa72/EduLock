@@ -2,4 +2,6 @@
 <resources>
     <string name="edulock_accessibility_service_name">EduLock app restrictions</string>
     <string name="edulock_accessibility_service_description">With the parent’s permission, EduLock restricts unapproved apps and limits approved app time. It observes app changes only and does not read screen text.</string>
+    <string name="edulock_device_admin_name">EduLock parental protection</string>
+    <string name="edulock_device_admin_description">Visible optional protection that requires deactivation before ordinary uninstall. It does not prevent clearing app data or factory reset.</string>
 </resources>

@@ -1,5 +1,7 @@
 package com.edulock.app
 
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -717,6 +719,24 @@ private fun EduLockApp(repository: EduLockRepository) {
                             Text("Enable EduLock app restrictions")
                         }
                     }
+                    if (isDeviceAdminActive(context)) {
+                        Text("🔒 Visible uninstall protection is active. A user must deactivate EduLock as a device administrator before ordinary uninstall.")
+                    } else {
+                        Text("Optional: ask a parent to enable visible uninstall protection. Android will show a device-admin confirmation; this does not block Clear data or factory reset on a regular device.")
+                        OutlinedButton(onClick = {
+                            val component = ComponentName(context, EduLockDeviceAdminReceiver::class.java)
+                            val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                                putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
+                                putExtra(
+                                    DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                                    "With a parent's permission, EduLock can make ordinary uninstall require deactivation of this visible protection first. This does not prevent Clear data or factory reset."
+                                )
+                            }
+                            context.startActivity(intent)
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            Text("🔒 Enable uninstall protection")
+                        }
+                    }
                     Button(onClick = {
                         execute {
                             val linked = childProfile ?: throw IllegalStateException("Sign in to your child account again.")
@@ -1036,6 +1056,12 @@ private fun readableQuestionType(type: String): String = when (type) {
 
 private fun directionFor(language: String): LayoutDirection =
     if (language.lowercase() in setOf("ur", "sd", "ar", "fa", "ps", "he")) LayoutDirection.Rtl else LayoutDirection.Ltr
+
+private fun isDeviceAdminActive(context: Context): Boolean {
+    val manager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+    val component = ComponentName(context, EduLockDeviceAdminReceiver::class.java)
+    return manager.isAdminActive(component)
+}
 
 private fun isAccessibilityServiceEnabled(context: Context): Boolean {
     val enabled = Secure.getString(context.contentResolver, Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
