@@ -80,9 +80,17 @@ Deno.serve(async (req) => {
         (q.country_code === countryCode ? 0 : 1);
       return score(a) - score(b) || String(a.topic).localeCompare(String(b.topic));
     });
+    // Keep each result/import set in one language. Prefer the requested language when
+    // it has comparable coverage; otherwise use English rather than mixing languages.
+    const requestedLanguageQuestions = ranked.filter((q: any) => q.language_code === language);
+    const englishQuestions = ranked.filter((q: any) => q.language_code === "en");
+    const useRequestedLanguage = language === "en" ||
+      requestedLanguageQuestions.length >= Math.min(10, englishQuestions.length);
+    const chosenLanguage = useRequestedLanguage ? language : "en";
     const uniqueQuestions: any[] = [];
     const seenQuestions = new Set<string>();
     for (const q of ranked) {
+      if (q.language_code !== chosenLanguage) continue;
       const key = [q.language_code, q.concept_key, q.prompt].join("|");
       if (!seenQuestions.has(key)) {
         seenQuestions.add(key);
@@ -90,8 +98,8 @@ Deno.serve(async (req) => {
       }
     }
     const questions = uniqueQuestions.slice(0, 80);
-    const fallbackUsed = questions.some((q: any) =>
-      Number(q.grade_level) !== grade || q.language_code !== language || q.country_code === "ZZ"
+    const fallbackUsed = chosenLanguage !== language || questions.some((q: any) =>
+      Number(q.grade_level) !== grade || q.country_code !== countryCode || q.country_code === "ZZ"
     );
 
     return json({
