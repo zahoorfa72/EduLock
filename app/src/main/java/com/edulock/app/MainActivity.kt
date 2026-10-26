@@ -150,6 +150,8 @@ private fun EduLockApp(repository: EduLockRepository) {
     var appDisplayName by remember { mutableStateOf("") }
     var appDailyLimit by remember { mutableStateOf("60") }
     var appLimitEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var appSearchQuery by remember { mutableStateOf("") }
+    var appStatusFilter by remember { mutableStateOf("All") }
     var appUsageChild by remember { mutableStateOf<ChildProfile?>(null) }
     var appUsageReports by remember { mutableStateOf(emptyList<AppUsageReport>()) }
     var childLocationSharing by remember {
@@ -1101,10 +1103,80 @@ private fun EduLockApp(repository: EduLockRepository) {
                         enabled = !busy && child != null,
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("↻ Refresh apps from child's phone") }
+                    val cleanedAppCount = childInstalledApps.count { installed ->
+                        !installed.packageName.startsWith("com.android.internal.") &&
+                            !installed.packageName.startsWith("com.android.providers.") &&
+                            installed.packageName !in setOf(
+                                "com.android.settings", "com.android.systemui",
+                                "com.android.permissioncontroller", "com.google.android.permissioncontroller",
+                                "com.android.packageinstaller", "com.google.android.packageinstaller",
+                                "com.android.launcher3", "com.google.android.apps.nexuslauncher",
+                                "com.miui.home", "com.samsung.android.oneui.home",
+                                "com.oplus.launcher", "com.huawei.android.launcher"
+                            ) &&
+                            installed.packageName != "com.google.android.adservices.api" &&
+                            !installed.packageName.contains("agingfunction", ignoreCase = true) &&
+                            !installed.displayName.equals("3 Button Navigation Bar", ignoreCase = true) &&
+                            !installed.displayName.equals("Ad Privacy", ignoreCase = true) &&
+                            !installed.displayName.equals("AgingFunction", ignoreCase = true)
+                    }
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF5FF))
+                    ) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Text("App access overview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("$cleanedAppCount apps detected • " + allowedApps.count { it.enabled } + " allowed • " + allowedApps.count { !it.enabled } + " blocked")
+                            Text("Everything starts allowed. Parent limits and blocks sync to the child's phone when it is online.")
+                        }
+                    }
+                    OutlinedTextField(
+                        value = appSearchQuery,
+                        onValueChange = { appSearchQuery = it.take(120) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Search apps") },
+                        placeholder = { Text("Find an app by name") }
+                    )
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("All", "Allowed", "Blocked").forEach { filter ->
+                            if (appStatusFilter == filter) {
+                                Button(onClick = { appStatusFilter = filter }, modifier = Modifier.weight(1f)) { Text(filter) }
+                            } else {
+                                OutlinedButton(onClick = { appStatusFilter = filter }, modifier = Modifier.weight(1f)) { Text(filter) }
+                            }
+                        }
+                    }
+                    val ignoredSystemPackages = setOf(
+                        "com.android.settings", "com.android.systemui",
+                        "com.android.permissioncontroller", "com.google.android.permissioncontroller",
+                        "com.android.packageinstaller", "com.google.android.packageinstaller",
+                        "com.android.launcher3", "com.google.android.apps.nexuslauncher",
+                        "com.miui.home", "com.samsung.android.oneui.home",
+                        "com.oplus.launcher", "com.huawei.android.launcher"
+                    )
+                    val filteredInstalledApps = childInstalledApps.filter { installed ->
+                        val isInternal = installed.packageName.startsWith("com.android.internal.") ||
+                            installed.packageName.startsWith("com.android.providers.") ||
+                            installed.packageName in ignoredSystemPackages ||
+                            installed.packageName == "com.google.android.adservices.api" ||
+                            installed.packageName.contains("agingfunction", ignoreCase = true) ||
+                            installed.displayName.equals("3 Button Navigation Bar", ignoreCase = true) ||
+                            installed.displayName.equals("Ad Privacy", ignoreCase = true) ||
+                            installed.displayName.equals("AgingFunction", ignoreCase = true)
+                        val rule = allowedApps.firstOrNull { it.packageName == installed.packageName }
+                        !isInternal &&
+                            (appSearchQuery.isBlank() || installed.displayName.contains(appSearchQuery, ignoreCase = true) || installed.packageName.contains(appSearchQuery, ignoreCase = true)) &&
+                            when (appStatusFilter) {
+                                "Allowed" -> rule?.enabled != false
+                                "Blocked" -> rule?.enabled == false
+                                else -> true
+                            }
+                    }
                     if (childInstalledApps.isEmpty()) {
                         Text("No apps received yet. Open EduLock on the paired child phone and keep it online. Its user-facing app list refreshes automatically every five minutes while EduLock is open.")
                     }
-                    childInstalledApps.forEach { installed ->
+                    filteredInstalledApps.forEach { installed ->
                         val existingRule = allowedApps.firstOrNull { it.packageName == installed.packageName }
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -1168,6 +1240,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                     if (childInstalledApps.isNotEmpty() && allowedApps.isEmpty()) Text("No saved app rules were returned. Apps remain allowed by default; check the database migration if you cannot save a limit.")
                     allowedApps.filter { app ->
                         childInstalledApps.none { it.packageName == app.packageName } &&
+                            (appSearchQuery.isBlank() || app.displayName.contains(appSearchQuery, ignoreCase = true) || app.packageName.contains(appSearchQuery, ignoreCase = true)) &&
+                            when (appStatusFilter) {
+                                "Allowed" -> app.enabled
+                                "Blocked" -> !app.enabled
+                                else -> true
+                            } &&
                             !app.packageName.startsWith("com.android.internal.") &&
                             !app.packageName.startsWith("com.android.providers.") &&
                             app.packageName !in setOf(
