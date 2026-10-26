@@ -50,6 +50,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private enum class AppScreen {
@@ -69,6 +70,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var emailOtp by remember { mutableStateOf("") }
+    var resendSeconds by remember { mutableStateOf(0) }
     var displayName by remember { mutableStateOf("") }
     var pairingCode by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -172,6 +174,10 @@ private fun EduLockApp(repository: EduLockRepository) {
         }
     }
 
+    LaunchedEffect(resendSeconds) {
+        if (resendSeconds > 0) { delay(1000); resendSeconds -= 1 }
+    }
+
     LaunchedEffect(Unit) {
         val restored = repository.restoreSession()
         if (restored != null) {
@@ -234,8 +240,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 val result = repository.signUp(email, password, displayName, accountRole)
                                 if (result.session == null) {
                                     emailOtp = ""
+                                    resendSeconds = 60
                                     screen = AppScreen.VERIFY_OTP
-                                    notice = "We sent a six-digit verification code to $email. Enter it below to verify your email."
+                                    notice = "We sent an eight-digit verification code to $email. Enter it below to verify your email."
                                 } else {
                                     resolveSignedIn(result.session, pairingCode)
                                     if (screen == AppScreen.PARENT_HOME || screen == AppScreen.CHILD_HOME) notice = result.message
@@ -266,28 +273,40 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                 }
 
-                AppScreen.VERIFY_OTP -> ScreenFrame("Verify your email", onBack = {
+                AppScreen.VERIFY_OTP -> ScreenFrame("Let's verify your email ✨", onBack = {
                     screen = AppScreen.AUTH
                     isRegistering = true
-                    notice = "Enter the six-digit code sent to $email to finish creating your account."
+                    notice = "Enter the eight-digit code sent to $email to finish creating your account."
                 }, notice = notice, busy = busy) {
-                    Text("Enter the six-digit code sent to:")
-                    Text(email, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
-                    Field(emailOtp, { emailOtp = it.filter(Char::isDigit).take(6) }, "6-digit email verification code", keyboardType = KeyboardType.Number)
+                    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF5FF)), shape = MaterialTheme.shapes.extraLarge) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("🎨", fontSize = 42.sp)
+                            Text("One tiny step to start!", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF173B67))
+                            Text("We sent an 8-digit code to", color = Color(0xFF42566D))
+                            Text(email, fontWeight = FontWeight.SemiBold, color = Color(0xFF087E8B))
+                            Text("Check your inbox and spam folder, then type the code below.", color = Color(0xFF42566D))
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Field(emailOtp, { emailOtp = it.filter(Char::isDigit).take(8) }, "8-digit verification code", keyboardType = KeyboardType.Number)
                     Button(onClick = {
                         execute {
                             val verified = repository.verifySignupOtp(email, emailOtp, accountRole)
                             resolveSignedIn(verified, pairingCode)
-                            if (screen == AppScreen.PARENT_HOME || screen == AppScreen.CHILD_HOME) notice = "Email verified successfully."
+                            if (screen == AppScreen.PARENT_HOME || screen == AppScreen.CHILD_HOME) notice = "🎉 Email verified! Welcome to EduLock."
                         }
-                    }, enabled = !busy && emailOtp.length == 6, modifier = Modifier.fillMaxWidth()) { Text("Verify email") }
-                    TextButton(onClick = {
+                    }, enabled = !busy && emailOtp.length == 8, modifier = Modifier.fillMaxWidth()) { Text("✓  Verify & continue") }
+                    OutlinedButton(onClick = {
                         execute {
                             repository.resendSignupOtp(email)
-                            notice = "A new verification code has been sent. Check your inbox and spam folder."
+                            resendSeconds = 60
+                            emailOtp = ""
+                            notice = "A new code was requested. Check your inbox and spam folder."
                         }
-                    }, enabled = !busy) { Text("Resend code") }
-                    Text("In Supabase, set Authentication > Email Templates > Confirm signup to send a code using the Token template variable.")
+                    }, enabled = !busy && resendSeconds == 0, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (resendSeconds > 0) "Resend code in " + resendSeconds + "s" else "↻  Send a new code")
+                    }
+                    Text(if (resendSeconds > 0) "For your security, you can request another code in " + resendSeconds + " seconds." else "Didn't receive it? Check Spam, then request a new code.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 AppScreen.PAIR_CHILD -> ScreenFrame("Link child account", onBack = {
                     repository.signOut(); session = null; screen = AppScreen.AUTH
