@@ -7,6 +7,9 @@ alter table edulock.allowed_apps
   add column if not exists daily_limit_minutes integer not null default 1440;
 
 alter table edulock.allowed_apps
+  alter column daily_limit_minutes set default 1440;
+
+alter table edulock.allowed_apps
   drop constraint if exists allowed_apps_daily_limit_minutes_check;
 alter table edulock.allowed_apps
   add constraint allowed_apps_daily_limit_minutes_check
