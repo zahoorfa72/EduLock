@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import android.os.UserManager
 import android.provider.Settings.Secure
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
@@ -357,7 +358,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             resolveSignedIn(current)
                         }
                     }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Continue with an already linked device") }
-                    Text("If pairing reports that anonymous sign-ins are disabled, the project owner must enable Authentication → Sign In / Providers → Anonymous in the EduLock Supabase project.")
+                    Text("If pairing reports that anonymous sign-ins are disabled, enable Authentication → Sign In / Providers → Anonymous in the EduLock Supabase project.")
                 }
 
                 AppScreen.PARENT_HOME -> ScreenFrame("Parent dashboard", notice = notice, busy = busy) {
@@ -735,6 +736,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                         "App blocking",
                         if (isAccessibilityServiceEnabled(context)) "Enabled" else "Needs setup",
                         if (isAccessibilityServiceEnabled(context)) "EduLock can display its restriction screen over unapproved apps while its rules are active." else "Turn on EduLock in Android Accessibility settings on this child's device to show blocking screens over restricted apps."
+                    )
+                    val managedProtectionActive = isManagedDeviceProtectionActive(context)
+                    SummaryCard(
+                        "Uninstall & clear-data protection",
+                        if (managedProtectionActive) "Managed policy active" else "Limited on this device",
+                        if (managedProtectionActive) "Android device-owner policies are blocking app-management actions, including uninstall and Clear data through Settings." else "Full protection is not active. Device-admin mode alone cannot reliably block Clear data. Stronger protection requires setting up this phone as a managed device before normal use."
                     )
                     if (isAccessibilityServiceEnabled(context)) {
                         Text("Device restriction service: enabled on this device.")
@@ -1124,6 +1131,41 @@ private fun readableQuestionType(type: String): String = when (type) {
 private fun directionFor(language: String): LayoutDirection =
     if (language.lowercase() in setOf("ur", "sd", "ar", "fa", "ps", "he")) LayoutDirection.Rtl else LayoutDirection.Ltr
 
+/**
+ * Enforces the stronger Android controls only when EduLock is already provisioned
+ * as the device owner during managed-device setup. A normal app cannot grant itself
+ * device-owner status at runtime.
+ */
+private fun applyManagedDeviceProtection(context: Context): Boolean {
+    val manager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+    if (!manager.isDeviceOwnerApp(context.packageName)) return false
+    val component = ComponentName(context, EduLockDeviceAdminReceiver::class.java)
+    return try {
+        manager.setUninstallBlocked(component, context.packageName, true)
+        manager.addUserRestriction(component, UserManager.DISALLOW_APPS_CONTROL)
+        manager.addUserRestriction(component, UserManager.DISALLOW_UNINSTALL_APPS)
+        true
+    } catch (_: SecurityException) {
+        false
+    } catch (_: IllegalArgumentException) {
+        false
+    }
+}
+
+private fun isManagedDeviceProtectionActive(context: Context): Boolean {
+    val manager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+    if (!manager.isDeviceOwnerApp(context.packageName)) return false
+    val component = ComponentName(context, EduLockDeviceAdminReceiver::class.java)
+    val userManager = context.getSystemService(Context.USER_SERVICE) as android.os.UserManager
+    return try {
+        manager.isUninstallBlocked(component, context.packageName) &&
+            userManager.hasUserRestriction(UserManager.DISALLOW_APPS_CONTROL) &&
+            userManager.hasUserRestriction(UserManager.DISALLOW_UNINSTALL_APPS)
+    } catch (_: SecurityException) {
+        false
+    }
+}
+
 private fun isDeviceAdminActive(context: Context): Boolean {
     val manager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
     val component = ComponentName(context, EduLockDeviceAdminReceiver::class.java)
@@ -1139,6 +1181,7 @@ private fun isAccessibilityServiceEnabled(context: Context): Boolean {
 class MainActivity : androidx.activity.ComponentActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
+        applyManagedDeviceProtection(applicationContext)
         val repository = EduLockRepository(applicationContext)
         setContent {
             EduLockApp(repository)
