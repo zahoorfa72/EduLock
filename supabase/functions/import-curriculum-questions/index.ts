@@ -1,0 +1,137 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
+const validUuid = (value: unknown): value is string =>
+  typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(value);
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  const url = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !anonKey || !serviceKey) return json({ error: "Server configuration is incomplete" }, 500);
+  const authorization = req.headers.get("Authorization");
+  if (!authorization?.startsWith("Bearer ")) return json({ error: "Sign in as a parent first" }, 401);
+
+  try {
+    const caller = createClient(url, anonKey, {
+      global: { headers: { Authorization: authorization } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: authData, error: authError } = await caller.auth.getUser();
+    if (authError || !authData.user) return json({ error: "Session expired; sign in again" }, 401);
+    const body = await req.json();
+
+    const childId = body.child_id;
+    const countryCode = typeof body.country_code === "string" ? body.country_code.toUpperCase() : "";
+    const grade = Number(body.grade_level);
+    const age = Number(body.age_years);
+    const subjectCode = typeof body.subject_code === "string" ? body.subject_code.toLowerCase() : "";
+    const language = typeof body.language_code === "string" ? body.language_code.toLowerCase() : "en";
+    const rawIds = Array.isArray(body.question_ids) ? body.question_ids : [];
+    const ids = [...new Set(rawIds.filter(validUuid))] as string[];
+    if (!validUuid(childId) || !/^[A-Z]{2}$/.test(countryCode) ||
+        !Number.isInteger(grade) || grade < 0 || grade > 13 ||
+        !Number.isInteger(age) || age < 3 || age > 19 ||
+        !/^[a-z][a-z0-9-]{1,15}$/.test(language) ||
+        !/^[a-z0-9_-]{2,40}$/.test(subjectCode) ||
+        ids.length < 1 || ids.length > 50 || ids.length !== rawIds.length) {
+      return json({ error: "Choose 1–50 valid age- and grade-matched questions" }, 400);
+    }
+
+    const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: profile, error: profileError } = await admin.schema("edulock")
+      .from("user_profiles").select("account_role").eq("user_id", authData.user.id).maybeSingle();
+    if (profileError || profile?.account_role !== "parent") return json({ error: "Parent access is required" }, 403);
+
+    const { data: child, error: childError } = await admin.schema("edulock")
+      .from("children").select("id,family_id").eq("id", childId).maybeSingle();
+    if (childError || !child) return json({ error: "Child profile was not found" }, 404);
+    const { data: family, error: familyError } = await admin.schema("edulock")
+      .from("family_profiles").select("id,owner_user_id").eq("id", child.family_id).maybeSingle();
+    if (familyError || family?.owner_user_id !== authData.user.id) return json({ error: "This child is not in your family" }, 403);
+
+    const { data: bankQuestions, error: bankError } = await admin.schema("edulock")
+      .from("curriculum_questions").select("*").in("id", ids).eq("active", true)
+      .in("country_code", [countryCode, "ZZ"]).eq("grade_level", grade)
+      .eq("subject_code", subjectCode).in("language_code", [language, "en"])
+      .lte("age_min", age).gte("age_max", age);
+    if (bankError) {
+      console.error("Curriculum import lookup failed", bankError.code, bankError.message);
+      return json({ error: "Curriculum bank is unavailable. Apply the latest EduLock migrations." }, 500);
+    }
+    const byId = new Map((bankQuestions ?? []).map((q: any) => [q.id, q]));
+    if (ids.some((id) => !byId.has(id))) return json({ error: "One or more selected questions do not match this country, grade, age or subject. Refresh and try again." }, 400);
+    const questions = ids.map((id) => byId.get(id)!);
+    const actualLanguage = questions[0].language_code;
+    if (questions.some((q: any) => q.language_code !== actualLanguage)) return json({ error: "Select questions from one language at a time." }, 400);
+
+    const first = questions[0];
+    const title = String(first.subject_name) + " — Grade " + String(grade);
+    const { data: existingSubject, error: subjectLookupError } = await admin.schema("edulock")
+      .from("subjects").select("id,title,language_code")
+      .eq("family_id", child.family_id).eq("title", title)
+      .eq("language_code", actualLanguage).eq("country_code", countryCode)
+      .eq("grade_level", grade).eq("curriculum_subject_code", subjectCode).maybeSingle();
+    if (subjectLookupError) {
+      console.error("Subject lookup failed", subjectLookupError.code, subjectLookupError.message);
+      return json({ error: "Could not load the target subject. Apply the latest EduLock migration." }, 500);
+    }
+
+    let subject = existingSubject;
+    if (!subject) {
+      const { data: createdSubject, error: subjectInsertError } = await admin.schema("edulock").from("subjects")
+        .insert({
+          family_id: child.family_id,
+          title,
+          language_code: actualLanguage,
+          country_code: countryCode,
+          grade_level: grade,
+          curriculum_name: first.country_code === "ZZ" ? "International foundational starter bank" : first.curriculum_name,
+          curriculum_subject_code: subjectCode,
+        }).select("id,title,language_code").single();
+      if (subjectInsertError || !createdSubject) {
+        console.error("Subject create failed", subjectInsertError?.code, subjectInsertError?.message);
+        return json({ error: "Could not create the curriculum subject" }, 500);
+      }
+      subject = createdSubject;
+    }
+
+    const rows = questions.map((q: any) => ({
+      subject_id: subject!.id,
+      curriculum_question_id: q.id,
+      prompt: q.prompt,
+      question_type: q.question_type,
+      options: q.options ?? [],
+      answer_key: q.answer_key ?? {},
+      language_code: q.language_code,
+      concept_key: q.concept_key || q.topic || "general",
+    }));
+    const { data: imported, error: importError } = await admin.schema("edulock").from("questions")
+      .upsert(rows, { onConflict: "subject_id,curriculum_question_id", ignoreDuplicates: true })
+      .select("id");
+    if (importError) {
+      console.error("Curriculum import failed", importError.code, importError.message);
+      return json({ error: "Could not import these curriculum questions" }, 500);
+    }
+
+    return json({
+      subject_id: subject.id,
+      subject_title: subject.title,
+      language_code: subject.language_code,
+      imported_count: imported?.length ?? 0,
+      selected_count: questions.length,
+      message: "Questions added to your subject. Return to Subjects & Questions to review them and assign a learning task."
+    });
+  } catch (error) {
+    console.error("Curriculum import failed", error);
+    return json({ error: "Could not import curriculum questions" }, 500);
+  }
+});
