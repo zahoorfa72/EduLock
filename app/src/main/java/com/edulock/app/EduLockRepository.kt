@@ -566,11 +566,17 @@ class EduLockRepository(context: Context) {
                 pkg to name else null
         }.distinctBy { it.first }.take(300)
         normalized.forEach { (pkg, name) ->
-            restArray(
-                "child_installed_apps?on_conflict=child_id,package_name",
-                "POST",
-                JSONObject().put("child_id", childId).put("package_name", pkg).put("display_name", name).put("last_seen_at", java.time.Instant.now().toString())
-            )
+            val existing = restArray("child_installed_apps?select=id&child_id=eq.$childId&package_name=eq.$pkg")
+            val payload = JSONObject().put("display_name", name).put("last_seen_at", java.time.Instant.now().toString())
+            if (existing.length() > 0) {
+                val id = existing.optJSONObject(0)?.optString("id")
+                if (!id.isNullOrBlank()) restArray("child_installed_apps?id=eq.$id", "PATCH", payload)
+            } else {
+                restArray(
+                    "child_installed_apps?select=id", "POST",
+                    payload.put("child_id", childId).put("package_name", pkg)
+                )
+            }
         }
     }
 
