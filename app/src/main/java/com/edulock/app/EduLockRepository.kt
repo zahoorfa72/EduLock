@@ -350,13 +350,15 @@ class EduLockRepository(context: Context) {
         require(name.trim().isNotEmpty()) { "Enter the child’s name" }
         require(dailyCap in 0..1440) { "Daily screen-time limit must be from 0 to 1440 minutes" }
         require(countryCode.trim().uppercase().matches(Regex("[A-Z]{2}"))) { "Choose a valid country." }
+        val language = languageCode.trim().ifBlank { "en" }.lowercase(Locale.ROOT)
+        require(language.matches(Regex("[a-z][a-z0-9-]{1,15}"))) { "Use a valid language code such as en, ur, sd or hi." }
         require(schoolGrade in 0..13) { "Choose a grade from kindergarten to grade 13." }
         require(ageYears in 3..19) { "Child age must be from 3 to 19 years." }
         val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years", "POST",
             JSONObject()
                 .put("family_id", familyId)
                 .put("display_name", name.trim().take(120))
-                .put("preferred_language", languageCode.trim().ifBlank { "en" }.take(16))
+                .put("preferred_language", language.take(16))
                 .put("daily_cap_minutes", dailyCap)
                 .put("country_code", countryCode.trim().uppercase())
                 .put("school_grade", schoolGrade)
