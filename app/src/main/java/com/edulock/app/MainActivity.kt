@@ -4,6 +4,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.UserManager
 import android.provider.Settings
 import android.os.UserManager
 import android.provider.Settings.Secure
@@ -66,7 +67,7 @@ import kotlinx.coroutines.launch
 private enum class AppScreen {
     AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD,
     SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
-    REPORTS, ALLOWED_APPS, APP_USAGE_REPORT, PLAY_TASK, TASK_RESULT
+    REPORTS, ALLOWED_APPS, PROTECTION_STATUS, APP_USAGE_REPORT, PLAY_TASK, TASK_RESULT
 }
 
 @Composable
@@ -134,6 +135,15 @@ private fun EduLockApp(repository: EduLockRepository) {
     var appLimitEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var appUsageChild by remember { mutableStateOf<ChildProfile?>(null) }
     var appUsageReports by remember { mutableStateOf(emptyList<AppUsageReport>()) }
+    var protectionAccessibilityEnabled by remember { mutableStateOf(isAccessibilityServiceEnabled(context)) }
+    var protectionDeviceAdminEnabled by remember { mutableStateOf(isDeviceAdminActive(context)) }
+    var protectionManagedEnabled by remember { mutableStateOf(isManagedDeviceProtectionActive(context)) }
+
+    fun refreshProtectionStatus() {
+        protectionAccessibilityEnabled = isAccessibilityServiceEnabled(context)
+        protectionDeviceAdminEnabled = isDeviceAdminActive(context)
+        protectionManagedEnabled = isManagedDeviceProtectionActive(context)
+    }
 
     fun execute(action: suspend () -> Unit) {
         scope.launch {
@@ -373,6 +383,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                         screen = AppScreen.CHILDREN
                         execute { children = repository.loadChildren(familyId) }
                     }, modifier = Modifier.fillMaxWidth()) { Text("Allowed apps & screen-time settings") }
+                    OutlinedButton(onClick = {
+                        refreshProtectionStatus()
+                        screen = AppScreen.PROTECTION_STATUS
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Device protection & setup status") }
                     OutlinedButton(onClick = {
                         repository.signOut()
                         session = null
@@ -769,6 +783,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                             Text("🔒 Enable device administrator")
                         }
                     }
+                    OutlinedButton(onClick = {
+                        refreshProtectionStatus()
+                        screen = AppScreen.PROTECTION_STATUS
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Protection status & setup") }
                     Button(onClick = {
                         execute {
                             val linked = childProfile ?: throw IllegalStateException("Sign in to your child account again.")
@@ -813,6 +831,89 @@ private fun EduLockApp(repository: EduLockRepository) {
                         repository.signOut()
                         session = null; childProfile = null; screen = AppScreen.AUTH; isRegistering = false
                     }, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
+                }
+
+                AppScreen.PROTECTION_STATUS -> ScreenFrame(
+                    "Protection & device setup",
+                    onBack = { screen = if (childProfile != null) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME },
+                    notice = notice,
+                    busy = busy
+                ) {
+                    Text(
+                        "EduLock only reports protections that Android says are enabled on this phone. " +
+                            "For restrictions to protect a child, complete setup on the child's device."
+                    )
+                    SummaryCard(
+                        "App blocking overlay",
+                        if (protectionAccessibilityEnabled) "Enabled" else "Needs setup",
+                        if (protectionAccessibilityEnabled)
+                            "The accessibility service is enabled. It can show EduLock's transparent restriction screen over unapproved apps while its rules are active."
+                        else
+                            "Enable EduLock in Android Accessibility settings on the child's device to allow app-level restriction screens."
+                    )
+                    if (!protectionAccessibilityEnabled) {
+                        Button(
+                            onClick = {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Enable app blocking in Accessibility") }
+                    }
+                    SummaryCard(
+                        "Device administrator",
+                        if (protectionDeviceAdminEnabled) "Enabled" else "Not enabled",
+                        if (protectionDeviceAdminEnabled)
+                            "Android's visible device-admin permission is active. This may add a deactivation step before ordinary uninstall, but does not guarantee protection against clearing data."
+                        else
+                            "Optional and parent-approved. This permission alone cannot reliably prevent Clear data, factory reset or uninstall on every device."
+                    )
+                    if (!protectionDeviceAdminEnabled) {
+                        OutlinedButton(
+                            onClick = {
+                                val component = ComponentName(context, EduLockDeviceAdminReceiver::class.java)
+                                val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                                    putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
+                                    putExtra(
+                                        DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                                        "With a parent's permission, enable Android's visible device-administrator setting. It may add a deactivation step before ordinary uninstall, but does not guarantee protection against clearing data or factory reset."
+                                    )
+                                }
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Enable visible device administrator") }
+                    }
+                    SummaryCard(
+                        "Managed-device enforcement",
+                        if (protectionManagedEnabled) "Active" else "Not active",
+                        if (protectionManagedEnabled)
+                            "Android reports EduLock is enforcing supported uninstall/app-control restrictions as device owner."
+                        else
+                            "Strong uninstall/app-control restrictions require EduLock to be provisioned as the Android device owner. A normal app cannot grant itself this status."
+                    )
+                    if (!protectionManagedEnabled) {
+                        Text(
+                            "To use device-owner protection, a parent or device administrator must provision the phone as a fully managed device. This often has to be done during initial setup and may require a factory reset. Do not rely on Accessibility or ordinary device-admin mode to prevent clearing app data.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            applyManagedDeviceProtection(context)
+                            refreshProtectionStatus()
+                            notice = if (protectionManagedEnabled)
+                                "Managed-device restrictions are active on this phone."
+                            else
+                                "Status refreshed. EduLock can apply stronger controls only if Android has already provisioned it as device owner."
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Refresh status and apply supported device-owner rules") }
+                    Text(
+                        "Safety note: EduLock displays its blocker only over restricted apps. It does not cover Android Settings or secretly intercept system controls. If a child clears app data, an anonymous pairing session may be lost and the device may need to be paired again.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
                 AppScreen.APP_USAGE_REPORT -> ScreenFrame("App usage report", onBack = { screen = AppScreen.CHILDREN }, notice = notice, busy = busy) {
