@@ -778,6 +778,7 @@ class EduLockRepository(context: Context) {
 
     private companion object {
         const val LOCK_PREFS = "edulock_lock_state"
+        const val APP_USED_PREFIX = "app_used_millis_"
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
     }
 }
