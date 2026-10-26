@@ -1207,15 +1207,16 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.CHILD_HOME -> ScreenFrame("Your learning space", notice = notice, busy = busy) {
                     val child = childProfile
                     Text("Hello, " + (child?.displayName ?: "learner") + "!")
-                    SummaryCard("Screen time earned today", earnedToday.toString() + " minutes", "Only successful tasks earn minutes. The server enforces daily caps.")
-                    val prefs = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
-                    val used = prefs.getLong("used_millis_today", 0L) / 60_000L
-                    val remaining = (earnedToday - used.toInt()).coerceAtLeast(0)
-                    SummaryCard("Remaining allowed time", remaining.toString() + " minutes", "Local app-use accounting is reset daily in UTC and refreshed at sign-in.")
+                    SummaryCard("Learning rewards earned today", earnedToday.toString() + " minutes", "Successful tasks add reward minutes. Rewards are tracked separately from app access.")
+                    SummaryCard(
+                        "App access",
+                        "Available by default",
+                        "Apps stay available unless a parent disables an app or its configured daily limit is reached."
+                    )
                     SummaryCard(
                         "App blocking",
-                        if (isAccessibilityServiceEnabled(context)) "Enabled" else "Needs setup",
-                        if (isAccessibilityServiceEnabled(context)) "EduLock can display its restriction screen over unapproved apps while its rules are active." else "Turn on EduLock in Android Accessibility settings on this child's device to show blocking screens over restricted apps."
+                        if (isAccessibilityServiceEnabled(context)) "Ready" else "Needs setup",
+                        if (isAccessibilityServiceEnabled(context)) "EduLock blocks only apps disabled by the parent or apps that reach their daily limit." else "Enable EduLock in Android Accessibility settings on the child's device to enforce parent-selected app restrictions."
                     )
                     val managedProtectionActive = isManagedDeviceProtectionActive(context)
                     SummaryCard(
