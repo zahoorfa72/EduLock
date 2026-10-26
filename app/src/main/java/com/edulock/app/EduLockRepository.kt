@@ -391,7 +391,7 @@ class EduLockRepository(context: Context) {
 
     suspend fun addQuestion(
         subjectId: String, prompt: String, type: String, options: List<String>, answer: String,
-        languageCode: String, conceptKey: String
+        languageCode: String, conceptKey: String, solution: String = ""
     ) {
         requireSession("parent")
         require(prompt.trim().isNotEmpty()) { "Enter the question" }
@@ -410,7 +410,7 @@ class EduLockRepository(context: Context) {
                 "For true/false questions, enter true or false as the correct answer"
             }
         }
-        restArray("questions?select=id", "POST",
+        val created = restArray("questions?select=id", "POST",
             JSONObject()
                 .put("subject_id", subjectId)
                 .put("prompt", prompt.trim().take(10_000))
@@ -419,6 +419,51 @@ class EduLockRepository(context: Context) {
                 .put("answer_key", JSONObject().put("answer", answer.trim().take(1000)))
                 .put("language_code", languageCode.trim().lowercase())
                 .put("concept_key", conceptKey.trim().replace(Regex("\\s+"), " ").take(160)))
+        val questionId = created.optJSONObject(0)?.optString("id")
+            ?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) }
+            ?: throw IOException("The question was created but the server did not return its ID.")
+        if (solution.isNotBlank()) {
+            try {
+                saveQuestionSolution(questionId, solution)
+            } catch (e: Exception) {
+                // Avoid leaving a template question half-saved without its private worked solution.
+                try { restArray("questions?id=eq.$questionId", "DELETE") } catch (_: Exception) { }
+                throw IOException("Could not save the parent-only worked solution. Apply the latest EduLock Supabase migration and try again.", e)
+            }
+        }
+    }
+
+    suspend fun saveQuestionSolution(questionId: String, solution: String) {
+        requireSession("parent")
+        require(questionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid question." }
+        val cleaned = solution.trim().take(12000)
+        if (cleaned.isEmpty()) return
+        val existing = restArray("question_solutions?select=id&question_id=eq.$questionId&limit=1")
+        val payload = JSONObject()
+            .put("question_id", questionId)
+            .put("solution", cleaned)
+            .put("updated_at", java.time.Instant.now().toString())
+        if (existing.length() > 0) {
+            restArray("question_solutions?question_id=eq.$questionId", "PATCH", payload)
+        } else {
+            restArray("question_solutions?select=id", "POST", payload)
+        }
+    }
+
+    suspend fun loadQuestionSolutions(questionIds: List<String>): Map<String, String> {
+        requireSession("parent")
+        val ids = questionIds.distinct().filter { it.matches(Regex("[0-9a-fA-F-]{36}")) }
+        if (ids.isEmpty()) return emptyMap()
+        val rows = restArray(
+            "question_solutions?select=question_id,solution&question_id=in.(" + ids.joinToString(",") + ")"
+        )
+        return (0 until rows.length()).mapNotNull { index ->
+            rows.optJSONObject(index)?.let { row ->
+                val id = row.optString("question_id")
+                val solution = row.optString("solution")
+                if (id.isNotBlank() && solution.isNotBlank()) id to solution else null
+            }
+        }.toMap()
     }
 
     suspend fun saveQuestionSolution(questionId: String, solution: String) {
