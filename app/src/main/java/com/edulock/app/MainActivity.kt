@@ -244,61 +244,55 @@ private fun EduLockApp(repository: EduLockRepository) {
             when (screen) {
                 AppScreen.AUTH -> ScreenFrame("EduLock", notice = notice, busy = busy) {
                     Text("Learn first. Play with purpose.", style = MaterialTheme.typography.titleMedium)
-                    Text("Secure parent access, multilingual learning and earned screen time.")
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { accountRole = "parent" }, enabled = !busy) { Text(if (accountRole == "parent") "✓ Parent" else "Parent") }
-                        OutlinedButton(onClick = { accountRole = "child" }, enabled = !busy) { Text(if (accountRole == "child") "✓ Child" else "Child") }
-                    }
+                    Text("A parent manages the family. A child device joins securely with a one-time pairing code.")
                     if (isRegistering) {
-                        Field(displayName, { displayName = it }, "Your name")
+                        Field(displayName, { displayName = it }, "Parent name")
                     }
-                    Field(email, { email = it }, "Email", keyboardType = KeyboardType.Email)
+                    Field(email, { email = it }, "Parent email", keyboardType = KeyboardType.Email)
                     Field(password, { password = it }, "Password (minimum 8 characters)", password = true)
-                    if (accountRole == "child") {
-                        Text("CHILD SETUP • Parent link required", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
-                        Text("First, ask your parent to create your child profile in their EduLock account and generate a one-time code. A child account cannot enter the learning space until this code links it to that profile.")
-                        Field(pairingCode, { pairingCode = it.filter(Char::isDigit).take(6) }, "Parent’s 6-digit pairing code", keyboardType = KeyboardType.Number)
-                        Text("The code expires after 10 minutes and works once. If email confirmation is enabled, confirm your email, sign in, then enter the same code on the link screen.")
-                    }
                     Button(
                         onClick = {
                             execute {
-                                if (accountRole == "child" && pairingCode.filter(Char::isDigit).length != 6) {
-                                    throw IllegalArgumentException("A child account must be linked to a parent. Enter the six-digit code from the parent before creating the account.")
-                                }
-                                val result = repository.signUp(email, password, displayName, accountRole)
+                                val result = repository.signUp(email, password, displayName, "parent")
                                 if (result.session == null) {
                                     emailOtp = ""
                                     resendSeconds = 60
+                                    accountRole = "parent"
                                     screen = AppScreen.VERIFY_OTP
                                     notice = "We sent an eight-digit verification code to $email. Enter it below to verify your email."
                                 } else {
-                                    resolveSignedIn(result.session, pairingCode)
-                                    if (screen == AppScreen.PARENT_HOME || screen == AppScreen.CHILD_HOME) notice = result.message
+                                    resolveSignedIn(result.session)
+                                    if (screen == AppScreen.PARENT_HOME) notice = result.message
                                 }
                             }
                         },
                         enabled = !busy && isRegistering,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Create " + if (accountRole == "parent") "parent account" else "child account") }
+                    ) { Text("Create parent account") }
                     Button(
                         onClick = {
                             execute {
-                                if (accountRole == "child" && pairingCode.isNotBlank() && pairingCode.filter(Char::isDigit).length != 6) {
-                                    throw IllegalArgumentException("Enter all six digits of the parent pairing code, or leave it blank if this account is already linked.")
-                                }
-                                val signedIn = repository.signIn(email, password, accountRole)
-                                resolveSignedIn(signedIn, pairingCode)
+                                val signedIn = repository.signIn(email, password, "parent")
+                                resolveSignedIn(signedIn)
                             }
                         },
                         enabled = !busy && !isRegistering,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Sign in as " + if (accountRole == "parent") "parent" else "child") }
+                    ) { Text("Sign in as parent") }
                     TextButton(onClick = { isRegistering = !isRegistering; notice = null }) {
-                        Text(if (isRegistering) "Already registered? Sign in" else "New to EduLock? Create account")
+                        Text(if (isRegistering) "Already registered? Sign in" else "New to EduLock? Create parent account")
                     }
+                    OutlinedButton(
+                        onClick = {
+                            pairingCode = ""
+                            notice = null
+                            screen = AppScreen.PAIR_CHILD
+                        },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Set up a child's device with pairing code") }
                     if (!repository.isConfigured) {
-                        Text("Configuration needed: set the public Supabase URL and anon/publishable key in the repository build secrets. Never add a service-role key to the Android app.")
+                        Text("Configuration needed: set the public Supabase URL and anon/publishable key in the GitHub Actions secrets before building. Never add a service-role key to the Android app.")
                     }
                 }
 
@@ -337,26 +331,33 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                     Text(if (resendSeconds > 0) "For your security, you can request another code in " + resendSeconds + " seconds." else "Didn't receive it? Check Spam, then request a new code.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                AppScreen.PAIR_CHILD -> ScreenFrame("Link child account", onBack = {
-                    repository.signOut(); session = null; screen = AppScreen.AUTH
+                AppScreen.PAIR_CHILD -> ScreenFrame("Pair this child's device", onBack = {
+                    repository.signOut()
+                    session = null
+                    childProfile = null
+                    accountRole = "parent"
+                    screen = AppScreen.AUTH
                 }, notice = notice, busy = busy) {
-                    Text("Ask the parent to open this child's profile and generate a new pairing code. It expires in 10 minutes and can be used once.")
+                    Text("Enter the six-digit, one-time code generated by the parent. No child email address or password is needed.")
+                    Text("The code expires after 10 minutes and can be used once. Keep this device's app data intact after pairing; anonymous child sessions cannot be recovered if app data is cleared.")
                     Field(pairingCode, { pairingCode = it.filter(Char::isDigit).take(6) }, "6-digit parent pairing code", keyboardType = KeyboardType.Number)
                     Button(onClick = {
                         execute {
-                            repository.claimChildPairing(pairingCode)
-                            val current = session ?: throw IllegalStateException("Please sign in again.")
-                            finishChildLogin(current, "")
+                            val childSession = repository.signInAnonymouslyAsChild()
+                            session = childSession
+                            finishChildLogin(childSession, pairingCode)
                         }
                     }, enabled = !busy && pairingCode.filter(Char::isDigit).length == 6, modifier = Modifier.fillMaxWidth()) {
-                        Text("Securely link this child")
+                        Text("Pair securely with parent")
                     }
                     OutlinedButton(onClick = {
                         execute {
-                            val current = session ?: throw IllegalStateException("Please sign in again.")
-                            resolveSignedIn(current, pairingCode)
+                            val current = repository.currentSession()
+                                ?: throw IllegalStateException("Enter the pairing code to set up this device.")
+                            resolveSignedIn(current)
                         }
-                    }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Refresh linked profile") }
+                    }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Continue with an already linked device") }
+                    Text("If pairing reports that anonymous sign-ins are disabled, the project owner must enable Authentication → Sign In / Providers → Anonymous in the EduLock Supabase project.")
                 }
 
                 AppScreen.PARENT_HOME -> ScreenFrame("Parent dashboard", notice = notice, busy = busy) {
@@ -730,6 +731,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                     val used = prefs.getLong("used_millis_today", 0L) / 60_000L
                     val remaining = (earnedToday - used.toInt()).coerceAtLeast(0)
                     SummaryCard("Remaining allowed time", remaining.toString() + " minutes", "Local app-use accounting is reset daily in UTC and refreshed at sign-in.")
+                    SummaryCard(
+                        "App blocking",
+                        if (isAccessibilityServiceEnabled(context)) "Enabled" else "Needs setup",
+                        if (isAccessibilityServiceEnabled(context)) "EduLock can display its restriction screen over unapproved apps while its rules are active." else "Turn on EduLock in Android Accessibility settings on this child's device to show blocking screens over restricted apps."
+                    )
                     if (isAccessibilityServiceEnabled(context)) {
                         Text("Device restriction service: enabled on this device.")
                     } else {
@@ -739,21 +745,21 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                     }
                     if (isDeviceAdminActive(context)) {
-                        Text("🔒 Visible uninstall protection is active. A user must deactivate EduLock as a device administrator before ordinary uninstall.")
+                        Text("🔒 Device administrator is enabled. It may add a deactivation step before ordinary uninstall, but it does not reliably prevent Clear data or factory reset.")
                     } else {
-                        Text("Optional: ask a parent to enable visible uninstall protection. Android will show a device-admin confirmation; this does not block Clear data or factory reset on a regular device.")
+                        Text("Optional: a parent can enable Android's visible device-administrator setting. This adds uninstall friction on supported devices; it cannot guarantee protection against Clear data or factory reset.")
                         OutlinedButton(onClick = {
                             val component = ComponentName(context, EduLockDeviceAdminReceiver::class.java)
                             val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
                                 putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
                                 putExtra(
                                     DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                                    "With a parent's permission, EduLock can make ordinary uninstall require deactivation of this visible protection first. This does not prevent Clear data or factory reset."
+                                    "With a parent's permission, enable Android's visible device-administrator setting. It may add a deactivation step before ordinary uninstall, but does not reliably prevent Clear data or factory reset."
                                 )
                             }
                             context.startActivity(intent)
                         }, modifier = Modifier.fillMaxWidth()) {
-                            Text("🔒 Enable uninstall protection")
+                            Text("🔒 Enable device administrator")
                         }
                     }
                     Button(onClick = {
