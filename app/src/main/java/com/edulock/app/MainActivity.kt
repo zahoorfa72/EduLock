@@ -1039,13 +1039,19 @@ private fun EduLockApp(repository: EduLockRepository) {
 
                         Text("Subject", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         listOf(
-                            Triple("math", "Mathematics", "Number sense, arithmetic, fractions and problem solving"),
+                            Triple("math", "Mathematics", "Numbers, arithmetic, fractions and problem solving"),
                             Triple("english", "English", "Vocabulary, reading and grammar"),
-                            Triple("science", "General Science", "Living things, health, matter and Earth science")
+                            Triple("science", "General Science", "Living things, health, matter and Earth science"),
+                            Triple("social", "Social Studies", "Community, geography and civic life"),
+                            Triple("computer", "Computer Skills", "Devices, digital skills and online safety"),
+                            Triple("urdu", "Urdu", "Urdu vocabulary, opposites and reading practice"),
+                            Triple("sindhi", "Sindhi", "Sindhi vocabulary, reading and language practice")
                         ).forEach { (code, name, detail) ->
                             Card(
                                 modifier = Modifier.fillMaxWidth().clickable {
                                     curriculumSubjectCode = code
+                                    if (code == "urdu") curriculumLanguageCode = "ur"
+                                    if (code == "sindhi") curriculumLanguageCode = "sd"
                                     curriculumSearchResult = null
                                     curriculumSelectedIds = emptySet()
                                 },
