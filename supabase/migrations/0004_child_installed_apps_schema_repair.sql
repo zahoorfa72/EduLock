@@ -55,5 +55,28 @@ create policy child_installed_apps_child_update
       and c.child_user_id = (select auth.uid())
   ));
 
+
+-- Newly discovered apps start allowed with no practical daily cap. The parent can
+-- explicitly disable an app or set a stricter per-app daily limit in the dashboard.
+create or replace function edulock.default_allow_discovered_app()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $
+begin
+  insert into edulock.allowed_apps(child_id, package_name, display_name, enabled, daily_limit_minutes)
+  values (new.child_id, new.package_name, new.display_name, true, 1440)
+  on conflict (child_id, package_name) do update
+    set display_name = excluded.display_name;
+  return new;
+end;
+$;
+
+drop trigger if exists child_installed_apps_default_allow on edulock.child_installed_apps;
+create trigger child_installed_apps_default_allow
+  after insert on edulock.child_installed_apps
+  for each row execute function edulock.default_allow_discovered_app();
+
 -- Refresh PostgREST metadata after migrations are applied.
 notify pgrst, 'reload schema';
