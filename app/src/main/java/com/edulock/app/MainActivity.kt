@@ -469,9 +469,17 @@ private fun EduLockApp(repository: EduLockRepository) {
                         @Suppress("DEPRECATION")
                         context.packageManager.getInstalledApplications(0)
                     }
+                    val protectedSystemPackages = setOf(
+                        "com.android.settings", "com.android.systemui",
+                        "com.android.permissioncontroller", "com.google.android.permissioncontroller",
+                        "com.android.packageinstaller", "com.google.android.packageinstaller",
+                        "com.android.launcher3", "com.google.android.apps.nexuslauncher",
+                        "com.miui.home", "com.samsung.android.oneui.home",
+                        "com.oplus.launcher", "com.huawei.android.launcher"
+                    )
                     val visibleApps = installedApps.mapNotNull { info ->
                         val pkg = info.packageName
-                        if (pkg == context.packageName ||
+                        if (pkg == context.packageName || pkg in protectedSystemPackages ||
                             pkg.startsWith("com.android.internal.") ||
                             pkg.startsWith("com.android.providers.") ||
                             pkg == "com.google.android.adservices.api" ||
@@ -1162,6 +1170,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                         childInstalledApps.none { it.packageName == app.packageName } &&
                             !app.packageName.startsWith("com.android.internal.") &&
                             !app.packageName.startsWith("com.android.providers.") &&
+                            app.packageName !in setOf(
+                                "com.android.settings", "com.android.systemui",
+                                "com.android.permissioncontroller", "com.google.android.permissioncontroller",
+                                "com.android.packageinstaller", "com.google.android.packageinstaller",
+                                "com.android.launcher3", "com.google.android.apps.nexuslauncher",
+                                "com.miui.home", "com.samsung.android.oneui.home",
+                                "com.oplus.launcher", "com.huawei.android.launcher"
+                            ) &&
                             app.packageName != "com.google.android.adservices.api" &&
                             !app.packageName.contains("agingfunction", ignoreCase = true) &&
                             !app.displayName.equals("3 Button Navigation Bar", ignoreCase = true) &&
