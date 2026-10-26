@@ -541,7 +541,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                 deviceMode = "unknown"
                 AppScreen.DEVICE_SETUP
             }
-            AppScreen.PARENT_HOME, AppScreen.CHILD_HOME, AppScreen.AUTH -> AppScreen.AUTH
+            AppScreen.PARENT_HOME, AppScreen.AUTH -> AppScreen.AUTH
+            // Keep a child device out of the parent login/dashboard route.
+            AppScreen.CHILD_HOME -> AppScreen.CHILD_HOME
             AppScreen.CHILDREN, AppScreen.SUBJECTS, AppScreen.ASSIGN_TASK, AppScreen.REPORTS, AppScreen.PROTECTION_STATUS, AppScreen.CHILD_LOCATIONS -> AppScreen.PARENT_HOME
             AppScreen.ADD_CHILD, AppScreen.APP_USAGE_REPORT, AppScreen.ALLOWED_APPS -> AppScreen.CHILDREN
             AppScreen.ADD_SUBJECT, AppScreen.QUESTIONS -> AppScreen.SUBJECTS
