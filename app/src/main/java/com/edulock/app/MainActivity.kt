@@ -573,7 +573,8 @@ private fun EduLockApp(repository: EduLockRepository) {
             AppScreen.CHILD_HOME -> AppScreen.CHILD_HOME
             AppScreen.CHILDREN, AppScreen.SUBJECTS, AppScreen.ASSIGN_TASK, AppScreen.REPORTS, AppScreen.PROTECTION_STATUS, AppScreen.CHILD_LOCATIONS -> AppScreen.PARENT_HOME
             AppScreen.ADD_CHILD, AppScreen.APP_USAGE_REPORT, AppScreen.ALLOWED_APPS -> AppScreen.CHILDREN
-            AppScreen.ADD_SUBJECT, AppScreen.QUESTIONS, AppScreen.LEARNING_TEMPLATES -> AppScreen.SUBJECTS
+            AppScreen.ADD_SUBJECT, AppScreen.QUESTIONS -> AppScreen.SUBJECTS
+            AppScreen.LEARNING_TEMPLATES -> if (selectedSubject != null) AppScreen.QUESTIONS else AppScreen.PARENT_HOME
             AppScreen.ADD_QUESTION, AppScreen.ADD_TRANSLATION -> AppScreen.QUESTIONS
             AppScreen.PLAY_TASK, AppScreen.TASK_RESULT -> AppScreen.CHILD_HOME
         }
@@ -759,7 +760,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     SummaryCard("Learning", subjects.size.toString() + " subject(s)", "Create questions in Urdu, Sindhi, English or another language.")
                     Button(onClick = { screen = AppScreen.CHILDREN; execute { children = repository.loadChildren(familyId) } }, modifier = Modifier.fillMaxWidth()) { Text("Manage child profiles") }
                     Button(onClick = { screen = AppScreen.SUBJECTS; execute { subjects = repository.loadSubjects(familyId) } }, modifier = Modifier.fillMaxWidth()) { Text("Subjects & questions") }
-                    OutlinedButton(onClick = { templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES }, modifier = Modifier.fillMaxWidth()) { Text("🧪 Math, physics & chemistry templates") }
+                    OutlinedButton(onClick = { selectedSubject = null; templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES }, modifier = Modifier.fillMaxWidth()) { Text("🧪 Math, physics & chemistry templates") }
                     Button(onClick = { selectedChild = null; selectedSubject = null; screen = AppScreen.ASSIGN_TASK }, modifier = Modifier.fillMaxWidth()) { Text("Assign learning task & reward") }
                     OutlinedButton(onClick = { screen = AppScreen.REPORTS; execute { attempts = repository.loadAttempts(); conceptProgress = repository.loadConceptProgress() } }, modifier = Modifier.fillMaxWidth()) { Text("🏆  Learning progress reports") }
                     OutlinedButton(onClick = {
@@ -941,7 +942,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 if (template.steps.isNotEmpty()) {
                                     Text("Activity steps", fontWeight = FontWeight.Bold)
                                     template.steps.forEachIndexed { index, step ->
-                                        Text("\${index + 1}. $step")
+                                        Text("${index + 1}. $step")
                                     }
                                 }
                                 Text("Question preview", fontWeight = FontWeight.Bold)
@@ -982,7 +983,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 }
                                                 if (template.steps.isNotEmpty()) {
                                                     append("\n\nSteps:\n")
-                                                    append(template.steps.mapIndexed { index, step -> "\${index + 1}. $step" }.joinToString("\n"))
+                                                    append(template.steps.mapIndexed { index, step -> "${index + 1}. $step" }.joinToString("\n"))
                                                 }
                                                 if (template.safety.isNotBlank()) {
                                                     append("\n\nSafety: ")
