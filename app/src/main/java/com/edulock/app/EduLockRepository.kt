@@ -14,6 +14,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -384,14 +385,19 @@ class EduLockRepository(context: Context) {
         }
     }
 
-    suspend fun updateChildCurriculum(childId: String, countryCode: String, schoolGrade: Int, ageYears: Int) {
+    suspend fun updateChildCurriculum(
+        childId: String, countryCode: String, schoolGrade: Int, ageYears: Int, languageCode: String
+    ) {
         requireSession("parent")
         require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
         require(countryCode.matches(Regex("[A-Z]{2}"))) { "Choose a valid country." }
         require(schoolGrade in 0..13) { "Grade must be from kindergarten to grade 13." }
         require(ageYears in 3..19) { "Age must be from 3 to 19 years." }
+        val language = languageCode.trim().lowercase(Locale.ROOT)
+        require(language.matches(Regex("[a-z][a-z0-9-]{1,15}"))) { "Choose a valid language code." }
         restArray("children?id=eq.$childId", "PATCH",
-            JSONObject().put("country_code", countryCode).put("school_grade", schoolGrade).put("age_years", ageYears))
+            JSONObject().put("country_code", countryCode).put("school_grade", schoolGrade)
+                .put("age_years", ageYears).put("preferred_language", language))
     }
 
     suspend fun loadCurrentChild(): ChildProfile? {
