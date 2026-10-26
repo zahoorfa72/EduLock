@@ -96,40 +96,33 @@ class EduLockAccessibilityService : AccessibilityService() {
     }
 
     private fun isAllowedPackageForUsage(packageName: String): Boolean {
-        if (packageName == applicationContext.packageName || packageName in essentialPackages()) return false
-        return lockPrefs().getStringSet(KEY_ALLOWED_PACKAGES, emptySet()).orEmpty().contains(packageName)
+        if (packageName == applicationContext.packageName || packageName in essentialPackages() || isInternalSystemPackage(packageName)) return false
+        return !lockPrefs().getStringSet(KEY_BLOCKED_PACKAGES, emptySet()).orEmpty().contains(packageName)
     }
 
     private fun applyRestriction(packageName: String) {
         val prefs = lockPrefs()
         if (!prefs.getBoolean(KEY_CHILD_ACTIVE, false) || packageName == applicationContext.packageName ||
-            packageName in essentialPackages()) {
+            packageName in essentialPackages() || isInternalSystemPackage(packageName)) {
             hideBlocker()
             return
         }
-        val allowed = prefs.getStringSet(KEY_ALLOWED_PACKAGES, emptySet()).orEmpty().contains(packageName)
-        val used = prefs.getLong(KEY_USED_MS, 0L)
-        val earned = prefs.getInt(KEY_EARNED_MINUTES, 0).coerceAtLeast(0) * MILLIS_PER_MINUTE
+        val explicitlyBlocked = prefs.getStringSet(KEY_BLOCKED_PACKAGES, emptySet()).orEmpty().contains(packageName)
         val appLimitMinutes = prefs.getStringSet(KEY_APP_DAILY_LIMITS, emptySet()).orEmpty()
             .firstOrNull { it.startsWith("$packageName=") }
             ?.substringAfter("=")
             ?.toIntOrNull()
             ?.coerceIn(1, 1440)
         val appUsed = prefs.getLong(APP_USED_PREFIX + packageName, 0L)
-        val blockedForAppTime = allowed && appLimitMinutes != null && appUsed >= appLimitMinutes * MILLIS_PER_MINUTE
-        val blockedForRewardTime = allowed && used >= earned
-        if (!allowed || blockedForAppTime || blockedForRewardTime) {
-            val message = when {
-                blockedForAppTime -> "Your daily limit for this app has been reached."
-                blockedForRewardTime -> "Today's earned screen time has been used."
-                else -> "This app has not been approved by your parent."
-            }
+        val blockedForAppTime = appLimitMinutes != null && appUsed >= appLimitMinutes * MILLIS_PER_MINUTE
+        if (explicitlyBlocked || blockedForAppTime) {
+            val message = if (explicitlyBlocked) "This app has been blocked by your parent."
+                else "Your daily limit for this app has been reached."
             showBlocker(message)
         } else {
             hideBlocker()
         }
     }
-
     private fun showBlocker(message: String) {
         if (blocker != null) {
             blockerDetail?.text = message
@@ -140,20 +133,21 @@ class EduLockAccessibilityService : AccessibilityService() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(dp(28), dp(36), dp(28), dp(36))
-            setBackgroundColor(Color.rgb(12, 24, 43))
+            setBackgroundColor(Color.rgb(244, 246, 255))
+            alpha = 1f
             isClickable = true
             isFocusable = true
         }
         val title = TextView(this).apply {
             text = "EduLock"
-            setTextColor(Color.WHITE)
+            setTextColor(Color.rgb(35, 43, 82))
             textSize = 30f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
         }
         val detail = TextView(this).apply {
             text = message
-            setTextColor(Color.rgb(222, 231, 245))
+            setTextColor(Color.rgb(66, 76, 110))
             textSize = 18f
             gravity = Gravity.CENTER
             setPadding(0, dp(20), 0, dp(28))
@@ -211,6 +205,7 @@ class EduLockAccessibilityService : AccessibilityService() {
     private fun essentialPackages(): Set<String> = setOf(
         "com.android.settings",
         "com.android.systemui",
+        "com.android.internal.systemui.navbar.threebutton",
         "com.android.permissioncontroller",
         "com.google.android.permissioncontroller",
         "com.android.packageinstaller",
@@ -223,10 +218,15 @@ class EduLockAccessibilityService : AccessibilityService() {
         "com.huawei.android.launcher"
     )
 
+    private fun isInternalSystemPackage(packageName: String): Boolean =
+        packageName.startsWith("com.android.internal.") ||
+            packageName == "com.google.android.adservices.api" ||
+            packageName.startsWith("com.android.providers.")
     private companion object {
         const val LOCK_PREFS = "edulock_lock_state"
         const val KEY_CHILD_ACTIVE = "child_active"
         const val KEY_ALLOWED_PACKAGES = "allowed_packages"
+        const val KEY_BLOCKED_PACKAGES = "blocked_packages"
         const val KEY_EARNED_MINUTES = "earned_minutes_today"
         const val KEY_USED_MS = "used_millis_today"
         const val KEY_DAY = "budget_day"
