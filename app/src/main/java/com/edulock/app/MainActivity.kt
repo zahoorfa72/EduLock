@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Build
 import android.os.UserManager
@@ -110,6 +111,8 @@ private fun EduLockApp(repository: EduLockRepository) {
     var tasks by remember { mutableStateOf(emptyList<TaskRow>()) }
     var attempts by remember { mutableStateOf(emptyList<AttemptRow>()) }
     var allowedApps by remember { mutableStateOf(emptyList<AllowedApp>()) }
+    var childInstalledApps by remember { mutableStateOf(emptyList<ChildInstalledApp>()) }
+    var installedAppLimitEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var lastPairingCode by remember { mutableStateOf("") }
     var pairingChildName by remember { mutableStateOf("") }
     var pairingCodeExpiry by remember { mutableStateOf(0) }
@@ -341,6 +344,31 @@ private fun EduLockApp(repository: EduLockRepository) {
                 } catch (_: Exception) {
                     // Keep the last applied rules while offline; retry on the next cycle.
                 }
+            }
+        }
+    }
+
+    LaunchedEffect(screen, childProfile?.id) {
+        val child = childProfile
+        if (screen == AppScreen.CHILD_HOME && child != null && repository.currentSession()?.accountRole == "child") {
+            try {
+                val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                val resolved = if (Build.VERSION.SDK_INT >= 33) {
+                    context.packageManager.queryIntentActivities(launcherIntent, PackageManager.ResolveInfoFlags.of(0L))
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.packageManager.queryIntentActivities(launcherIntent, 0)
+                }
+                val visibleApps = resolved.mapNotNull { info ->
+                    val activityInfo = info.activityInfo ?: return@mapNotNull null
+                    val pkg = activityInfo.packageName
+                    if (pkg == context.packageName) return@mapNotNull null
+                    val label = activityInfo.loadLabel(context.packageManager)?.toString()?.trim().orEmpty()
+                    if (label.isBlank()) null else pkg to label
+                }.distinctBy { it.first }.take(300)
+                repository.syncInstalledApps(child.id, visibleApps)
+            } catch (_: Exception) {
+                // Keep the child experience available if inventory sync is temporarily unavailable.
             }
         }
     }
@@ -883,23 +911,83 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.ALLOWED_APPS -> ScreenFrame("Allowed apps", onBack = { screen = AppScreen.CHILDREN }, notice = notice, busy = busy) {
                     val child = selectedChild
                     Text("Child: " + (child?.displayName ?: "Not selected"))
-                    Text("Choose the apps this child may use and set a separate daily limit for each one. Android Settings and the home screen stay available for recovery.")
-                    Field(appDisplayName, { appDisplayName = it }, "App display name")
-                    Field(appPackage, { appPackage = it }, "Package name (e.g. com.example.app)")
-                    Field(appDailyLimit, { appDailyLimit = it.filter(Char::isDigit).take(4) }, "Daily limit in minutes (1–1440)", keyboardType = KeyboardType.Number)
-                    Button(onClick = {
-                        execute {
-                            val selected = child ?: throw IllegalStateException("Select a child profile first.")
-                            val dailyLimit = appDailyLimit.toIntOrNull()
-                                ?: throw IllegalArgumentException("Enter a daily limit from 1 to 1440 minutes.")
-                            require(dailyLimit in 1..1440) { "Daily limit must be between 1 and 1440 minutes." }
-                            repository.addAllowedApp(selected.id, appPackage, appDisplayName, dailyLimit)
-                            allowedApps = repository.loadAllowedApps(selected.id)
-                            appDisplayName = ""; appPackage = ""; appDailyLimit = "60"
-                            notice = "App and daily limit saved. Sync the child's device to apply the latest rules."
+                    Text("Choose from apps detected on the child's paired phone. Allow or disable an app and set its daily limit here; the child's EduLock checks the rules when it next syncs.")
+                    OutlinedButton(
+                        onClick = {
+                            execute {
+                                val selected = child ?: throw IllegalStateException("Select a child profile first.")
+                                childInstalledApps = repository.loadInstalledApps(selected.id)
+                                allowedApps = repository.loadAllowedApps(selected.id)
+                            }
+                        },
+                        enabled = !busy && child != null,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("↻ Refresh apps from child's phone") }
+                    if (childInstalledApps.isEmpty()) {
+                        Text("No app list has arrived yet. Open EduLock on the child's phone, sign in to the paired child profile, and keep it connected to the internet. EduLock will send the launchable app list.")
+                    }
+                    childInstalledApps.forEach { installed ->
+                        val existingRule = allowedApps.firstOrNull { it.packageName == installed.packageName }
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Text(installed.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
+                                Text(installed.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (existingRule == null) {
+                                    var limitText = installedAppLimitEdits[installed.packageName] ?: "60"
+                                    Field(limitText, { value ->
+                                        installedAppLimitEdits = installedAppLimitEdits + (installed.packageName to value.filter(Char::isDigit).take(4))
+                                    }, "Daily limit in minutes (1–1440)", keyboardType = KeyboardType.Number)
+                                    Button(
+                                        onClick = {
+                                            execute {
+                                                val limit = (installedAppLimitEdits[installed.packageName] ?: "60").toIntOrNull()
+                                                    ?: throw IllegalArgumentException("Enter a daily limit from 1 to 1440 minutes.")
+                                                require(limit in 1..1440) { "Daily limit must be between 1 and 1440 minutes." }
+                                                val selected = child ?: throw IllegalStateException("Select a child profile first.")
+                                                repository.allowInstalledApp(selected.id, installed, limit)
+                                                allowedApps = repository.loadAllowedApps(selected.id)
+                                                notice = "App allowed with a $limit-minute daily limit. The child's phone applies the rule after syncing."
+                                            }
+                                        },
+                                        enabled = !busy,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { Text("Allow on child's phone") }
+                                } else {
+                                    Text(if (existingRule.enabled) "Allowed • ${existingRule.dailyLimitMinutes} minutes/day" else "Disabled")
+                                    Field(
+                                        installedAppLimitEdits[installed.packageName] ?: existingRule.dailyLimitMinutes.toString(),
+                                        { value -> installedAppLimitEdits = installedAppLimitEdits + (installed.packageName to value.filter(Char::isDigit).take(4)) },
+                                        "Daily limit in minutes (1–1440)",
+                                        keyboardType = KeyboardType.Number
+                                    )
+                                    Button(onClick = {
+                                        execute {
+                                            val limit = (installedAppLimitEdits[installed.packageName] ?: existingRule.dailyLimitMinutes.toString()).toIntOrNull()
+                                                ?: throw IllegalArgumentException("Enter a daily limit from 1 to 1440 minutes.")
+                                            require(limit in 1..1440) { "Daily limit must be between 1 and 1440 minutes." }
+                                            repository.updateAllowedAppLimit(existingRule.id, limit)
+                                            allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
+                                            installedAppLimitEdits = installedAppLimitEdits - installed.packageName
+                                            notice = "Daily limit saved. The child's phone applies it after syncing."
+                                        }
+                                    }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Save limit") }
+                                    OutlinedButton(onClick = {
+                                        execute {
+                                            repository.updateAllowedAppEnabled(existingRule.id, !existingRule.enabled)
+                                            allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
+                                            notice = if (existingRule.enabled) "App disabled for child after the next sync." else "App enabled for child after the next sync."
+                                        }
+                                    }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                                        Text(if (existingRule.enabled) "Disable on child's phone" else "Enable on child's phone")
+                                    }
+                                }
+                            }
                         }
-                    }, enabled = !busy && child != null && appPackage.isNotBlank() && appDisplayName.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Add allowed app") }
-                    if (allowedApps.isEmpty()) Text("No apps are allowed yet. With restrictions enabled, only EduLock and essential Android recovery screens remain accessible until an app is approved.")
+                    }
+                    if (allowedApps.isEmpty()) Text("No apps are allowed yet. EduLock will keep restricted apps blocked once Accessibility is enabled on the child's phone.")
                     allowedApps.forEach { app ->
                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
