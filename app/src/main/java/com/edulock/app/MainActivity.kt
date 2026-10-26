@@ -863,8 +863,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 Text(child.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                                 Text("Language: " + child.preferredLanguage + " • Daily cap: " + child.dailyCapMinutes + " minutes")
                                 Text(
-                                    displayCountryName(child.countryCode) + " • Grade " +
-                                        if (child.schoolGrade == 0) "Kindergarten" else child.schoolGrade.toString() +
+                                    displayCountryName(child.countryCode) + " • " +
+                                        (if (child.schoolGrade == 0) "Kindergarten" else "Grade ${child.schoolGrade}") +
                                         " • Age " + child.ageYears,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -2325,6 +2325,9 @@ private fun ScreenFrame(
         Spacer(Modifier.height(14.dp))
     }
 }
+
+private fun displayCountryName(code: String): String =
+    Locale("", code.uppercase()).getDisplayCountry(Locale.ENGLISH).ifBlank { code.uppercase() }
 
 private fun screenEmoji(title: String): String = when {
     title.contains("verify", true) -> "🔐"
