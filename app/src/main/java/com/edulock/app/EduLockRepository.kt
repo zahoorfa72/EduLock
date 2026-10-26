@@ -466,39 +466,6 @@ class EduLockRepository(context: Context) {
         }.toMap()
     }
 
-    suspend fun saveQuestionSolution(questionId: String, solution: String) {
-        requireSession("parent")
-        require(questionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid question." }
-        val cleaned = solution.trim().take(12000)
-        if (cleaned.isEmpty()) return
-        val existing = restArray("question_solutions?select=id&question_id=eq.$questionId&limit=1")
-        val payload = JSONObject()
-            .put("question_id", questionId)
-            .put("solution", cleaned)
-            .put("updated_at", java.time.Instant.now().toString())
-        if (existing.length() > 0) {
-            restArray("question_solutions?question_id=eq.$questionId", "PATCH", payload)
-        } else {
-            restArray("question_solutions?select=id", "POST", payload)
-        }
-    }
-
-    suspend fun loadQuestionSolutions(questionIds: List<String>): Map<String, String> {
-        requireSession("parent")
-        val ids = questionIds.distinct().filter { it.matches(Regex("[0-9a-fA-F-]{36}")) }
-        if (ids.isEmpty()) return emptyMap()
-        val rows = restArray(
-            "question_solutions?select=question_id,solution&question_id=in.(" + ids.joinToString(",") + ")"
-        )
-        return (0 until rows.length()).mapNotNull { index ->
-            rows.optJSONObject(index)?.let { row ->
-                val id = row.optString("question_id")
-                val solution = row.optString("solution")
-                if (id.isNotBlank() && solution.isNotBlank()) id to solution else null
-            }
-        }.toMap()
-    }
-
     suspend fun loadQuestions(subjectId: String, limit: Int = 500): List<QuestionRow> {
         requireSession()
         val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,created_at&subject_id=eq.$subjectId&order=created_at.asc,id.asc&limit=${limit.coerceIn(1, 500)}")
