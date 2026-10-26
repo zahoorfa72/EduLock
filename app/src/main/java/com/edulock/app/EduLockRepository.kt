@@ -548,6 +548,11 @@ class EduLockRepository(context: Context) {
         restArray("allowed_apps?id=eq.$appId", "PATCH", JSONObject().put("daily_limit_minutes", dailyLimitMinutes))
     }
 
+    suspend fun updateAllowedAppEnabled(appId: String, enabled: Boolean) {
+        requireSession("parent")
+        restArray("allowed_apps?id=eq.$appId", "PATCH", JSONObject().put("enabled", enabled))
+    }
+
     suspend fun deleteAllowedApp(appId: String) {
         requireSession("parent")
         send("rest/v1/allowed_apps?id=eq.$appId", "DELETE", null, authenticated = true, profile = true)
