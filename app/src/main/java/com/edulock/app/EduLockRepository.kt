@@ -72,7 +72,7 @@ data class AllowedApp(
     val packageName: String,
     val displayName: String,
     val enabled: Boolean = true,
-    val dailyLimitMinutes: Int = 60
+    val dailyLimitMinutes: Int = 1440
 )
 
 data class ChildInstalledApp(
@@ -586,27 +586,24 @@ class EduLockRepository(context: Context) {
 
     suspend fun syncInstalledApps(childId: String, apps: List<Pair<String, String>>) {
         requireSession("child")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
         val normalized = apps.mapNotNull { (packageName, displayName) ->
             val pkg = packageName.trim()
             val name = displayName.trim().take(120)
             if (pkg.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+")) && name.isNotBlank())
                 pkg to name else null
-        }.distinctBy { it.first }.take(300)
+        }.distinctBy { it.first }.take(500)
+        if (normalized.isEmpty()) return
+        val timestamp = java.time.Instant.now().toString()
+        val payload = JSONArray()
         normalized.forEach { (pkg, name) ->
-            val existing = restArray("child_installed_apps?select=id&child_id=eq.$childId&package_name=eq.$pkg")
-            val payload = JSONObject().put("display_name", name).put("last_seen_at", java.time.Instant.now().toString())
-            if (existing.length() > 0) {
-                val id = existing.optJSONObject(0)?.optString("id")
-                if (!id.isNullOrBlank()) restArray("child_installed_apps?id=eq.$id", "PATCH", payload)
-            } else {
-                restArray(
-                    "child_installed_apps?select=id", "POST",
-                    payload.put("child_id", childId).put("package_name", pkg)
-                )
-            }
+            payload.put(JSONObject().put("child_id", childId).put("package_name", pkg)
+                .put("display_name", name).put("last_seen_at", timestamp))
         }
+        // One PostgREST upsert avoids hundreds of sequential network requests on child startup.
+        restArray("child_installed_apps?on_conflict=child_id,package_name", "POST", payload,
+            prefer = "resolution=merge-duplicates,return=representation")
     }
-
     suspend fun loadInstalledApps(childId: String): List<ChildInstalledApp> {
         requireSession("parent")
         val rows = restArray("child_installed_apps?select=child_id,package_name,display_name,last_seen_at&child_id=eq.$childId&order=display_name.asc")
@@ -643,7 +640,7 @@ class EduLockRepository(context: Context) {
                 AllowedApp(
                     row.optString("id"), row.optString("child_id"), row.optString("package_name"),
                     row.optString("display_name"), row.optBoolean("enabled", true),
-                    row.optInt("daily_limit_minutes", 60).coerceIn(1, 1440)
+                    row.optInt("daily_limit_minutes", 1440).coerceIn(1, 1440)
                 )
             }
         }
@@ -773,8 +770,8 @@ class EduLockRepository(context: Context) {
         return result as? JSONObject ?: throw IOException("The authentication server returned an unexpected response")
     }
 
-    private suspend fun restArray(path: String, method: String = "GET", body: JSONObject? = null): JSONArray {
-        val result = send("rest/v1/$path", method, body, authenticated = true, profile = true)
+    private suspend fun restArray(path: String, method: String = "GET", body: Any? = null, prefer: String = "return=representation"): JSONArray {
+        val result = send("rest/v1/$path", method, body, authenticated = true, profile = true, prefer = prefer)
         return when (result) {
             is JSONArray -> result
             is JSONObject -> JSONArray().put(result)
@@ -785,14 +782,15 @@ class EduLockRepository(context: Context) {
     private suspend fun send(
         path: String,
         method: String,
-        body: JSONObject?,
+        body: Any?,
         authenticated: Boolean,
         profile: Boolean,
-        allowRefresh: Boolean = true
+        allowRefresh: Boolean = true,
+        prefer: String = "return=representation"
     ): Any {
         ensureConfigured()
         var session = if (authenticated) sessionStore.read() else null
-        var result = perform(path, method, body, session?.accessToken, profile)
+        var result = perform(path, method, body, session?.accessToken, profile, prefer)
         if (result.status == 401 && allowRefresh && authenticated && session?.refreshToken?.isNotBlank() == true) {
             try {
                 val refreshedJson = perform(
@@ -805,7 +803,7 @@ class EduLockRepository(context: Context) {
                 session = sessionFrom(refreshedJson, session.accountRole, session.userId)
                     ?: throw IOException("Session refresh failed")
                 sessionStore.save(session)
-                result = perform(path, method, body, session.accessToken, profile)
+                result = perform(path, method, body, session.accessToken, profile, prefer)
             } catch (_: Exception) {
                 signOut()
                 throw IOException("Your session expired. Sign in again.")
@@ -823,7 +821,8 @@ class EduLockRepository(context: Context) {
     private data class RawResult(val status: Int, val text: String)
 
     private suspend fun perform(
-        path: String, method: String, body: JSONObject?, bearerToken: String?, profile: Boolean
+        path: String, method: String, body: Any?, bearerToken: String?, profile: Boolean,
+        prefer: String = "return=representation"
     ): RawResult = withContext(Dispatchers.IO) {
         val builder = Request.Builder()
             .url("$baseUrl/$path")
@@ -836,7 +835,7 @@ class EduLockRepository(context: Context) {
         }
         if (method == "POST" || method == "PATCH" || method == "PUT") {
             builder.header("Content-Type", "application/json")
-                .header("Prefer", "return=representation")
+                .header("Prefer", prefer)
                 .method(method, (body ?: JSONObject()).toString().toRequestBody(JSON_MEDIA))
         } else if (method == "DELETE") {
             builder.method("DELETE", null)
