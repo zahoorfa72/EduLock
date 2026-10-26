@@ -136,6 +136,28 @@ class EduLockRepository(context: Context) {
         return AuthResult(null, message)
     }
 
+    suspend fun verifySignupOtp(email: String, token: String, accountRole: String): AuthSession {
+        ensureConfigured()
+        require(email.trim().contains("@")) { "Enter a valid email address" }
+        val code = token.filter(Char::isDigit)
+        require(code.length == 6) { "Enter the six-digit code from your email" }
+        require(accountRole == "parent" || accountRole == "child") { "Select a valid account type" }
+        val json = authRequest(
+            "auth/v1/verify",
+            JSONObject().put("type", "signup").put("email", email.trim()).put("token", code)
+        )
+        val verified = sessionFrom(json, accountRole)
+            ?: throw IOException("Email verified, but no session was returned. Sign in with your email and password.")
+        sessionStore.save(verified)
+        return verified
+    }
+
+    suspend fun resendSignupOtp(email: String) {
+        ensureConfigured()
+        require(email.trim().contains("@")) { "Enter a valid email address" }
+        authRequest("auth/v1/resend", JSONObject().put("type", "signup").put("email", email.trim()))
+    }
+
     suspend fun signIn(email: String, password: String, accountRole: String): AuthSession {
         ensureConfigured()
         require(email.trim().contains("@")) { "Enter a valid email address" }
