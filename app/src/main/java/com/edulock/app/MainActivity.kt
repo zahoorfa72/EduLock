@@ -896,6 +896,116 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                 }
 
+                AppScreen.LEARNING_TEMPLATES -> ScreenFrame(
+                    "Math & science templates",
+                    onBack = { screen = if (selectedSubject != null) AppScreen.QUESTIONS else AppScreen.PARENT_HOME },
+                    notice = notice,
+                    busy = busy
+                ) {
+                    Text(
+                        "Ready-to-use questions with worked solutions. Physics and chemistry activities include materials, steps, expected observations and safety notes.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("Mathematics", "Physics", "Chemistry").forEach { category ->
+                            OutlinedButton(
+                                onClick = { templateCategory = category },
+                                enabled = !busy
+                            ) {
+                                Text(if (templateCategory == category) "✓ $category" else category)
+                            }
+                        }
+                    }
+                    val filteredTemplates = LearningTemplates.all.filter { it.category == templateCategory }
+                    filteredTemplates.forEach { template ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(22.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F0FF)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(template.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text(
+                                    template.subjectTitle + " • " + readableQuestionType(template.questionType),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                if (template.materials.isNotEmpty()) {
+                                    Text("Materials", fontWeight = FontWeight.Bold)
+                                    Text(template.materials.joinToString(" • "))
+                                }
+                                if (template.steps.isNotEmpty()) {
+                                    Text("Activity steps", fontWeight = FontWeight.Bold)
+                                    template.steps.forEachIndexed { index, step ->
+                                        Text("\${index + 1}. $step")
+                                    }
+                                }
+                                Text("Question preview", fontWeight = FontWeight.Bold)
+                                Text(template.prompt)
+                                if (template.options.isNotEmpty()) {
+                                    Text("Answer choices: " + template.options.joinToString(" • "))
+                                }
+                                Text("Parent's worked solution", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Text(template.solution)
+                                if (template.safety.isNotBlank()) {
+                                    Text("Safety", fontWeight = FontWeight.Bold, color = Color(0xFF8B4C00))
+                                    Text(template.safety, color = Color(0xFF774300))
+                                }
+                                Button(
+                                    onClick = {
+                                        execute {
+                                            val targetSubject = repository.findOrCreateSubject(
+                                                familyId,
+                                                template.subjectTitle,
+                                                template.languageCode
+                                            )
+                                            subjects = repository.loadSubjects(familyId)
+                                            selectedSubject = targetSubject
+                                            questions = repository.loadQuestions(targetSubject.id)
+                                            questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
+                                            questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
+                                            questionPrompt = template.prompt
+                                            questionType = template.questionType
+                                            questionOptions = template.options.joinToString("\n")
+                                            questionAnswer = template.answer
+                                            questionLanguage = template.languageCode
+                                            questionConceptKey = template.conceptKey
+                                            questionSolution = buildString {
+                                                append(template.solution)
+                                                if (template.materials.isNotEmpty()) {
+                                                    append("\n\nMaterials: ")
+                                                    append(template.materials.joinToString(", "))
+                                                }
+                                                if (template.steps.isNotEmpty()) {
+                                                    append("\n\nSteps:\n")
+                                                    append(template.steps.mapIndexed { index, step -> "\${index + 1}. $step" }.joinToString("\n"))
+                                                }
+                                                if (template.safety.isNotBlank()) {
+                                                    append("\n\nSafety: ")
+                                                    append(template.safety)
+                                                }
+                                            }
+                                            screen = AppScreen.ADD_QUESTION
+                                            notice = "Template loaded. Review it, then save the question and private solution."
+                                        }
+                                    },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Use template · create question") }
+                            }
+                        }
+                    }
+                    Text(
+                        "Experiments use ordinary classroom materials only. Results vary with materials, amounts, temperature and technique. Follow the safety notes and use adult supervision where stated; never mix these activities with cleaning products.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
                 AppScreen.ADD_SUBJECT -> ScreenFrame("Create subject", onBack = { screen = AppScreen.SUBJECTS }, notice = notice, busy = busy) {
                     Field(subjectTitle, { subjectTitle = it }, "Subject name")
                     Field(subjectLanguage, { subjectLanguage = it }, "Language code (en, ur, sd, or any language)")
