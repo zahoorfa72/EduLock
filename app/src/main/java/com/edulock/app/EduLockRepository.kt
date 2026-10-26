@@ -124,7 +124,7 @@ class EduLockRepository(context: Context) {
 
     suspend fun signUp(email: String, password: String, displayName: String, accountRole: String): AuthResult {
         ensureConfigured()
-        require(accountRole == "parent" || accountRole == "child") { "Select a valid account type" }
+        require(accountRole == "parent") { "Only parent accounts can be created. Child devices are paired with a one-time code." }
         require(email.trim().contains("@") && email.trim().length <= 254) { "Enter a valid email address" }
         require(password.length >= 8) { "Use a password with at least 8 characters" }
         require(password.length <= 128) { "Password is too long" }
@@ -144,7 +144,7 @@ class EduLockRepository(context: Context) {
             return AuthResult(token, "Account created successfully.")
         }
         val message = if (user != null) {
-            "Account created. Check your email to confirm it, then sign in. Keep your parent pairing code safe if this is a child account."
+            "Parent account created. Check your email to confirm it, then sign in."
         } else {
             "Account request submitted. Check your email if confirmation is enabled."
         }
@@ -156,7 +156,7 @@ class EduLockRepository(context: Context) {
         require(email.trim().contains("@")) { "Enter a valid email address" }
         val code = token.filter(Char::isDigit)
         require(code.length == 8) { "Enter the eight-digit code from your email" }
-        require(accountRole == "parent" || accountRole == "child") { "Select a valid account type" }
+        require(accountRole == "parent") { "Email verification is for parent accounts. Pair child devices with a one-time code." }
         val json = authRequest(
             "auth/v1/verify",
             JSONObject().put("type", "signup").put("email", email.trim()).put("token", code)
@@ -173,11 +173,36 @@ class EduLockRepository(context: Context) {
         authRequest("auth/v1/resend", JSONObject().put("type", "signup").put("email", email.trim()))
     }
 
+    /**
+     * Creates/reuses the child device's anonymous Supabase session so a child can pair
+     * with a parent's one-time code without creating an email/password account.
+     */
+    suspend fun signInAnonymouslyAsChild(): AuthSession {
+        ensureConfigured()
+        val existing = restoreSession()
+        if (existing != null) {
+            if (existing.accountRole == "child") return existing
+            throw IOException("Sign out of the parent account before pairing this child device.")
+        }
+
+        val body = JSONObject().put(
+            "data",
+            JSONObject()
+                .put("account_role", "child")
+                .put("display_name", "EduLock child device")
+        )
+        val json = authRequest("auth/v1/signup", body)
+        val childSession = sessionFrom(json, "child")
+            ?: throw IOException("Supabase did not return a child device session. In the EduLock Supabase project, enable Authentication → Sign In / Providers → Anonymous, then retry.")
+        sessionStore.save(childSession)
+        return childSession
+    }
+
     suspend fun signIn(email: String, password: String, accountRole: String): AuthSession {
         ensureConfigured()
         require(email.trim().contains("@")) { "Enter a valid email address" }
         require(password.isNotEmpty()) { "Enter your password" }
-        require(accountRole == "parent" || accountRole == "child") { "Select a valid account type" }
+        require(accountRole == "parent") { "Email/password sign-in is for parents. Pair child devices with a one-time code." }
         val json = authRequest(
             "auth/v1/token?grant_type=password",
             JSONObject().put("email", email.trim()).put("password", password)
@@ -189,8 +214,10 @@ class EduLockRepository(context: Context) {
             val profileRows = restArray("user_profiles?select=account_role&user_id=eq." + session.userId + "&limit=1")
             val storedRole = profileRows.optJSONObject(0)?.optString("account_role")
                 ?: throw IOException("Your account profile is not ready. Apply the EduLock Supabase migrations and try again.")
-            if (storedRole != "parent" && storedRole != "child") throw IOException("Your account role is not valid.")
-            session.copy(accountRole = storedRole).also { sessionStore.save(it) }
+            if (storedRole != "parent") {
+                throw IOException("Child access is pairing-code-only. Use 'Set up a child's device with pairing code' instead of child email/password sign-in.")
+            }
+            session.copy(accountRole = "parent").also { sessionStore.save(it) }
         } catch (e: Exception) {
             signOut()
             throw e
