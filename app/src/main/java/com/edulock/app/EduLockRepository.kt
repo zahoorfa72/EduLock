@@ -321,7 +321,16 @@ class EduLockRepository(context: Context) {
     suspend fun deleteChildProfile(childId: String) {
         requireSession("parent")
         require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
-        send("rest/v1/children?id=eq.$childId", "DELETE", null, authenticated = true, profile = true)
+        val result = send(
+            "rest/v1/rpc/delete_child_profile",
+            "POST",
+            JSONObject().put("p_child_id", childId),
+            authenticated = true,
+            profile = true
+        ) as? JSONObject ?: throw IOException("The server did not confirm child-profile deletion.")
+        if (!result.optBoolean("deleted", false)) {
+            throw IOException("The server did not delete this child profile. Refresh and try again.")
+        }
     }
 
     suspend fun loadCurrentChild(): ChildProfile? {
@@ -368,6 +377,18 @@ class EduLockRepository(context: Context) {
         return SubjectRow(row.getString("id"), row.getString("family_id"), row.getString("title"), row.optString("language_code", "en"))
     }
 
+    suspend fun findOrCreateSubject(familyId: String, title: String, languageCode: String): SubjectRow {
+        requireSession("parent")
+        val normalizedTitle = title.trim()
+        require(normalizedTitle.isNotEmpty()) { "Enter a subject name." }
+        val normalizedLanguage = languageCode.trim().ifBlank { "en" }
+        val existing = loadSubjects(familyId).firstOrNull {
+            it.title.equals(normalizedTitle, ignoreCase = true) &&
+                it.languageCode.equals(normalizedLanguage, ignoreCase = true)
+        }
+        return existing ?: addSubject(familyId, normalizedTitle, normalizedLanguage)
+    }
+
     suspend fun addQuestion(
         subjectId: String, prompt: String, type: String, options: List<String>, answer: String,
         languageCode: String, conceptKey: String
@@ -398,6 +419,39 @@ class EduLockRepository(context: Context) {
                 .put("answer_key", JSONObject().put("answer", answer.trim().take(1000)))
                 .put("language_code", languageCode.trim().lowercase())
                 .put("concept_key", conceptKey.trim().replace(Regex("\\s+"), " ").take(160)))
+    }
+
+    suspend fun saveQuestionSolution(questionId: String, solution: String) {
+        requireSession("parent")
+        require(questionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid question." }
+        val cleaned = solution.trim().take(12000)
+        if (cleaned.isEmpty()) return
+        val existing = restArray("question_solutions?select=id&question_id=eq.$questionId&limit=1")
+        val payload = JSONObject()
+            .put("question_id", questionId)
+            .put("solution", cleaned)
+            .put("updated_at", java.time.Instant.now().toString())
+        if (existing.length() > 0) {
+            restArray("question_solutions?question_id=eq.$questionId", "PATCH", payload)
+        } else {
+            restArray("question_solutions?select=id", "POST", payload)
+        }
+    }
+
+    suspend fun loadQuestionSolutions(questionIds: List<String>): Map<String, String> {
+        requireSession("parent")
+        val ids = questionIds.distinct().filter { it.matches(Regex("[0-9a-fA-F-]{36}")) }
+        if (ids.isEmpty()) return emptyMap()
+        val rows = restArray(
+            "question_solutions?select=question_id,solution&question_id=in.(" + ids.joinToString(",") + ")"
+        )
+        return (0 until rows.length()).mapNotNull { index ->
+            rows.optJSONObject(index)?.let { row ->
+                val id = row.optString("question_id")
+                val solution = row.optString("solution")
+                if (id.isNotBlank() && solution.isNotBlank()) id to solution else null
+            }
+        }.toMap()
     }
 
     suspend fun loadQuestions(subjectId: String, limit: Int = 500): List<QuestionRow> {
@@ -839,7 +893,7 @@ class EduLockRepository(context: Context) {
             .header("Authorization", "Bearer ${bearerToken ?: anonKey}")
             .header("Accept", "application/json")
         if (profile) {
-            if (method == "GET" || method == "DELETE") builder.header("Accept-Profile", "edulock")
+            if (method == "GET") builder.header("Accept-Profile", "edulock")
             else builder.header("Content-Profile", "edulock")
         }
         if (method == "POST" || method == "PATCH" || method == "PUT") {
@@ -847,6 +901,7 @@ class EduLockRepository(context: Context) {
                 .header("Prefer", prefer)
                 .method(method, (body ?: JSONObject()).toString().toRequestBody(JSON_MEDIA))
         } else if (method == "DELETE") {
+            builder.header("Prefer", prefer)
             builder.method("DELETE", null)
         } else {
             builder.get()
