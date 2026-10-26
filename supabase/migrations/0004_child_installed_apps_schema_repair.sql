@@ -14,6 +14,12 @@ create table if not exists edulock.child_installed_apps (
 create index if not exists child_installed_apps_child_name_idx
   on edulock.child_installed_apps(child_id, display_name);
 
+-- The app-inventory trigger below writes this column; add it before creating the trigger.
+alter table edulock.allowed_apps
+  add column if not exists daily_limit_minutes integer not null default 1440;
+alter table edulock.allowed_apps
+  alter column daily_limit_minutes set default 1440;
+
 alter table edulock.child_installed_apps enable row level security;
 revoke all on edulock.child_installed_apps from public, anon;
 grant select, insert, update, delete on edulock.child_installed_apps to authenticated;
