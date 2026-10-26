@@ -1,13 +1,19 @@
 package com.edulock.app
 
+import android.Manifest
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.UserManager
 import android.provider.Settings
 import android.provider.Settings.Secure
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -63,11 +69,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.Instant
 
 private enum class AppScreen {
     AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD,
     SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
-    REPORTS, ALLOWED_APPS, PROTECTION_STATUS, APP_USAGE_REPORT, PLAY_TASK, TASK_RESULT
+    REPORTS, ALLOWED_APPS, PROTECTION_STATUS, CHILD_LOCATIONS, APP_USAGE_REPORT, PLAY_TASK, TASK_RESULT
 }
 
 @Composable
@@ -135,6 +142,11 @@ private fun EduLockApp(repository: EduLockRepository) {
     var appLimitEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var appUsageChild by remember { mutableStateOf<ChildProfile?>(null) }
     var appUsageReports by remember { mutableStateOf(emptyList<AppUsageReport>()) }
+    var childLocationSharing by remember {
+        mutableStateOf(context.getSharedPreferences(ChildLocationService.PREFS, Context.MODE_PRIVATE)
+            .getBoolean(ChildLocationService.KEY_SHARING_ENABLED, false))
+    }
+    var childLocationRows by remember { mutableStateOf(emptyList<ChildLocationSnapshot>()) }
     var protectionAccessibilityEnabled by remember { mutableStateOf(isAccessibilityServiceEnabled(context)) }
     var protectionDeviceAdminEnabled by remember { mutableStateOf(isDeviceAdminActive(context)) }
     var protectionManagedEnabled by remember { mutableStateOf(isManagedDeviceProtectionActive(context)) }
@@ -143,6 +155,96 @@ private fun EduLockApp(repository: EduLockRepository) {
         protectionAccessibilityEnabled = isAccessibilityServiceEnabled(context)
         protectionDeviceAdminEnabled = isDeviceAdminActive(context)
         protectionManagedEnabled = isManagedDeviceProtectionActive(context)
+    }
+
+    fun enableChildLocationSharing() {
+        val child = childProfile
+        if (child == null || repository.currentSession()?.accountRole != "child") {
+            notice = "Pair this device with a parent before enabling location sharing."
+            return
+        }
+        val locationPrefs = context.getSharedPreferences(ChildLocationService.PREFS, Context.MODE_PRIVATE)
+        locationPrefs.edit()
+            .putString(ChildLocationService.KEY_CHILD_ID, child.id)
+            .putBoolean(ChildLocationService.KEY_SHARING_ENABLED, true)
+            .apply()
+        childLocationSharing = true
+        try {
+            context.startForegroundService(
+                Intent(context, ChildLocationService::class.java).setAction(ChildLocationService.ACTION_START)
+            )
+            notice = "Location sharing enabled. Android shows an ongoing notification while EduLock reports location."
+        } catch (e: Exception) {
+            locationPrefs.edit().putBoolean(ChildLocationService.KEY_SHARING_ENABLED, false).apply()
+            childLocationSharing = false
+            notice = "Could not start location sharing. Check permissions and battery settings: " + (e.message ?: "try again")
+        }
+    }
+
+    fun disableChildLocationSharing() {
+        val locationPrefs = context.getSharedPreferences(ChildLocationService.PREFS, Context.MODE_PRIVATE)
+        locationPrefs.edit().putBoolean(ChildLocationService.KEY_SHARING_ENABLED, false).apply()
+        childLocationSharing = false
+        try {
+            context.startForegroundService(
+                Intent(context, ChildLocationService::class.java).setAction(ChildLocationService.ACTION_DISABLE)
+            )
+            notice = "Location sharing paused. The last successful location remains saved for the parent."
+        } catch (e: Exception) {
+            context.stopService(Intent(context, ChildLocationService::class.java))
+            notice = "Location sharing paused on this device. The server status may take time to update."
+        }
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val foregroundGranted =
+            grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+            context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!foregroundGranted) {
+            notice = "Location permission was not granted. EduLock cannot share a location without it."
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            context.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            notice = "To keep location updates running when EduLock is not on screen, open App info → Permissions → Location and choose Allow all the time. Then return and tap Enable location sharing again."
+            try {
+                context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+            } catch (_: Exception) {
+                // Keep instructions available if Android cannot open settings.
+            }
+        } else {
+            enableChildLocationSharing()
+        }
+    }
+
+    fun requestChildLocationSharing() {
+        val fine = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!fine && !coarse) {
+            locationPermissionLauncher.launch(arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ))
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            context.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            notice = "Enable Location → Allow all the time in Android App info so sharing can continue in the background."
+            try {
+                context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+            } catch (_: Exception) { }
+            return
+        }
+        enableChildLocationSharing()
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        notice = if (granted) "Offline-device notifications are enabled." else
+            "Notifications are disabled. EduLock can show offline status in the app, but Android may suppress alerts."
     }
 
     fun execute(action: suspend () -> Unit) {
@@ -175,6 +277,16 @@ private fun EduLockApp(repository: EduLockRepository) {
             return
         }
         childProfile = linked
+        val locationPrefs = context.getSharedPreferences(ChildLocationService.PREFS, Context.MODE_PRIVATE)
+        if (locationPrefs.getString(ChildLocationService.KEY_CHILD_ID, null) != linked.id) {
+            locationPrefs.edit()
+                .putString(ChildLocationService.KEY_CHILD_ID, linked.id)
+                .putBoolean(ChildLocationService.KEY_SHARING_ENABLED, false)
+                .apply()
+            childLocationSharing = false
+        } else {
+            childLocationSharing = locationPrefs.getBoolean(ChildLocationService.KEY_SHARING_ENABLED, false)
+        }
         tasks = repository.loadChildTasks(linked.id)
         try {
             earnedToday = repository.refreshChildDeviceRestrictions(linked)
@@ -193,6 +305,7 @@ private fun EduLockApp(repository: EduLockRepository) {
             familyId = repository.ensureParentFamily(displayName.ifBlank { "My family" })
             children = repository.loadChildren(familyId)
             subjects = repository.loadSubjects(familyId)
+            LocationWatchdogWorker.schedule(context)
             screen = AppScreen.PARENT_HOME
         } else {
             finishChildLogin(newSession, suppliedCode)
@@ -209,6 +322,21 @@ private fun EduLockApp(repository: EduLockRepository) {
             while (true) {
                 delay(60_000)
                 try { repository.syncAppUsage(activeChildId) } catch (_: Exception) { /* Retry next cycle; keep learning usable offline. */ }
+            }
+        }
+    }
+
+    LaunchedEffect(screen, familyId) {
+        if (screen == AppScreen.CHILD_LOCATIONS && familyId.isNotBlank()) {
+            while (true) {
+                delay(60_000)
+                try {
+                    val latestChildren = repository.loadChildren(familyId)
+                    children = latestChildren
+                    childLocationRows = latestChildren.map { repository.loadChildLocationSnapshot(it.id) }
+                } catch (_: Exception) {
+                    // Keep the last successfully loaded points visible when temporarily offline.
+                }
             }
         }
     }
@@ -234,7 +362,7 @@ private fun EduLockApp(repository: EduLockRepository) {
             AppScreen.VERIFY_OTP -> AppScreen.AUTH
             AppScreen.PAIR_CHILD -> { repository.signOut(); session = null; childProfile = null; AppScreen.AUTH }
             AppScreen.PARENT_HOME, AppScreen.CHILD_HOME, AppScreen.AUTH -> AppScreen.AUTH
-            AppScreen.CHILDREN, AppScreen.SUBJECTS, AppScreen.ASSIGN_TASK, AppScreen.REPORTS, AppScreen.PROTECTION_STATUS -> AppScreen.PARENT_HOME
+            AppScreen.CHILDREN, AppScreen.SUBJECTS, AppScreen.ASSIGN_TASK, AppScreen.REPORTS, AppScreen.PROTECTION_STATUS, AppScreen.CHILD_LOCATIONS -> AppScreen.PARENT_HOME
             AppScreen.ADD_CHILD, AppScreen.APP_USAGE_REPORT, AppScreen.ALLOWED_APPS -> AppScreen.CHILDREN
             AppScreen.ADD_SUBJECT, AppScreen.QUESTIONS -> AppScreen.SUBJECTS
             AppScreen.ADD_QUESTION, AppScreen.ADD_TRANSLATION -> AppScreen.QUESTIONS
@@ -417,6 +545,21 @@ private fun EduLockApp(repository: EduLockRepository) {
                         screen = AppScreen.CHILDREN
                         execute { children = repository.loadChildren(familyId) }
                     }, modifier = Modifier.fillMaxWidth()) { Text("Allowed apps & screen-time settings") }
+                    OutlinedButton(onClick = {
+                        screen = AppScreen.CHILD_LOCATIONS
+                        execute {
+                            val latestChildren = repository.loadChildren(familyId)
+                            children = latestChildren
+                            childLocationRows = latestChildren.map { repository.loadChildLocationSnapshot(it.id) }
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) { Text("📍 Family location & offline alerts") }
+                    if (Build.VERSION.SDK_INT >= 33 &&
+                        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        OutlinedButton(
+                            onClick = { notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Enable offline-device notifications") }
+                    }
                     OutlinedButton(onClick = {
                         refreshProtectionStatus()
                         screen = AppScreen.PROTECTION_STATUS
@@ -833,6 +976,28 @@ private fun EduLockApp(repository: EduLockRepository) {
                         refreshProtectionStatus()
                         screen = AppScreen.PROTECTION_STATUS
                     }, modifier = Modifier.fillMaxWidth()) { Text("Protection status & setup") }
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF5FF))
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("📍 Family location sharing", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text(
+                                if (childLocationSharing) "Location sharing is enabled on this child's device. Android shows an ongoing notification while the service is active."
+                                else "Location sharing is off. With permission, EduLock can report this device's location to the paired parent."
+                            )
+                            if (childLocationSharing) {
+                                OutlinedButton(onClick = { disableChildLocationSharing() }, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Pause location sharing")
+                                }
+                            } else {
+                                Button(onClick = { requestChildLocationSharing() }, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Enable location sharing")
+                                }
+                            }
+                            Text("Only the latest location is retained on the server. If offline, the previous server location stays visible and new fixes queue locally until connection returns.")
+                        }
+                    }
                     Button(onClick = {
                         execute {
                             val linked = childProfile ?: throw IllegalStateException("Sign in to your child account again.")
@@ -955,6 +1120,84 @@ private fun EduLockApp(repository: EduLockRepository) {
                     ) { Text("Refresh status and apply supported device-owner rules") }
                     Text(
                         "Safety note: EduLock displays its blocker only over restricted apps. It does not cover Android Settings or secretly intercept system controls. If a child clears app data, an anonymous pairing session may be lost and the device may need to be paired again.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                AppScreen.CHILD_LOCATIONS -> ScreenFrame(
+                    "Family location",
+                    onBack = { screen = AppScreen.PARENT_HOME },
+                    notice = notice,
+                    busy = busy
+                ) {
+                    Text(
+                        "Latest reported location for each paired child. A missing check-in means the device is not reporting; it cannot prove the phone is switched off.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            execute {
+                                val latestChildren = repository.loadChildren(familyId)
+                                children = latestChildren
+                                childLocationRows = latestChildren.map { repository.loadChildLocationSnapshot(it.id) }
+                            }
+                        },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("↻ Refresh locations") }
+                    if (children.isEmpty()) Text("No child profiles are linked yet.")
+                    children.forEach { child ->
+                        val snapshot = childLocationRows.firstOrNull { it.childId == child.id }
+                        val lastSeenMillis = snapshot?.lastSeenAt?.let { raw ->
+                            runCatching { Instant.parse(raw).toEpochMilli() }.getOrNull()
+                        }
+                        val minutesSinceSeen = lastSeenMillis?.let { ((System.currentTimeMillis() - it).coerceAtLeast(0L) / 60_000L) }
+                        val statusText = when {
+                            snapshot == null || snapshot.lastSeenAt == null -> "Waiting for the child's first device check-in"
+                            !snapshot.sharingEnabled -> "Location sharing is paused on the child's device"
+                            minutesSinceSeen != null && minutesSinceSeen >= 15 -> "Not reporting for about $minutesSinceSeen minutes. The phone may be offline, switched off, or EduLock may be stopped."
+                            else -> "Device checking in • last contact ${snapshot.lastSeenAt.replace("T", " ").take(19)}"
+                        }
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(child.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                Text(statusText, color = if (minutesSinceSeen != null && minutesSinceSeen >= 15 && snapshot?.sharingEnabled == true) Color(0xFFB45309) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (snapshot?.batteryPercent != null) Text("Child-device battery: ${snapshot.batteryPercent}%")
+                                if (snapshot?.latitude != null && snapshot.longitude != null) {
+                                    Text("Last saved location: ${snapshot.latitude}, ${snapshot.longitude}", fontWeight = FontWeight.SemiBold)
+                                    if (snapshot.accuracyMeters != null) Text("Reported accuracy: about ${snapshot.accuracyMeters.toInt()} m")
+                                    Text(
+                                        "Location fix time: " + (snapshot.recordedAt?.replace("T", " ")?.take(19) ?: "not available"),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Button(onClick = {
+                                        val lat = snapshot.latitude
+                                        val lon = snapshot.longitude
+                                        val uri = Uri.parse("geo:$lat,$lon?q=$lat,$lon(${Uri.encode(child.displayName)})")
+                                        try {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                                        } catch (_: Exception) {
+                                            try {
+                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.openstreetmap.org/?mlat=$lat&mlon=$lon#map=16/$lat/$lon")))
+                                            } catch (_: Exception) {
+                                                notice = "No map app or browser is available on this phone."
+                                            }
+                                        }
+                                    }, modifier = Modifier.fillMaxWidth()) { Text("Open last location in map") }
+                                } else {
+                                    Text("No location has reached the server yet. Keep location sharing enabled on the child's phone and make sure it has an internet connection.")
+                                }
+                                Text("The server retains the last successful point when the child device goes offline.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                    Text(
+                        "Offline alerts need notification permission on this parent phone and an active internet connection. Android schedules checks periodically, so an alert may be delayed; it cannot tell whether a device is truly powered off.",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
