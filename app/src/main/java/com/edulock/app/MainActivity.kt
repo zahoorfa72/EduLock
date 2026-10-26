@@ -827,10 +827,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             }
                         }
                     }
-                    OutlinedButton(onClick = {
-                        repository.signOut()
-                        session = null; childProfile = null; screen = AppScreen.AUTH; isRegistering = false
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
+                    Text("This device is paired with your parent. Keep EduLock installed and its app data intact so this device can reconnect securely.")
                 }
 
                 AppScreen.PROTECTION_STATUS -> ScreenFrame(
@@ -1246,9 +1243,7 @@ private fun applyManagedDeviceProtection(context: Context): Boolean {
         manager.addUserRestriction(component, UserManager.DISALLOW_APPS_CONTROL)
         manager.addUserRestriction(component, UserManager.DISALLOW_UNINSTALL_APPS)
         true
-    } catch (_: SecurityException) {
-        false
-    } catch (_: IllegalArgumentException) {
+    } catch (_: Exception) {
         false
     }
 }
