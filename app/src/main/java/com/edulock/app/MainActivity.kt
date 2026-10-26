@@ -1361,7 +1361,7 @@ private fun ChildLocationMap(latitude: Double, longitude: Double) {
         <html>
         <head>
           <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=3">
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://unpkg.com; style-src https://unpkg.com 'unsafe-inline'; img-src https://tile.openstreetmap.org https://unpkg.com data:; connect-src https://tile.openstreetmap.org;">
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://unpkg.com 'unsafe-inline'; style-src https://unpkg.com 'unsafe-inline'; img-src https://tile.openstreetmap.org https://unpkg.com data:; connect-src https://tile.openstreetmap.org;">
           <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
           <style>html,body,#map{height:100%;width:100%;margin:0;padding:0} .leaflet-container{font-family:sans-serif}</style>
         </head>
