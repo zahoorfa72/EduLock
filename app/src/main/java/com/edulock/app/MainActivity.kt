@@ -38,6 +38,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
@@ -153,9 +154,48 @@ private fun EduLockApp(repository: EduLockRepository) {
             .getBoolean(ChildLocationService.KEY_SHARING_ENABLED, false))
     }
     var childLocationRows by remember { mutableStateOf(emptyList<ChildLocationSnapshot>()) }
+    var pendingChildAction by remember { mutableStateOf<Pair<ChildProfile, String>?>(null) }
     var protectionAccessibilityEnabled by remember { mutableStateOf(isAccessibilityServiceEnabled(context)) }
     var protectionDeviceAdminEnabled by remember { mutableStateOf(isDeviceAdminActive(context)) }
     var protectionManagedEnabled by remember { mutableStateOf(isManagedDeviceProtectionActive(context)) }
+
+    pendingChildAction?.let { (targetChild, action) ->
+        val isDelete = action == "delete"
+        AlertDialog(
+            onDismissRequest = { pendingChildAction = null },
+            title = { Text(if (isDelete) "Delete child profile?" else "Deactivate device link?") },
+            text = {
+                Text(
+                    if (isDelete)
+                        "Permanently delete ${targetChild.displayName}'s profile and its linked EduLock records. This cannot be undone."
+                    else
+                        "Unlink ${targetChild.displayName}'s device. The current device will lose access to this child profile; a new pairing code can link a device again."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingChildAction = null
+                    execute {
+                        if (isDelete) {
+                            repository.deleteChildProfile(targetChild.id)
+                            if (selectedChild?.id == targetChild.id) selectedChild = null
+                            if (childProfile?.id == targetChild.id) childProfile = null
+                            notice = "Child profile deleted."
+                        } else {
+                            repository.deactivateChildLink(targetChild.id)
+                            notice = "Device link deactivated. Generate a new pairing code to link a device again."
+                        }
+                        children = repository.loadChildren(familyId)
+                        childInstalledApps = emptyList()
+                        allowedApps = emptyList()
+                    }
+                }) { Text(if (isDelete) "Delete permanently" else "Deactivate link") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingChildAction = null }) { Text("Cancel") }
+            }
+        )
+    }
 
     fun refreshProtectionStatus() {
         protectionAccessibilityEnabled = isAccessibilityServiceEnabled(context)
@@ -651,6 +691,16 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     screen = AppScreen.ALLOWED_APPS
                                     execute { allowedApps = repository.loadAllowedApps(child.id) }
                                 }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("🎮  App access & daily limits") }
+                                OutlinedButton(
+                                    onClick = { pendingChildAction = child to "unlink" },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Deactivate device link") }
+                                OutlinedButton(
+                                    onClick = { pendingChildAction = child to "delete" },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Delete child profile") }
                                 OutlinedButton(onClick = {
                                     appUsageChild = child
                                     screen = AppScreen.APP_USAGE_REPORT
@@ -1060,6 +1110,19 @@ private fun EduLockApp(repository: EduLockRepository) {
                         Button(onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }, modifier = Modifier.fillMaxWidth()) {
                             Text("Enable EduLock app restrictions")
                         }
+                        OutlinedButton(
+                            onClick = {
+                                val appInfoIntent = Intent(
+                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.parse("package:" + context.packageName)
+                                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(appInfoIntent)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Fix Android “Restricted setting”") }
+                        Text(
+                            "If Android shows “Restricted setting”, open this app's App info, tap the ⋮ menu, choose “Allow restricted settings”, then return here and enable EduLock under Accessibility. This is an Android security step for apps installed outside an approved store; EduLock cannot bypass it."
+                        )
                     }
                     if (isDeviceAdminActive(context)) {
                         Text("🔒 Device administrator is enabled. It may add a deactivation step before ordinary uninstall, but it does not reliably prevent Clear data or factory reset.")
