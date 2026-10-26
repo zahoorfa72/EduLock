@@ -464,8 +464,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                 try {
                     val linked = childProfile
                     if (linked != null && linked.id == activeChildId) {
-                        // Pull parent changes to app allow/deny state and per-app limits
-                        // while the child's learning screen is active.
+                        // Refresh tasks and parental rules; new parent-assigned curriculum tasks appear without sign-out.
+                        tasks = repository.loadChildTasks(activeChildId)
                         earnedToday = repository.refreshChildDeviceRestrictions(linked)
                         repository.syncAppUsage(activeChildId)
                     }
