@@ -82,6 +82,17 @@ data class AppUsageReport(
     val displayName: String,
     val usedSeconds: Long
 )
+
+data class ChildLocationSnapshot(
+    val childId: String,
+    val latitude: Double?,
+    val longitude: Double?,
+    val accuracyMeters: Double?,
+    val recordedAt: String?,
+    val lastSeenAt: String?,
+    val sharingEnabled: Boolean,
+    val batteryPercent: Int?
+)
 data class AttemptRow(
     val id: String,
     val childId: String,
@@ -512,6 +523,31 @@ class EduLockRepository(context: Context) {
                 )
             }
         }
+    }
+
+    suspend fun loadChildLocationSnapshot(childId: String): ChildLocationSnapshot {
+        requireSession("parent")
+        val locations = restArray(
+            "child_locations?select=child_id,latitude,longitude,accuracy_meters,recorded_at&child_id=eq.$childId&limit=1"
+        )
+        val statuses = restArray(
+            "child_device_status?select=child_id,last_seen_at,sharing_enabled,battery_percent&child_id=eq.$childId&limit=1"
+        )
+        val point = locations.optJSONObject(0)
+        val status = statuses.optJSONObject(0)
+        val latitude = if (point != null && !point.isNull("latitude")) point.optDouble("latitude").takeIf { it.isFinite() } else null
+        val longitude = if (point != null && !point.isNull("longitude")) point.optDouble("longitude").takeIf { it.isFinite() } else null
+        val accuracy = if (point != null && !point.isNull("accuracy_meters")) point.optDouble("accuracy_meters").takeIf { it.isFinite() && it >= 0 } else null
+        return ChildLocationSnapshot(
+            childId = childId,
+            latitude = latitude,
+            longitude = longitude,
+            accuracyMeters = accuracy,
+            recordedAt = point?.optString("recorded_at")?.takeIf { !it.isNullOrBlank() && it != "null" },
+            lastSeenAt = status?.optString("last_seen_at")?.takeIf { !it.isNullOrBlank() && it != "null" },
+            sharingEnabled = status?.optBoolean("sharing_enabled", false) ?: false,
+            batteryPercent = if (status != null && !status.isNull("battery_percent")) status.optInt("battery_percent").coerceIn(0, 100) else null
+        )
     }
 
     suspend fun loadAllowedApps(childId: String): List<AllowedApp> {
