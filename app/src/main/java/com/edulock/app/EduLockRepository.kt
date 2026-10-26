@@ -22,10 +22,55 @@ data class ChildProfile(
     val familyId: String,
     val displayName: String,
     val preferredLanguage: String,
-    val dailyCapMinutes: Int
+    val dailyCapMinutes: Int,
+    val countryCode: String = "PK",
+    val schoolGrade: Int = 1,
+    val ageYears: Int = 8
 )
 
-data class SubjectRow(val id: String, val familyId: String, val title: String, val languageCode: String)
+data class SubjectRow(
+    val id: String,
+    val familyId: String,
+    val title: String,
+    val languageCode: String,
+    val countryCode: String = "PK",
+    val gradeLevel: Int = 1,
+    val curriculumName: String = "Parent-created",
+    val curriculumSubjectCode: String = ""
+)
+
+data class CurriculumQuestion(
+    val id: String,
+    val countryCode: String,
+    val curriculumName: String,
+    val gradeLevel: Int,
+    val ageMin: Int,
+    val ageMax: Int,
+    val subjectCode: String,
+    val subjectName: String,
+    val languageCode: String,
+    val topic: String,
+    val prompt: String,
+    val questionType: String,
+    val options: List<String>,
+    val conceptKey: String,
+    val sourceNote: String
+)
+
+data class CurriculumSearchResult(
+    val questions: List<CurriculumQuestion>,
+    val fallbackUsed: Boolean,
+    val message: String
+)
+
+data class CurriculumImportResult(
+    val subjectId: String,
+    val subjectTitle: String,
+    val languageCode: String,
+    val importedCount: Int,
+    val selectedCount: Int,
+    val message: String
+)
 
 data class QuestionRow(
     val id: String,
@@ -295,20 +340,26 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadChildren(familyId: String): List<ChildProfile> {
         requireSession("parent")
-        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes&family_id=eq.$familyId&order=created_at.desc")
+        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years&family_id=eq.$familyId&order=created_at.desc")
         return (0 until rows.length()).mapNotNull { i -> rows.optJSONObject(i)?.toChildProfile() }
     }
 
-    suspend fun addChild(familyId: String, name: String, languageCode: String, dailyCap: Int): ChildProfile {
+    suspend fun addChild(familyId: String, name: String, languageCode: String, dailyCap: Int, countryCode: String = "PK", schoolGrade: Int = 1, ageYears: Int = 8): ChildProfile {
         requireSession("parent")
         require(name.trim().isNotEmpty()) { "Enter the child’s name" }
         require(dailyCap in 0..1440) { "Daily screen-time limit must be from 0 to 1440 minutes" }
-        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes", "POST",
+        require(countryCode.trim().uppercase().matches(Regex("[A-Z]{2}"))) { "Choose a valid country." }
+        require(schoolGrade in 0..13) { "Choose a grade from kindergarten to grade 13." }
+        require(ageYears in 3..19) { "Child age must be from 3 to 19 years." }
+        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years", "POST",
             JSONObject()
                 .put("family_id", familyId)
                 .put("display_name", name.trim().take(120))
                 .put("preferred_language", languageCode.trim().ifBlank { "en" }.take(16))
-                .put("daily_cap_minutes", dailyCap))
+                .put("daily_cap_minutes", dailyCap)
+                .put("country_code", countryCode.trim().uppercase())
+                .put("school_grade", schoolGrade)
+                .put("age_years", ageYears))
         return rows.optJSONObject(0)?.toChildProfile() ?: throw IOException("Could not create this child profile")
     }
 
@@ -333,9 +384,19 @@ class EduLockRepository(context: Context) {
         }
     }
 
+    suspend fun updateChildCurriculum(childId: String, countryCode: String, schoolGrade: Int, ageYears: Int) {
+        requireSession("parent")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        require(countryCode.matches(Regex("[A-Z]{2}"))) { "Choose a valid country." }
+        require(schoolGrade in 0..13) { "Grade must be from kindergarten to grade 13." }
+        require(ageYears in 3..19) { "Age must be from 3 to 19 years." }
+        restArray("children?id=eq.$childId", "PATCH",
+            JSONObject().put("country_code", countryCode).put("school_grade", schoolGrade).put("age_years", ageYears))
+    }
+
     suspend fun loadCurrentChild(): ChildProfile? {
         val session = requireSession("child")
-        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes&child_user_id=eq.${session.userId}&limit=1")
+        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years&child_user_id=eq.${session.userId}&limit=1")
         return rows.optJSONObject(0)?.toChildProfile()
     }
 
@@ -358,23 +419,29 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadSubjects(familyId: String): List<SubjectRow> {
         requireSession("parent")
-        val rows = restArray("subjects?select=id,family_id,title,language_code&family_id=eq.$familyId&order=created_at.desc")
+        val rows = restArray("subjects?select=id,family_id,title,language_code,country_code,grade_level,curriculum_name,curriculum_subject_code&family_id=eq.$familyId&order=created_at.desc")
         return (0 until rows.length()).mapNotNull { i ->
             rows.optJSONObject(i)?.let { row ->
-                SubjectRow(row.optString("id"), row.optString("family_id"), row.optString("title"), row.optString("language_code", "en"))
+                SubjectRow(row.optString("id"), row.optString("family_id"), row.optString("title"), row.optString("language_code", "en"), row.optString("country_code", "PK"), row.optInt("grade_level", 1), row.optString("curriculum_name", "Parent-created"), row.optString("curriculum_subject_code", ""))
             }
         }
     }
 
-    suspend fun addSubject(familyId: String, title: String, languageCode: String): SubjectRow {
+    suspend fun addSubject(familyId: String, title: String, languageCode: String, countryCode: String = "PK", gradeLevel: Int = 1, curriculumName: String = "Parent-created", curriculumSubjectCode: String = ""): SubjectRow {
         requireSession("parent")
         require(title.trim().isNotEmpty()) { "Enter a subject name" }
-        val rows = restArray("subjects?select=id,family_id,title,language_code", "POST",
+        require(countryCode.matches(Regex("[A-Z]{2}"))) { "Choose a valid country." }
+        require(gradeLevel in 0..13) { "Grade must be from kindergarten to grade 13." }
+        val rows = restArray("subjects?select=id,family_id,title,language_code,country_code,grade_level,curriculum_name,curriculum_subject_code", "POST",
             JSONObject().put("family_id", familyId)
                 .put("title", title.trim().take(160))
-                .put("language_code", languageCode.trim().ifBlank { "en" }.take(16)))
+                .put("language_code", languageCode.trim().ifBlank { "en" }.take(16))
+                .put("country_code", countryCode)
+                .put("grade_level", gradeLevel)
+                .put("curriculum_name", curriculumName.take(160))
+                .put("curriculum_subject_code", curriculumSubjectCode.take(40)))
         val row = rows.optJSONObject(0) ?: throw IOException("Could not create the subject")
-        return SubjectRow(row.getString("id"), row.getString("family_id"), row.getString("title"), row.optString("language_code", "en"))
+        return SubjectRow(row.getString("id"), row.getString("family_id"), row.getString("title"), row.optString("language_code", "en"), row.optString("country_code", countryCode), row.optInt("grade_level", gradeLevel), row.optString("curriculum_name", curriculumName), row.optString("curriculum_subject_code", curriculumSubjectCode))
     }
 
     suspend fun findOrCreateSubject(familyId: String, title: String, languageCode: String): SubjectRow {
@@ -835,6 +902,72 @@ class EduLockRepository(context: Context) {
         }
     }
 
+    suspend fun loadCurriculumQuestions(
+        childId: String, countryCode: String, gradeLevel: Int, ageYears: Int,
+        subjectCode: String, languageCode: String
+    ): CurriculumSearchResult {
+        requireSession("parent")
+        val response = requestFunction("curriculum-library", JSONObject()
+            .put("child_id", childId)
+            .put("country_code", countryCode.uppercase())
+            .put("grade_level", gradeLevel)
+            .put("age_years", ageYears)
+            .put("subject_code", subjectCode.lowercase())
+            .put("language_code", languageCode.lowercase()))
+        val array = response.optJSONArray("questions") ?: JSONArray()
+        val questions = (0 until array.length()).mapNotNull { index ->
+            val row = array.optJSONObject(index) ?: return@mapNotNull null
+            val options = row.optJSONArray("options") ?: JSONArray()
+            CurriculumQuestion(
+                id = row.optString("id"),
+                countryCode = row.optString("country_code", "ZZ"),
+                curriculumName = row.optString("curriculum_name", "Starter bank"),
+                gradeLevel = row.optInt("grade_level", gradeLevel),
+                ageMin = row.optInt("age_min", 3),
+                ageMax = row.optInt("age_max", 19),
+                subjectCode = row.optString("subject_code", subjectCode),
+                subjectName = row.optString("subject_name", subjectCode),
+                languageCode = row.optString("language_code", "en"),
+                topic = row.optString("topic"),
+                prompt = row.optString("prompt"),
+                questionType = row.optString("question_type", "multiple_choice"),
+                options = (0 until options.length()).map { options.optString(it) },
+                conceptKey = row.optString("concept_key", "general"),
+                sourceNote = row.optString("source_note", "Starter practice content; verify curriculum alignment.")
+            )
+        }
+        return CurriculumSearchResult(
+            questions,
+            response.optBoolean("fallback_used", false),
+            response.optString("message", "Select questions to add to a subject.")
+        )
+    }
+
+    suspend fun importCurriculumQuestions(
+        childId: String, countryCode: String, gradeLevel: Int, ageYears: Int,
+        subjectCode: String, languageCode: String, questionIds: List<String>
+    ): CurriculumImportResult {
+        requireSession("parent")
+        val ids = questionIds.distinct().filter { it.matches(Regex("[0-9a-fA-F-]{36}")) }
+        require(ids.isNotEmpty() && ids.size <= 50) { "Select between 1 and 50 questions." }
+        val response = requestFunction("import-curriculum-questions", JSONObject()
+            .put("child_id", childId)
+            .put("country_code", countryCode.uppercase())
+            .put("grade_level", gradeLevel)
+            .put("age_years", ageYears)
+            .put("subject_code", subjectCode.lowercase())
+            .put("language_code", languageCode.lowercase())
+            .put("question_ids", JSONArray(ids)))
+        return CurriculumImportResult(
+            subjectId = response.optString("subject_id"),
+            subjectTitle = response.optString("subject_title"),
+            languageCode = response.optString("language_code", languageCode),
+            importedCount = response.optInt("imported_count", 0),
+            selectedCount = response.optInt("selected_count", ids.size),
+            message = response.optString("message", "Curriculum questions imported.")
+        )
+    }
+
     private suspend fun requestFunction(name: String, body: JSONObject): JSONObject {
         val result = send("functions/v1/$name", "POST", body, authenticated = true, profile = false)
         return result as? JSONObject ?: throw IOException("The server returned an unexpected response")
@@ -981,7 +1114,10 @@ class EduLockRepository(context: Context) {
         familyId = optString("family_id"),
         displayName = optString("display_name"),
         preferredLanguage = optString("preferred_language", "en"),
-        dailyCapMinutes = optInt("daily_cap_minutes", 60).coerceIn(0, 1440)
+        dailyCapMinutes = optInt("daily_cap_minutes", 60).coerceIn(0, 1440),
+        countryCode = optString("country_code", "PK").uppercase().takeIf { it.matches(Regex("[A-Z]{2}")) } ?: "PK",
+        schoolGrade = optInt("school_grade", 1).coerceIn(0, 13),
+        ageYears = optInt("age_years", 8).coerceIn(3, 19)
     )
 
     private fun JSONObject.toTaskRow() = TaskRow(
