@@ -6,8 +6,10 @@ import android.provider.Settings
 import android.provider.Settings.Secure
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -16,8 +18,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -29,6 +34,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -120,6 +126,8 @@ private fun EduLockApp(repository: EduLockRepository) {
     var taskDailyCapMinutes by remember { mutableStateOf("60") }
     var appPackage by remember { mutableStateOf("") }
     var appDisplayName by remember { mutableStateOf("") }
+    var appDailyLimit by remember { mutableStateOf("60") }
+    var appLimitEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
     fun execute(action: suspend () -> Unit) {
         scope.launch {
@@ -195,19 +203,24 @@ private fun EduLockApp(repository: EduLockRepository) {
     }
 
     val eduLockColors = lightColorScheme(
-        primary = Color(0xFF173B67),
+        primary = Color(0xFF5147E8),
         onPrimary = Color.White,
-        secondary = Color(0xFF087E8B),
+        secondary = Color(0xFF078C87),
         onSecondary = Color.White,
-        tertiary = Color(0xFFD69E36),
-        background = Color(0xFFF4F7FB),
+        tertiary = Color(0xFFFFB547),
+        background = Color(0xFFF7F8FF),
         surface = Color.White,
-        surfaceVariant = Color(0xFFE8EEF6),
-        onSurface = Color(0xFF172638),
-        onSurfaceVariant = Color(0xFF42566D),
-        error = Color(0xFFB42318)
+        surfaceVariant = Color(0xFFEEF0FF),
+        onSurface = Color(0xFF1B2440),
+        onSurfaceVariant = Color(0xFF5B6680),
+        error = Color(0xFFCE3D52)
     )
-    MaterialTheme(colorScheme = eduLockColors) {
+    val eduLockShapes = Shapes(
+        small = RoundedCornerShape(15.dp),
+        medium = RoundedCornerShape(22.dp),
+        large = RoundedCornerShape(29.dp)
+    )
+    MaterialTheme(colorScheme = eduLockColors, shapes = eduLockShapes) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
@@ -637,24 +650,45 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.ALLOWED_APPS -> ScreenFrame("Allowed apps", onBack = { screen = AppScreen.CHILDREN }, notice = notice, busy = busy) {
                     val child = selectedChild
                     Text("Child: " + (child?.displayName ?: "Not selected"))
-                    Text("Add exact Android package names. Only these apps are allowed while reward time remains. Settings and the home screen stay available for recovery.")
+                    Text("Choose the apps this child may use and set a separate daily limit for each one. Android Settings and the home screen stay available for recovery.")
                     Field(appDisplayName, { appDisplayName = it }, "App display name")
                     Field(appPackage, { appPackage = it }, "Package name (e.g. com.example.app)")
+                    Field(appDailyLimit, { appDailyLimit = it.filter(Char::isDigit).take(4) }, "Daily limit in minutes (1–1440)", keyboardType = KeyboardType.Number)
                     Button(onClick = {
                         execute {
                             val selected = child ?: throw IllegalStateException("Select a child profile first.")
-                            repository.addAllowedApp(selected.id, appPackage, appDisplayName)
+                            val dailyLimit = appDailyLimit.toIntOrNull()
+                                ?: throw IllegalArgumentException("Enter a daily limit from 1 to 1440 minutes.")
+                            require(dailyLimit in 1..1440) { "Daily limit must be between 1 and 1440 minutes." }
+                            repository.addAllowedApp(selected.id, appPackage, appDisplayName, dailyLimit)
                             allowedApps = repository.loadAllowedApps(selected.id)
-                            appDisplayName = ""; appPackage = ""
-                            notice = "Allowed app saved. The list syncs to the child's device after the child signs in."
+                            appDisplayName = ""; appPackage = ""; appDailyLimit = "60"
+                            notice = "App and daily limit saved. Sync the child's device to apply the latest rules."
                         }
                     }, enabled = !busy && child != null && appPackage.isNotBlank() && appDisplayName.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Add allowed app") }
                     if (allowedApps.isEmpty()) Text("No apps are allowed yet. With restrictions enabled, only EduLock and essential Android recovery screens remain accessible until an app is approved.")
                     allowedApps.forEach { app ->
                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text(app.displayName, fontWeight = FontWeight.SemiBold)
-                                Text(app.packageName)
+                                Text(app.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
+                                Text(app.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Field(
+                                    appLimitEdits[app.id] ?: app.dailyLimitMinutes.toString(),
+                                    { newValue -> appLimitEdits = appLimitEdits + (app.id to newValue.filter(Char::isDigit).take(4)) },
+                                    "Daily limit in minutes (1–1440)",
+                                    keyboardType = KeyboardType.Number
+                                )
+                                Button(onClick = {
+                                    execute {
+                                        val limit = (appLimitEdits[app.id] ?: app.dailyLimitMinutes.toString()).toIntOrNull()
+                                            ?: throw IllegalArgumentException("Enter a daily limit from 1 to 1440 minutes.")
+                                        require(limit in 1..1440) { "Daily limit must be between 1 and 1440 minutes." }
+                                        repository.updateAllowedAppLimit(app.id, limit)
+                                        allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
+                                        appLimitEdits = appLimitEdits - app.id
+                                        notice = "Daily limit updated. Sync the child's device to apply the change."
+                                    }
+                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Save daily limit") }
                                 OutlinedButton(onClick = {
                                     execute {
                                         repository.deleteAllowedApp(app.id)
@@ -847,23 +881,85 @@ private fun ScreenFrame(
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier.fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        if (onBack != null) TextButton(onClick = onBack) { Text("← Back") }
-        Text(title, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-        if (busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        if (!notice.isNullOrBlank()) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                modifier = Modifier.fillMaxWidth()
+        if (onBack != null) {
+            TextButton(onClick = onBack) {
+                Text("← Back to safety", fontWeight = FontWeight.SemiBold)
+            }
+        }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF283985)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(notice, modifier = Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium)
+                Box(
+                    modifier = Modifier.size(58.dp)
+                        .background(Color(0xFFFFD978), RoundedCornerShape(20.dp)),
+                    contentAlignment = Alignment.Center
+                ) { Text(screenEmoji(title), fontSize = 29.sp) }
+                Spacer(Modifier.width(14.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(title, fontSize = 26.sp, lineHeight = 30.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                    Text(screenTagline(title), fontSize = 13.sp, lineHeight = 18.sp, color = Color(0xFFE2E7FF))
+                }
+            }
+        }
+        if (busy) LinearProgressIndicator(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.secondary,
+            trackColor = Color(0xFFDCE2F6)
+        )
+        if (!notice.isNullOrBlank()) {
+            val isError = listOf("error", "failed", "invalid", "could not", "cannot", "required", "expired", "not found")
+                .any { notice.contains(it, ignoreCase = true) }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                colors = CardDefaults.cardColors(containerColor = if (isError) Color(0xFFFFE8EC) else Color(0xFFE0F7EF))
+            ) {
+                Text(
+                    notice, modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium,
+                    color = if (isError) Color(0xFF9F263B) else Color(0xFF176A58)
+                )
             }
         }
         content()
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
     }
+}
+
+private fun screenEmoji(title: String): String = when {
+    title.contains("verify", true) -> "🔐"
+    title.contains("parent", true) -> "👨‍👩‍👧"
+    title.contains("child", true) || title.contains("learner", true) -> "🧸"
+    title.contains("learning", true) || title.contains("task", true) -> "🚀"
+    title.contains("subject", true) -> "📚"
+    title.contains("question", true) -> "🧩"
+    title.contains("report", true) -> "🏆"
+    title.contains("app", true) -> "🎮"
+    title.contains("translation", true) || title.contains("concept", true) -> "🌈"
+    title.equals("EduLock", true) -> "🦉"
+    else -> "✨"
+}
+
+private fun screenTagline(title: String): String = when {
+    title.contains("parent", true) -> "Your family's learning hub"
+    title.contains("child", true) || title.contains("learning", true) -> "Learn • play • grow"
+    title.contains("verify", true) -> "Your learning adventure is almost ready"
+    title.contains("question", true) -> "Little puzzles, big discoveries"
+    title.contains("report", true) -> "Celebrate every step forward"
+    title.contains("app", true) -> "Safe screen time, one app at a time"
+    title.equals("EduLock", true) -> "Safe screen time. Brighter learning."
+    else -> "Small steps, big discoveries"
 }
 
 @Composable
@@ -881,7 +977,8 @@ private fun Field(
         modifier = Modifier.fillMaxWidth(),
         singleLine = !label.contains("prompt", true) && !label.contains("options", true),
         visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType)
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        shape = MaterialTheme.shapes.medium
     )
 }
 
@@ -889,14 +986,33 @@ private fun Field(
 private fun SummaryCard(title: String, value: String, explanation: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(value, style = MaterialTheme.typography.headlineSmall)
-            Text(explanation, style = MaterialTheme.typography.bodySmall)
+        Row(modifier = Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(48.dp).background(Color(0xFFDCDFFF), RoundedCornerShape(16.dp)),
+                contentAlignment = Alignment.Center
+            ) { Text(summaryEmoji(title), fontSize = 23.sp) }
+            Spacer(Modifier.width(13.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                Text(explanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
+}
+
+private fun summaryEmoji(title: String): String = when {
+    title.contains("children", true) -> "🧒"
+    title.contains("learning", true) || title.contains("subject", true) -> "📚"
+    title.contains("score", true) -> "⭐"
+    title.contains("screen time", true) || title.contains("minutes", true) -> "⏱️"
+    title.contains("average", true) -> "📈"
+    title.contains("task", true) -> "🎯"
+    else -> "✨"
 }
 
 private fun languageLabel(code: String): String = when (code.lowercase()) {

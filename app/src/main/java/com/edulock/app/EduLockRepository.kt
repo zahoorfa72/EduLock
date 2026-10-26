@@ -66,7 +66,14 @@ data class TaskRow(
     val active: Boolean
 )
 
-data class AllowedApp(val id: String, val childId: String, val packageName: String, val displayName: String, val enabled: Boolean = true)
+data class AllowedApp(
+    val id: String,
+    val childId: String,
+    val packageName: String,
+    val displayName: String,
+    val enabled: Boolean = true,
+    val dailyLimitMinutes: Int = 60
+)
 data class AttemptRow(
     val id: String,
     val childId: String,
@@ -474,16 +481,21 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadAllowedApps(childId: String): List<AllowedApp> {
         requireSession()
-        val rows = restArray("allowed_apps?select=id,child_id,package_name,display_name,enabled&child_id=eq.$childId&order=display_name.asc")
+        val rows = restArray("allowed_apps?select=id,child_id,package_name,display_name,enabled,daily_limit_minutes&child_id=eq.$childId&order=display_name.asc")
         return (0 until rows.length()).mapNotNull { i ->
             rows.optJSONObject(i)?.let { row ->
-                AllowedApp(row.optString("id"), row.optString("child_id"), row.optString("package_name"), row.optString("display_name"), row.optBoolean("enabled", true))
+                AllowedApp(
+                    row.optString("id"), row.optString("child_id"), row.optString("package_name"),
+                    row.optString("display_name"), row.optBoolean("enabled", true),
+                    row.optInt("daily_limit_minutes", 60).coerceIn(1, 1440)
+                )
             }
         }
     }
 
-    suspend fun addAllowedApp(childId: String, packageName: String, displayName: String) {
+    suspend fun addAllowedApp(childId: String, packageName: String, displayName: String, dailyLimitMinutes: Int) {
         requireSession("parent")
+        require(dailyLimitMinutes in 1..1440) { "Daily app limit must be between 1 and 1440 minutes." }
         val normalizedPackage = packageName.trim()
         require(normalizedPackage.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+"))) {
             "Enter a valid Android package name, for example com.example.app"
@@ -491,7 +503,14 @@ class EduLockRepository(context: Context) {
         require(displayName.trim().isNotEmpty()) { "Enter the app's display name" }
         restArray("allowed_apps?select=id", "POST",
             JSONObject().put("child_id", childId).put("package_name", normalizedPackage)
-                .put("display_name", displayName.trim().take(120)).put("enabled", true))
+                .put("display_name", displayName.trim().take(120)).put("enabled", true)
+                .put("daily_limit_minutes", dailyLimitMinutes))
+    }
+
+    suspend fun updateAllowedAppLimit(appId: String, dailyLimitMinutes: Int) {
+        requireSession("parent")
+        require(dailyLimitMinutes in 1..1440) { "Daily app limit must be between 1 and 1440 minutes." }
+        restArray("allowed_apps?id=eq.$appId", "PATCH", JSONObject().put("daily_limit_minutes", dailyLimitMinutes))
     }
 
     suspend fun deleteAllowedApp(appId: String) {
@@ -501,8 +520,10 @@ class EduLockRepository(context: Context) {
 
     suspend fun refreshChildDeviceRestrictions(child: ChildProfile): Int {
         requireSession("child")
-        val allowed = loadAllowedApps(child.id).filter { it.enabled }.map { it.packageName }.toMutableSet()
+        val appRules = loadAllowedApps(child.id).filter { it.enabled }
+        val allowed = appRules.map { it.packageName }.toMutableSet()
         allowed += "com.edulock.app"
+        val appLimits = appRules.map { it.packageName + "=" + it.dailyLimitMinutes }.toSet()
         val startOfDay = LocalDate.now(ZoneOffset.UTC).atStartOfDay().toInstant(ZoneOffset.UTC)
         val stamp = DateTimeFormatter.ISO_INSTANT.format(startOfDay)
         val ledger = restArray("screen_time_ledger?select=minutes_delta&child_id=eq.${child.id}&created_at=gte.$stamp")
@@ -513,6 +534,7 @@ class EduLockRepository(context: Context) {
             .putBoolean("child_active", true)
             .putString("child_id", child.id)
             .putStringSet("allowed_packages", allowed)
+            .putStringSet("app_daily_limits", appLimits)
             .putInt("earned_minutes_today", earned)
             .putInt("daily_cap_minutes", child.dailyCapMinutes)
             .putString("budget_day", LocalDate.now(ZoneOffset.UTC).toString())
@@ -620,7 +642,12 @@ class EduLockRepository(context: Context) {
             val json = JSONObject(text)
             val message = listOf("msg", "message", "error_description", "error", "hint")
                 .firstNotNullOfOrNull { key -> json.optString(key).takeIf { it.isNotBlank() && it != "null" } }
-            if (message != null) return message.take(500)
+            if (message != null) {
+                if (message.contains("invalid schema: edulock", ignoreCase = true)) {
+                    return "EduLock database is installed, but the edulock schema is not exposed to the Supabase Data API. In Integrations > Data API > Settings > Exposed schemas, select edulock and Save."
+                }
+                return message.take(500)
+            }
         } catch (_: Exception) {
             // Fall through to safe generic message.
         }

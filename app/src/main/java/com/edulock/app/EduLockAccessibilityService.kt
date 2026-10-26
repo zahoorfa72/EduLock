@@ -45,9 +45,7 @@ class EduLockAccessibilityService : AccessibilityService() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val prefs = lockPrefs()
         val today = utcDay()
-        if (prefs.getString(KEY_DAY, null) != today) {
-            prefs.edit().putString(KEY_DAY, today).putLong(KEY_USED_MS, 0L).apply()
-        }
+        if (prefs.getString(KEY_DAY, null) != today) resetDailyUsage(prefs, today)
         lastPackage = ""
         lastEventAt = System.currentTimeMillis()
         handler.removeCallbacks(ticker)
@@ -80,15 +78,20 @@ class EduLockAccessibilityService : AccessibilityService() {
     private fun accountForegroundUsage(now: Long) {
         val prefs = lockPrefs()
         val today = utcDay()
-        if (prefs.getString(KEY_DAY, null) != today) {
-            prefs.edit().putString(KEY_DAY, today).putLong(KEY_USED_MS, 0L).apply()
-        }
+        if (prefs.getString(KEY_DAY, null) != today) resetDailyUsage(prefs, today)
         if (!prefs.getBoolean(KEY_CHILD_ACTIVE, false) || !isAllowedPackageForUsage(lastPackage)) {
             lastEventAt = now
             return
         }
         val delta = (now - lastEventAt).coerceIn(0L, MAX_SINGLE_DELTA_MS)
-        if (delta > 0) prefs.edit().putLong(KEY_USED_MS, prefs.getLong(KEY_USED_MS, 0L) + delta).apply()
+        if (delta > 0) {
+            val editor = prefs.edit().putLong(KEY_USED_MS, prefs.getLong(KEY_USED_MS, 0L) + delta)
+            if (lastPackage.isNotBlank()) {
+                val appUsageKey = APP_USED_PREFIX + lastPackage
+                editor.putLong(appUsageKey, prefs.getLong(appUsageKey, 0L) + delta)
+            }
+            editor.apply()
+        }
         lastEventAt = now
     }
 
@@ -107,9 +110,21 @@ class EduLockAccessibilityService : AccessibilityService() {
         val allowed = prefs.getStringSet(KEY_ALLOWED_PACKAGES, emptySet()).orEmpty().contains(packageName)
         val used = prefs.getLong(KEY_USED_MS, 0L)
         val earned = prefs.getInt(KEY_EARNED_MINUTES, 0).coerceAtLeast(0) * MILLIS_PER_MINUTE
-        val blockedForTime = allowed && used >= earned
-        if (!allowed || blockedForTime) {
-            showBlocker(if (blockedForTime) "Today's earned screen time has been used." else "This app has not been approved by your parent.")
+        val appLimitMinutes = prefs.getStringSet(KEY_APP_DAILY_LIMITS, emptySet()).orEmpty()
+            .firstOrNull { it.startsWith("$packageName=") }
+            ?.substringAfter("=")
+            ?.toIntOrNull()
+            ?.coerceIn(1, 1440)
+        val appUsed = prefs.getLong(APP_USED_PREFIX + packageName, 0L)
+        val blockedForAppTime = allowed && appLimitMinutes != null && appUsed >= appLimitMinutes * MILLIS_PER_MINUTE
+        val blockedForRewardTime = allowed && used >= earned
+        if (!allowed || blockedForAppTime || blockedForRewardTime) {
+            val message = when {
+                blockedForAppTime -> "Your daily limit for this app has been reached."
+                blockedForRewardTime -> "Today's earned screen time has been used."
+                else -> "This app has not been approved by your parent."
+            }
+            showBlocker(message)
         } else {
             hideBlocker()
         }
@@ -183,6 +198,12 @@ class EduLockAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun resetDailyUsage(prefs: android.content.SharedPreferences, today: String) {
+        val editor = prefs.edit().putString(KEY_DAY, today).putLong(KEY_USED_MS, 0L)
+        prefs.all.keys.filter { it.startsWith(APP_USED_PREFIX) }.forEach { editor.remove(it) }
+        editor.apply()
+    }
+
     private fun lockPrefs() = getSharedPreferences(LOCK_PREFS, MODE_PRIVATE)
     private fun utcDay() = LocalDate.now(ZoneOffset.UTC).toString()
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
@@ -209,6 +230,8 @@ class EduLockAccessibilityService : AccessibilityService() {
         const val KEY_EARNED_MINUTES = "earned_minutes_today"
         const val KEY_USED_MS = "used_millis_today"
         const val KEY_DAY = "budget_day"
+        const val KEY_APP_DAILY_LIMITS = "app_daily_limits"
+        const val APP_USED_PREFIX = "app_used_millis_"
         const val MILLIS_PER_MINUTE = 60_000L
         const val MAX_SINGLE_DELTA_MS = 20_000L
         const val TICK_MILLIS = 10_000L
