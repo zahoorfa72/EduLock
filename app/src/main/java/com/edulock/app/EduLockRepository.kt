@@ -569,8 +569,7 @@ class EduLockRepository(context: Context) {
             restArray(
                 "child_installed_apps?on_conflict=child_id,package_name",
                 "POST",
-                JSONObject().put("child_id", childId).put("package_name", pkg).put("display_name", name).put("last_seen_at", java.time.Instant.now().toString()),
-                prefer = "resolution=merge-duplicates,return=minimal"
+                JSONObject().put("child_id", childId).put("package_name", pkg).put("display_name", name).put("last_seen_at", java.time.Instant.now().toString())
             )
         }
     }
