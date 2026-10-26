@@ -52,3 +52,12 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase functions deploy submit-task-attempt --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+      - name: Deploy curriculum library function
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy curriculum-library --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+
+      - name: Deploy curriculum import function
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy import-curriculum-questions --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
