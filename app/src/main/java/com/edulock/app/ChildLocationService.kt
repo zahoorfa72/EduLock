@@ -35,9 +35,24 @@ class ChildLocationService : Service() {
     private var locationManager: LocationManager? = null
     private var listenerRegistered = false
 
-    private val locationListener = LocationListener { location ->
-        rememberLocation(location)
-        queueSync()
+    private val locationListener = object : LocationListener {
+        override fun onLocationChanged(location: Location) {
+            rememberLocation(location)
+            queueSync()
+        }
+
+        override fun onProviderEnabled(provider: String) {
+            updateNotification("Location provider enabled. Waiting for a fresh fix.")
+        }
+
+        override fun onProviderDisabled(provider: String) {
+            updateNotification("Location provider disabled. Turn on Location to refresh the child's position.")
+        }
+
+        @Suppress("DEPRECATION")
+        override fun onStatusChanged(provider: String, status: Int, extras: android.os.Bundle?) {
+            // Legacy callback; Android Q and newer do not call this method.
+        }
     }
 
     private val heartbeat = object : Runnable {
@@ -168,10 +183,12 @@ class ChildLocationService : Service() {
     private fun queueSync() {
         val childId = locationPrefs().getString(KEY_CHILD_ID, null) ?: return
         io.execute {
-            try {
-                val prefs = locationPrefs()
-                if (!prefs.getBoolean(KEY_SHARING_ENABLED, false)) return@execute
-                if (prefs.getBoolean(KEY_PENDING, false)) {
+            val prefs = locationPrefs()
+            if (!prefs.getBoolean(KEY_SHARING_ENABLED, false)) return@execute
+
+            var locationUploadedOrNotPending = !prefs.getBoolean(KEY_PENDING, false)
+            if (!locationUploadedOrNotPending) {
+                try {
                     val lat = prefs.getString(KEY_LATITUDE, null)?.toDoubleOrNull()
                     val lon = prefs.getString(KEY_LONGITUDE, null)?.toDoubleOrNull()
                     val pointTime = prefs.getLong(KEY_POINT_TIME, 0L)
@@ -179,14 +196,25 @@ class ChildLocationService : Service() {
                     if (lat != null && lon != null && pointTime > 0L) {
                         ChildLocationSyncClient.uploadLatestLocation(this, childId, lat, lon, accuracy, pointTime)
                         prefs.edit().putBoolean(KEY_PENDING, false).apply()
+                        locationUploadedOrNotPending = true
                     }
+                } catch (e: Exception) {
+                    // Keep the pending point on disk; heartbeat can still succeed independently.
+                    Log.w(TAG, "Latest location upload will retry", e)
                 }
+            }
+
+            try {
                 ChildLocationSyncClient.sendHeartbeat(this, childId, true, batteryPercent())
-                updateNotification("Location sharing is active. Last check-in: " + Instant.now().toString().take(16).replace("T", " "))
+                val message = if (locationUploadedOrNotPending) {
+                    "Location sharing is active. Last check-in: " + Instant.now().toString().take(16).replace("T", " ")
+                } else {
+                    "Device is connected; latest location is queued and will retry."
+                }
+                updateNotification(message)
             } catch (e: Exception) {
-                // Keep the pending point on disk; the next heartbeat retries it.
-                Log.w(TAG, "Location remains saved locally and will retry when possible", e)
-                updateNotification("Waiting for connection. The latest location is saved on this device.")
+                Log.w(TAG, "Device heartbeat will retry", e)
+                updateNotification("Waiting for connection. The last server location remains saved.")
             }
         }
     }
