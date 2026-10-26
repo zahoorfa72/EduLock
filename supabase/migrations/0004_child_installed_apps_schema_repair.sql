@@ -75,7 +75,7 @@ $;
 
 drop trigger if exists child_installed_apps_default_allow on edulock.child_installed_apps;
 create trigger child_installed_apps_default_allow
-  after insert on edulock.child_installed_apps
+  after insert or update on edulock.child_installed_apps
   for each row execute function edulock.default_allow_discovered_app();
 
 -- Refresh PostgREST metadata after migrations are applied.
