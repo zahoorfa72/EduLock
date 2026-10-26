@@ -50,7 +50,7 @@ Use the intended EduLock Supabase project. EduLock uses its own `edulock` schema
    - `supabase functions deploy claim-child-pairing`
    - `supabase functions deploy submit-task-attempt`
 4. Confirm the Edge Function environment has Supabase's server-provided `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. The service-role key is used only inside Edge Functions; it must never be copied into Android, GitHub Actions build variables, or chat.
-5. In Supabase Auth, choose the appropriate email-confirmation policy. When confirmation is required, a user must confirm the email and then sign in before linking a child account.
+5. In Supabase Auth, choose the appropriate email-confirmation policy for parent accounts. Child device pairing does not use email confirmation, because child devices do not create email/password accounts.
 6. In Supabase Auth settings, enable **Anonymous Sign-Ins** for the EduLock project. Create a parent account in EduLock, add a child profile and generate a pairing code. On the child's device, choose **Set up a child's device with pairing code** and enter the six-digit code. No child email/password account is created. Codes expire after ten minutes and work once.
 7. Create a subject, add questions, assign a task, and test scoring/caps using a non-production test account before using family data.
 
@@ -77,7 +77,7 @@ This command can fail if the device does not meet Android's provisioning require
 - [ ] GitHub Actions Android build passes and the APK installs on Android 8.0+.
 - [ ] Register parent, confirm email if required, sign in, close/reopen, and verify session refresh.
 - [ ] Create two families and verify neither parent can read the other's children, subjects, tasks or reports.
-- [ ] Create a child account and use a valid pairing code; test expired, reused, wrong-family and parent-account codes.
+- [ ] Enable Anonymous Sign-Ins, pair a fresh child device with a valid pairing code, and test expired, reused, wrong-family and parent-account codes.
 - [ ] Verify Urdu, Sindhi (RTL), English and another Unicode language render and save correctly.
 - [ ] Create a concept-tagged question, add two translations, verify child language switching keeps the same question identity, and confirm parent reports show correct/total separately by language.
 - [ ] Confirm child API requests cannot select translation accepted_answers or directly write concept progress rows.
