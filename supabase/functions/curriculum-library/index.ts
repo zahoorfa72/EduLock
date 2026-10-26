@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
         uniqueQuestions.push(q);
       }
     }
-    const questions = uniqueQuestions.slice(0, 80);
+    const questions = uniqueQuestions.slice(0, 50);
     const fallbackUsed = chosenLanguage !== language || questions.some((q: any) =>
       Number(q.grade_level) !== grade || q.country_code !== countryCode || q.country_code === "ZZ"
     );
