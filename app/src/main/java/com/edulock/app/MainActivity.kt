@@ -49,6 +49,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -64,7 +65,7 @@ import kotlinx.coroutines.launch
 private enum class AppScreen {
     AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD,
     SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
-    REPORTS, ALLOWED_APPS, PLAY_TASK, TASK_RESULT
+    REPORTS, ALLOWED_APPS, APP_USAGE_REPORT, PLAY_TASK, TASK_RESULT
 }
 
 @Composable
@@ -130,6 +131,8 @@ private fun EduLockApp(repository: EduLockRepository) {
     var appDisplayName by remember { mutableStateOf("") }
     var appDailyLimit by remember { mutableStateOf("60") }
     var appLimitEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var appUsageChild by remember { mutableStateOf<ChildProfile?>(null) }
+    var appUsageReports by remember { mutableStateOf(emptyList<AppUsageReport>()) }
 
     fun execute(action: suspend () -> Unit) {
         scope.launch {
@@ -164,8 +167,9 @@ private fun EduLockApp(repository: EduLockRepository) {
         tasks = repository.loadChildTasks(linked.id)
         try {
             earnedToday = repository.refreshChildDeviceRestrictions(linked)
+            repository.syncAppUsage(linked.id)
         } catch (e: Exception) {
-            notice = "Signed in, but screen-time settings did not sync: " + (e.message ?: "try again")
+            notice = "Signed in, but device settings or usage did not sync: " + (e.message ?: "try again")
         }
         screen = AppScreen.CHILD_HOME
     }
@@ -186,6 +190,16 @@ private fun EduLockApp(repository: EduLockRepository) {
 
     LaunchedEffect(resendSeconds) {
         if (resendSeconds > 0) { delay(1000); resendSeconds -= 1 }
+    }
+
+    LaunchedEffect(screen, childProfile?.id) {
+        val activeChildId = childProfile?.id
+        if (screen == AppScreen.CHILD_HOME && !activeChildId.isNullOrBlank()) {
+            while (true) {
+                delay(60_000)
+                try { repository.syncAppUsage(activeChildId) } catch (_: Exception) { /* Retry next cycle; keep learning usable offline. */ }
+            }
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -352,7 +366,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Button(onClick = { screen = AppScreen.CHILDREN; execute { children = repository.loadChildren(familyId) } }, modifier = Modifier.fillMaxWidth()) { Text("Manage child profiles") }
                     Button(onClick = { screen = AppScreen.SUBJECTS; execute { subjects = repository.loadSubjects(familyId) } }, modifier = Modifier.fillMaxWidth()) { Text("Subjects & questions") }
                     Button(onClick = { selectedChild = null; selectedSubject = null; screen = AppScreen.ASSIGN_TASK }, modifier = Modifier.fillMaxWidth()) { Text("Assign learning task & reward") }
-                    OutlinedButton(onClick = { screen = AppScreen.REPORTS; execute { attempts = repository.loadAttempts() } }, modifier = Modifier.fillMaxWidth()) { Text("Progress reports") }
+                    OutlinedButton(onClick = { screen = AppScreen.REPORTS; execute { attempts = repository.loadAttempts(); conceptProgress = repository.loadConceptProgress() } }, modifier = Modifier.fillMaxWidth()) { Text("🏆  Learning progress reports") }
                     OutlinedButton(onClick = {
                         screen = AppScreen.CHILDREN
                         execute { children = repository.loadChildren(familyId) }
@@ -396,7 +410,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     selectedChild = child
                                     screen = AppScreen.ALLOWED_APPS
                                     execute { allowedApps = repository.loadAllowedApps(child.id) }
-                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Configure allowed apps") }
+                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("🎮  App access & daily limits") }
+                                OutlinedButton(onClick = {
+                                    appUsageChild = child
+                                    screen = AppScreen.APP_USAGE_REPORT
+                                    execute { appUsageReports = repository.loadAppUsageReports(child.id) }
+                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("📊  App usage report") }
                             }
                         }
                     }
@@ -742,6 +761,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             val linked = childProfile ?: throw IllegalStateException("Sign in to your child account again.")
                             tasks = repository.loadChildTasks(linked.id)
                             earnedToday = repository.refreshChildDeviceRestrictions(linked)
+                            repository.syncAppUsage(linked.id)
                             screen = AppScreen.CHILD_HOME
                         }
                     }, modifier = Modifier.fillMaxWidth()) { Text("Sync tasks and screen-time settings") }
@@ -780,6 +800,43 @@ private fun EduLockApp(repository: EduLockRepository) {
                         repository.signOut()
                         session = null; childProfile = null; screen = AppScreen.AUTH; isRegistering = false
                     }, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
+                }
+
+                AppScreen.APP_USAGE_REPORT -> ScreenFrame("App usage report", onBack = { screen = AppScreen.CHILDREN }, notice = notice, busy = busy) {
+                    val child = appUsageChild
+                    Text("Daily app usage for " + (child?.displayName ?: "this child"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("Shows package-level foreground time recorded by EduLock. Reports sync when the child opens EduLock or taps Sync; this is not a live remote screen view.")
+                    OutlinedButton(onClick = {
+                        execute {
+                            val selected = child ?: throw IllegalStateException("Select a child profile first.")
+                            appUsageReports = repository.loadAppUsageReports(selected.id)
+                        }
+                    }, enabled = !busy && child != null, modifier = Modifier.fillMaxWidth()) { Text("↻  Refresh report") }
+                    val totalSeconds = appUsageReports.sumOf { it.usedSeconds }
+                    SummaryCard("Recorded use (reported days)", (totalSeconds / 3600).toString() + " h " + ((totalSeconds % 3600) / 60).toString() + " min", "Totals reflect the last seven days of reported, approved-app use.")
+                    if (appUsageReports.isEmpty()) {
+                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF5FF))) {
+                            Text("No usage reports yet. On the child device, open EduLock and tap “Sync tasks and screen-time settings”. Make sure the parent-approved Accessibility service is enabled.", modifier = Modifier.padding(18.dp), color = Color(0xFF244568))
+                        }
+                    } else {
+                        appUsageReports.groupBy { it.usageDate }.forEach { (day, dailyRows) ->
+                            Text(day, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            dailyRows.forEach { row ->
+                                Card(modifier = Modifier.fillMaxWidth(), border = BorderStroke(1.dp, Color(0xFFE1E6F4)), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+                                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Box(modifier = Modifier.size(48.dp).background(Color(0xFFFFE9B5), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) { Text("📱", fontSize = 23.sp) }
+                                        Spacer(Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text(row.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                            Text(row.packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text((row.usedSeconds / 3600).toString() + " h " + ((row.usedSeconds % 3600) / 60).toString() + " min", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Text("Privacy: EduLock records app package names and total foreground time for approved apps only. It does not collect screen contents, keystrokes, messages, or browser history.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
                 AppScreen.PLAY_TASK -> ScreenFrame(activeTask?.title ?: "Task", onBack = { screen = AppScreen.CHILD_HOME }, notice = notice, busy = busy) {
@@ -902,6 +959,7 @@ private fun ScreenFrame(
 ) {
     Column(
         modifier = Modifier.fillMaxSize()
+            .background(Brush.verticalGradient(listOf(Color(0xFFF4F5FF), Color(0xFFF4FFFC), Color(0xFFFFFAEF))))
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -914,11 +972,13 @@ private fun ScreenFrame(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.large,
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF283985)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF5147E8)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                modifier = Modifier.fillMaxWidth()
+                    .background(Brush.linearGradient(listOf(Color(0xFF5147E8), Color(0xFF078C87), Color(0xFF6C5CE7))))
+                    .padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -1007,8 +1067,9 @@ private fun SummaryCard(title: String, value: String, explanation: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = BorderStroke(1.dp, Color(0xFFE1E6F4)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
