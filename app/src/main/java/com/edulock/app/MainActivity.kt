@@ -329,8 +329,18 @@ private fun EduLockApp(repository: EduLockRepository) {
         val activeChildId = childProfile?.id
         if (screen == AppScreen.CHILD_HOME && !activeChildId.isNullOrBlank()) {
             while (true) {
-                delay(60_000)
-                try { repository.syncAppUsage(activeChildId) } catch (_: Exception) { /* Retry next cycle; keep learning usable offline. */ }
+                delay(30_000)
+                try {
+                    val linked = childProfile
+                    if (linked != null && linked.id == activeChildId) {
+                        // Pull parent changes to app allow/deny state and per-app limits
+                        // while the child's learning screen is active.
+                        earnedToday = repository.refreshChildDeviceRestrictions(linked)
+                        repository.syncAppUsage(activeChildId)
+                    }
+                } catch (_: Exception) {
+                    // Keep the last applied rules while offline; retry on the next cycle.
+                }
             }
         }
     }
