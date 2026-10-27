@@ -841,5 +841,87 @@ ParentLearningTemplate(
             conceptKey = "faith:jain:care-for-life",
             solution = "Jain traditions strongly emphasise non-violence and careful treatment of living beings."
         )
+
+        ,ParentLearningTemplate(
+            title = "اسلام: رمضان", category = "Religious Education", subjectTitle = "Islamic Studies",
+            languageCode = "ur", questionType = "multiple_choice",
+            prompt = "اسلام میں کس مہینے میں مسلمان روزہ رکھتے ہیں؟",
+            options = listOf("رمضان", "شوال", "محرم"), answer = "رمضان",
+            conceptKey = "faith:islamic:pk-ramadan-ur",
+            solution = "رمضان اسلامی قمری تقویم کا مقدس مہینہ ہے جس میں مسلمان روزہ رکھتے ہیں۔",
+            countryCode = "PK"
+        ),
+        ParentLearningTemplate(
+            title = "اسلام: عیدالفطر", category = "Religious Education", subjectTitle = "Islamic Studies",
+            languageCode = "ur", questionType = "multiple_choice",
+            prompt = "عیدالفطر کس مہینے کے روزوں کے بعد آتی ہے؟",
+            options = listOf("رمضان", "ربیع الاول", "محرم"), answer = "رمضان",
+            conceptKey = "faith:islamic:pk-eid-ur",
+            solution = "عیدالفطر رمضان کے اختتام پر منائی جاتی ہے۔",
+            countryCode = "PK"
+        ),
+        ParentLearningTemplate(
+            title = "اسلام: روزي ۽ رمضان", category = "Religious Education", subjectTitle = "Islamic Studies",
+            languageCode = "sd", questionType = "multiple_choice",
+            prompt = "مسلمان ڪهڙي مهيني ۾ روزا رکندا آهن؟",
+            options = listOf("رمضان", "شوال", "محرم"), answer = "رمضان",
+            conceptKey = "faith:islamic:pk-ramadan-sd",
+            solution = "رمضان اسلامي قمري سال جو مقدس مهينو آهي، جنهن ۾ مسلمان روزا رکندا آهن۔",
+            countryCode = "PK"
+        ),
+        ParentLearningTemplate(
+            title = "اسلام: نبی اور مقدس کتاب", category = "Religious Education", subjectTitle = "Islamic Studies",
+            languageCode = "ur", questionType = "multiple_choice",
+            prompt = "اسلام کی مقدس کتاب کون سی ہے؟",
+            options = listOf("قرآن", "وید", "بائبل"), answer = "قرآن",
+            conceptKey = "faith:islamic:pk-scripture-ur",
+            solution = "قرآن اسلام کی مقدس کتاب ہے۔",
+            countryCode = "PK"
+        ),
+        ParentLearningTemplate(
+            title = "हिंदू अध्ययन: दीपावली", category = "Religious Education", subjectTitle = "Hindu Studies",
+            languageCode = "hi", questionType = "multiple_choice",
+            prompt = "हिंदू परंपराओं में किस त्योहार को प्रकाश का पर्व कहा जाता है?",
+            options = listOf("दीपावली", "बैसाखी", "ईद"), answer = "दीपावली",
+            conceptKey = "faith:hindu:in-diwali-hi",
+            solution = "दीपावली को प्रकाश का पर्व कहा जाता है; इसे मनाने के तरीके अलग-अलग समुदायों में भिन्न हो सकते हैं।",
+            countryCode = "IN"
+        ),
+        ParentLearningTemplate(
+            title = "हिंदू अध्ययन: अहिंसा", category = "Religious Education", subjectTitle = "Hindu Studies",
+            languageCode = "hi", questionType = "multiple_choice",
+            prompt = "अहिंसा का सामान्य अर्थ क्या है?",
+            options = listOf("किसी को हानि न पहुँचाना", "रंग मिलाना", "ग्रहों की कक्षा"), answer = "किसी को हानि न पहुँचाना",
+            conceptKey = "faith:hindu:ahimsa-hi",
+            solution = "अहिंसा का अर्थ किसी जीव को हानि न पहुँचाना या हिंसा से बचना है।",
+            countryCode = "IN"
+        ),
+        ParentLearningTemplate(
+            title = "इस्लामी अध्ययन: ईद", category = "Religious Education", subjectTitle = "Islamic Studies",
+            languageCode = "hi", questionType = "multiple_choice",
+            prompt = "रमज़ान के महीने के अंत में कौन-सा त्योहार मनाया जाता है?",
+            options = listOf("ईद-उल-फ़ित्र", "दीपावली", "बैसाखी"), answer = "ईद-उल-फ़ित्र",
+            conceptKey = "faith:islamic:eid-hi",
+            solution = "ईद-उल-फ़ित्र रमज़ान के रोज़ों के बाद मनाई जाती है।",
+            countryCode = "IN"
+        ),
+        ParentLearningTemplate(
+            title = "ਸਿੱਖ ਅਧਿਐਨ: ਲੰਗਰ", category = "Religious Education", subjectTitle = "Sikh Studies",
+            languageCode = "pa", questionType = "multiple_choice",
+            prompt = "ਸਿੱਖ ਪਰੰਪਰਾ ਵਿੱਚ ਲੰਗਰ ਕੀ ਹੁੰਦਾ ਹੈ?",
+            options = listOf("ਸਭ ਲਈ ਮੁਫ਼ਤ ਸਾਂਝਾ ਭੋਜਨ", "ਇੱਕ ਗ੍ਰਹਿ", "ਗਣਿਤ ਦਾ ਚਿੰਨ੍ਹ"), answer = "ਸਭ ਲਈ ਮੁਫ਼ਤ ਸਾਂਝਾ ਭੋਜਨ",
+            conceptKey = "faith:sikh:langar-pa",
+            solution = "ਲੰਗਰ ਗੁਰਦੁਆਰੇ ਵਿੱਚ ਸਭ ਨੂੰ ਬਰਾਬਰੀ ਨਾਲ ਦਿੱਤਾ ਜਾਣ ਵਾਲਾ ਸਾਂਝਾ ਭੋਜਨ ਹੈ।",
+            countryCode = "IN"
+        ),
+        ParentLearningTemplate(
+            title = "जैन अध्ययन: अहिंसा", category = "Religious Education", subjectTitle = "Jain Studies",
+            languageCode = "hi", questionType = "multiple_choice",
+            prompt = "जैन परंपरा में कौन-सा सिद्धांत बहुत महत्वपूर्ण है?",
+            options = listOf("अहिंसा", "हानि पहुँचाना", "रंगों को मिलाना"), answer = "अहिंसा",
+            conceptKey = "faith:jain:ahimsa-hi",
+            solution = "जैन धर्म में अहिंसा और जीवों के प्रति सावधानी बहुत महत्वपूर्ण मानी जाती है।",
+            countryCode = "IN"
+        )
     )
 }
