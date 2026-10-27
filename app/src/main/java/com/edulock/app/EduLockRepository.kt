@@ -648,7 +648,9 @@ class EduLockRepository(context: Context) {
         var created = 0
 
         fun generatedSeedSuffix(key: String): String? {
-            if (!key.matches(Regex("(?:3d|4d):[^:]+:[a-z0-9-]+-[0-9]+"))) return null
+            val ordinarySeed = key.matches(Regex("(?:3d|4d):[^:]+:[a-z0-9-]+-[0-9]+"))
+            val faithSeed = key.matches(Regex("(?:3d|4d):[^:]+:faith:[a-z-]+:[0-9]+"))
+            if (!ordinarySeed && !faithSeed) return null
             return key.removePrefix("3d:").removePrefix("4d:").substringAfter(":", "")
         }
 
