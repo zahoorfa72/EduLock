@@ -17,7 +17,7 @@ fun SolarSystemQuizContent() {
 
 @Composable
 fun SolarSystemModelPreview() {
-    SolarSystemWebView(quizMode = false, height = 260.dp)
+    SolarSystemWebView(quizMode = false, height = 460.dp)
 }
 
 @Composable
@@ -172,7 +172,7 @@ requestAnimationFrame(frame);
 @Composable
 fun Learning3DPreview(modelType: String) {
     AndroidView(
-        modifier = Modifier.fillMaxWidth().height(230.dp),
+        modifier = Modifier.fillMaxWidth().height(450.dp),
         factory = { ctx ->
             WebView(ctx).apply {
                 setBackgroundColor(android.graphics.Color.rgb(7, 12, 34))
@@ -210,7 +210,7 @@ private fun learning3DHtml(modelType: String): String {
             shape = """<div class="molecule"><i class="bond b1"></i><i class="bond b2"></i><b class="sphere oxygen"></b><b class="sphere hydrogen h1"></b><b class="sphere hydrogen h2"></b></div>"""
         }
         "geometry" -> {
-            title = "3D geometry lab"; description = "Rotate the cube to inspect its faces, edges and vertices."
+            title = "4D geometry lab"; description = "Rotate 360°, zoom and explode the cube to inspect individual faces."
             shape = """<div class="cube"><i class="face front"></i><i class="face back"></i><i class="face right"></i><i class="face left"></i><i class="face top"></i><i class="face bottom"></i></div><div class="shape-label">CUBE · 6 FACES</div>"""
         }
         "cell" -> {
