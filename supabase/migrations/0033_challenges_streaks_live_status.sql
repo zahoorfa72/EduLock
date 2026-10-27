@@ -30,10 +30,6 @@ declare
   v_streak_bonus integer := 0;
   v_yesterday date := (now() at time zone 'UTC')::date - 1;
   v_today_date date := (now() at time zone 'UTC')::date;
-  v_streak edulock.child_task_streaks%rowtype;
-  v_streak_bonus integer := 0;
-  v_yesterday date := (now() at time zone 'UTC')::date - 1;
-  v_today_date date := (now() at time zone 'UTC')::date;
 begin
   if jsonb_typeof(p_answers) <> 'array' then raise exception 'Answers must be an array'; end if;
   if jsonb_array_length(p_answers) > 500 then raise exception 'Too many answers'; end if;
@@ -207,47 +203,6 @@ begin
     from jsonb_to_recordset(v_details) as x(
       question_id uuid, concept_key text, language_code text, is_correct boolean
     );
-
-  -- A passed task advances the child's daily streak. The bonus is awarded once
-  -- per UTC day, within the same per-child daily cap, and capped at 30 minutes.
-  if v_passed then
-    insert into edulock.child_task_streaks(child_id, last_passed_day, consecutive_days, last_streak_bonus_day)
-      values (v_child.id, v_today_date, 1, null)
-      on conflict (child_id) do nothing;
-    select * into v_streak from edulock.child_task_streaks
-      where child_id = v_child.id for update;
-    if v_streak.last_passed_day < v_today_date then
-      if v_streak.last_passed_day = v_yesterday then
-        update edulock.child_task_streaks
-          set consecutive_days = least(consecutive_days + 1, 30),
-              last_passed_day = v_today_date
-          where child_id = v_child.id
-          returning * into v_streak;
-      elsif v_streak.last_passed_day < v_yesterday then
-        update edulock.child_task_streaks
-          set consecutive_days = 1, last_passed_day = v_today_date
-          where child_id = v_child.id
-          returning * into v_streak;
-      end if;
-    end if;
-    if v_streak.last_streak_bonus_day is distinct from v_today_date then
-      v_streak_bonus := least(30, greatest(0, v_streak.consecutive_days * 5),
-        greatest(0, v_child.daily_cap_minutes - v_daily_used - v_award));
-      if v_streak_bonus > 0 then
-        update edulock.child_task_streaks
-          set last_streak_bonus_day = v_today_date
-          where child_id = v_child.id;
-        v_award := v_award + v_streak_bonus;
-        insert into edulock.screen_time_ledger(
-          child_id, source_attempt_id, minutes_delta, reason, target_package_name, target_group_id
-        )
-        values (
-          v_child.id, v_attempt_id, v_streak_bonus, 'Daily streak bonus',
-          v_task.reward_package_name, v_task.reward_group_id
-        );
-      end if;
-    end if;
-  end if;
 
   if v_award > 0 then
     insert into edulock.screen_time_ledger(
