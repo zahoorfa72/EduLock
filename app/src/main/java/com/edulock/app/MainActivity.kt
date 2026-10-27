@@ -976,7 +976,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 title = { AppUiText("Choose a religious-education curriculum") },
                 text = {
                     Column(Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState())) {
-                        AppUiText("Optional. Choose the learning track you want EduLock to use; it does not infer a family's religion from its country.")
+                        AppUiText("Choose a religious-education track for a child profile. Country suggestions are only defaults; parents can select or change the track.")
                         val trackOptions = religiousStudyOptionsForCountry(parentCountryCode)
                         trackOptions.forEach { (code, label) ->
                             TextButton(onClick = {
@@ -1005,9 +1005,6 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         OutlinedButton(onClick = { familySettingsOpen = false; languagePickerTarget = "parent-learning"; languageSearch = ""; languagePickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
                             AppUiText("📚 Lesson language: " + languageLabel(parentLearningLanguageCode))
-                        }
-                        OutlinedButton(onClick = { familySettingsOpen = false; studyTrackPickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                            AppUiText("🕊 Religious education: " + studyTrackLabel(parentStudyTrack))
                         }
                         OutlinedButton(onClick = { familySettingsOpen = false; languagePickerTarget = "display"; languageSearch = ""; languagePickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
                             AppUiText("🌐 App display language: " + languageLabel(parentDisplayLanguageCode))
@@ -1518,6 +1515,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Field(childSchoolGrade, { childSchoolGrade = it.filter(Char::isDigit).take(2) }, "School grade (0 = Kindergarten, 1–13)", keyboardType = KeyboardType.Number)
                     Field(childAgeYears, { childAgeYears = it.filter(Char::isDigit).take(2) }, "Child age (3–19 years)", keyboardType = KeyboardType.Number)
                     Field(childLanguage, { childLanguage = it.trim().take(16) }, "Preferred learning language (en, ur, sd...)")
+                    AppUiText("Religious education is optional for each child. Choose a matching track only if your family wants these lessons; the country suggestion is not a guess about your family's beliefs.")
+                    OutlinedButton(onClick = { studyTrackPickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                        AppUiText("🕊 Religious-education subject: " + studyTrackLabel(parentStudyTrack))
+                    }
                     AppUiText("The question bank filters by country, grade, age and language. When a reviewed local-language set isn't available, EduLock clearly labels the starter-bank fallback.")
                     Field(childDailyCap, { childDailyCap = it.filter(Char::isDigit).take(4) }, "Maximum reward minutes per day (0–1440)", keyboardType = KeyboardType.Number)
                     Field(childDailyGameLimit, { childDailyGameLimit = it.filter(Char::isDigit).take(4) }, "Educational games per day in minutes (0 disables; max 1440)", keyboardType = KeyboardType.Number)
