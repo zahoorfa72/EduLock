@@ -162,7 +162,12 @@ private fun EduLockApp(repository: EduLockRepository) {
     var parentCountryCode by remember { mutableStateOf("PK") }
     var parentLearningLanguageCode by remember { mutableStateOf("ur") }
     var parentStudyTrack by remember { mutableStateOf("none") }
-    var parentDisplayLanguageCode by remember { mutableStateOf("en") }
+    var parentDisplayLanguageCode by remember {
+        mutableStateOf(
+            context.getSharedPreferences("edulock_display_language", Context.MODE_PRIVATE)
+                .getString("language", "en") ?: "en"
+        )
+    }
     var languagePickerTarget by remember { mutableStateOf("curriculum") }
     var studyTrackPickerOpen by remember { mutableStateOf(false) }
     var familySettingsOpen by remember { mutableStateOf(false) }
