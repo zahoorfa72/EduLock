@@ -5,6 +5,9 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import java.io.ByteArrayOutputStream
 import android.content.pm.PackageManager
 import android.content.pm.ApplicationInfo
 import android.net.Uri
@@ -248,6 +251,40 @@ private enum class AppScreen {
 @Composable
 private fun EduLockApp(repository: EduLockRepository) {
     val context = LocalContext.current
+    val questionPicturePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedUri ->
+        if (selectedUri != null) {
+            questionPictureUri = selectedUri
+            questionPictureError = null
+            execute {
+                val rawBytes = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    context.contentResolver.openInputStream(selectedUri)?.use { it.readBytes() }
+                        ?: throw IOException("Could not read the selected picture.")
+                }
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, bounds)
+                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("The selected file is not a supported picture.")
+                val factor = maxOf(bounds.outWidth / 1024f, bounds.outHeight / 1024f, 1f)
+                val options = BitmapFactory.Options().apply {
+                    inSampleSize = Integer.highestOneBit(factor.toInt().coerceAtLeast(1))
+                }
+                val decoded = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
+                    ?: throw IOException("Could not decode the selected picture.")
+                val scale = minOf(1f, 1024f / maxOf(decoded.width, decoded.height).toFloat())
+                val bitmap = if (scale < 1f) Bitmap.createScaledBitmap(
+                    decoded,
+                    (decoded.width * scale).toInt().coerceAtLeast(1),
+                    (decoded.height * scale).toInt().coerceAtLeast(1),
+                    true
+                ) else decoded
+                val stream = ByteArrayOutputStream()
+                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 85, stream)) throw IOException("Could not compress the selected picture.")
+                val bytes = stream.toByteArray()
+                if (bytes.size > 2_000_000) throw IOException("The compressed picture is larger than 2 MB. Please choose a smaller picture.")
+                questionPictureBytes = bytes
+                questionPicturePreview = bitmap
+            }
+        }
+    }
     val scope = rememberCoroutineScope()
     val devicePreferences = remember { context.getSharedPreferences("edulock_device_mode", Context.MODE_PRIVATE) }
     var deviceMode by remember { mutableStateOf(devicePreferences.getString("mode", "unknown") ?: "unknown") }
@@ -342,6 +379,10 @@ private fun EduLockApp(repository: EduLockRepository) {
     var subjectGradeLevel by remember { mutableStateOf("1") }
     var editingSubjectId by remember { mutableStateOf<String?>(null) }
     var questionPrompt by remember { mutableStateOf("") }
+    var questionPictureUri by remember { mutableStateOf<Uri?>(null) }
+    var questionPictureBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var questionPicturePreview by remember { mutableStateOf<Bitmap?>(null) }
+    var questionPictureError by remember { mutableStateOf<String?>(null) }
     var question3DModel by remember { mutableStateOf("none") }
     var questionType by remember { mutableStateOf("multiple_choice") }
     var questionOptions by remember { mutableStateOf("") }
@@ -2751,7 +2792,20 @@ private fun EduLockApp(repository: EduLockRepository) {
                             AppUiText("Correct answer format: left=right;left=right. Example: cat=meow;dog=bark.")
                         } else if (questionType == "picture") {
                             Field(questionOptions, { questionOptions = it }, "Optional picture labels / choices (one per line)")
-                            AppUiText("Picture upload to the private question-images bucket is not connected yet.")
+                            OutlinedButton(
+                                onClick = { questionPicturePicker.launch("image/*") },
+                                enabled = !busy,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { AppUiText(if (questionPictureUri == null) "Choose picture" else "Change picture") }
+                            questionPicturePreview?.let { preview ->
+                                AndroidView(
+                                    factory = { android.widget.ImageView(it).apply { scaleType = android.widget.ImageView.ScaleType.FIT_CENTER } },
+                                    update = { it.setImageBitmap(preview); it.adjustViewBounds = true },
+                                    modifier = Modifier.fillMaxWidth().height(220.dp)
+                                )
+                            }
+                            questionPictureError?.let { AppUiText(it, color = MaterialTheme.colorScheme.error) }
+                            AppUiText("EduLock shrinks this image to a maximum of 1024 px and uploads it to your family's private question-images storage.")
                         } else if (questionType == "true_false") {
                             AppUiText("Save the canonical answer as true or false. A translation can use localized labels and accepted answers.")
                         }
@@ -2770,7 +2824,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     if (pair.size == 2 && pair[0].isNotBlank() && pair[1].isNotBlank()) pair[0].trim() + "=" + pair[1].trim() else null
                                 }.joinToString(";")
                             } else questionAnswer
-                            repository.addQuestion(subject.id, questionPrompt, questionType, options, canonicalAnswer, questionLanguage, savedConceptKey, questionSolution)
+                            val newQuestionId = repository.addQuestion(subject.id, questionPrompt, questionType, options, canonicalAnswer, questionLanguage, savedConceptKey, questionSolution)
+                            if (questionType == "picture") {
+                                val bytes = questionPictureBytes ?: throw IllegalArgumentException("Choose a picture before saving this picture question.")
+                                val parentChild = selectedChild ?: throw IllegalStateException("Choose the child profile for this question.")
+                                repository.uploadQuestionImage(parentChild.familyId, newQuestionId, bytes)
+                            }
                             questions = repository.loadQuestions(subject.id)
                             questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
                             questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
