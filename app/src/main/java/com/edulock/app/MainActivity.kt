@@ -1594,7 +1594,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("🌌 Preview all interactive 3D learning models") }
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("Mathematics", "Physics", "Chemistry", "Biology", "General Science", "English", "Urdu", "Sindhi", "Hindi", "Social Studies", "Computer Skills")
+                        listOf("Mathematics", "Physics", "Chemistry", "Biology", "General Science", "English", "Urdu", "Sindhi", "Hindi", "Social Studies", "Computer Skills", "Astronomy", "Geography", "Health & Safety", "Art & Design", "Drawing & Colour", "Religious Education")
                             .chunked(2).forEach { categories ->
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     categories.forEach { category ->
@@ -1607,7 +1607,16 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 }
                             }
                     }
-                    val filteredTemplates = LearningTemplates.all.filter { it.category == templateCategory }
+                    val filteredTemplates = LearningTemplates.all.filter { template ->
+                        template.category == templateCategory &&
+                            (templateCategory != "Religious Education" ||
+                                (parentStudyTrack != "none" && template.conceptKey.startsWith("faith:" + parentStudyTrack + ":")))
+                    }
+                    if (templateCategory == "Religious Education" && parentStudyTrack == "none") {
+                        Text("Choose an optional religious-education track in Family settings to see matching question templates.")
+                    } else if (filteredTemplates.isEmpty()) {
+                        Text("No templates are available for this category yet. Parents can create their own questions.")
+                    }
                     filteredTemplates.forEach { template ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -1657,7 +1666,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             val targetSubject = repository.findOrCreateSubject(
                                                 familyId,
                                                 template.subjectTitle,
-                                                template.languageCode
+                                                template.languageCode,
+                                                parentCountryCode
                                             )
                                             subjects = repository.loadSubjects(familyId)
                                             selectedSubject = targetSubject
@@ -1711,7 +1721,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Field(subjectLanguage, { subjectLanguage = it }, "Language code (en, ur, sd, or any language)")
                     Button(onClick = {
                         execute {
-                            repository.addSubject(familyId, subjectTitle, subjectLanguage)
+                            repository.addSubject(familyId, subjectTitle, subjectLanguage, parentCountryCode)
                             subjects = repository.loadSubjects(familyId)
                             screen = AppScreen.SUBJECTS
                             notice = "Subject saved."
