@@ -294,6 +294,8 @@ private fun EduLockApp(repository: EduLockRepository) {
     var expandedFourDQuestionId by remember { mutableStateOf<String?>(null) }
     var answers by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var taskResult by remember { mutableStateOf<TaskResult?>(null) }
+    var taskDeadlineAtMillis by remember { mutableStateOf<Long?>(null) }
+    var taskSecondsRemaining by remember { mutableIntStateOf(0) }
 
     var childName by remember { mutableStateOf("") }
     var childLanguage by remember { mutableStateOf("en") }
@@ -847,6 +849,48 @@ private fun EduLockApp(repository: EduLockRepository) {
 
     LaunchedEffect(resendSeconds) {
         if (resendSeconds > 0) { delay(1000); resendSeconds -= 1 }
+    }
+
+    LaunchedEffect(screen, activeTask?.id) {
+        val task = activeTask
+        if (screen == AppScreen.PLAY_TASK && task?.timeLimitSeconds != null) {
+            val limit = task.timeLimitSeconds.coerceIn(10, 3600)
+            if (taskDeadlineAtMillis == null) taskDeadlineAtMillis = System.currentTimeMillis() + limit * 1000L
+            while (screen == AppScreen.PLAY_TASK && activeTask?.id == task.id) {
+                val remaining = (((taskDeadlineAtMillis ?: System.currentTimeMillis()) - System.currentTimeMillis() + 999L) / 1000L)
+                    .toInt().coerceAtLeast(0)
+                taskSecondsRemaining = remaining
+                if (remaining <= 0) {
+                    execute {
+                        val stillActive = activeTask
+                        if (screen == AppScreen.PLAY_TASK && stillActive?.id == task.id) {
+                            val filledAnswers = questions.associate { question ->
+                                question.id to answers[question.id].orEmpty()
+                            }
+                            try {
+                                val submitted = repository.submitTask(task.id, filledAnswers, answerLanguages)
+                                taskResult = submitted
+                                val linked = childProfile
+                                if (linked != null) {
+                                    try { earnedToday = repository.refreshChildDeviceRestrictions(linked) }
+                                    catch (_: Exception) { earnedToday = submitted.dailyUsedMinutes }
+                                }
+                                screen = AppScreen.TASK_RESULT
+                                notice = "Time is up. Your answers were submitted automatically."
+                            } catch (error: Exception) {
+                                notice = "Time is up, but submission failed: " + (error.message ?: "please reconnect and retry.")
+                                taskDeadlineAtMillis = System.currentTimeMillis() + 30_000L
+                            }
+                        }
+                    }
+                    break
+                }
+                delay(250)
+            }
+        } else if (screen != AppScreen.PLAY_TASK) {
+            taskDeadlineAtMillis = null
+            taskSecondsRemaining = 0
+        }
     }
 
     // Educational games have a separate daily cap. Time is recorded locally while the
