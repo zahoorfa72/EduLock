@@ -2323,16 +2323,19 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     require(TranslateLanguage.fromLanguageTag(targetCode) != null) {
                                         "That language code is not supported by the on-device translator. Choose a supported language code such as ur, hi, ar, fr or es."
                                     }
+                                    val answerKeys = repository.loadQuestionAnswerKeys(questions.map { it.id })
                                     var saved = 0
                                     var skipped = 0
                                     questions.forEach { question ->
                                         if (question.languageCode.equals(targetCode, ignoreCase = true)) {
                                             skipped++
                                         } else {
-                                            val answerIndex = question.options.indexOfFirst { it.equals(question.answer, ignoreCase = true) }
+                                            val canonicalAnswer = answerKeys[question.id]
+                                                ?: throw IllegalStateException("Could not read the parent-only answer key for question: " + question.prompt.take(80))
+                                            val answerIndex = question.options.indexOfFirst { it.equals(canonicalAnswer, ignoreCase = true) }
                                             val needsSeparateAnswer = answerIndex < 0
                                             val sourceValues = listOf(question.prompt) + question.options +
-                                                if (needsSeparateAnswer) listOf(question.answer) else emptyList()
+                                                if (needsSeparateAnswer) listOf(canonicalAnswer) else emptyList()
                                             val translatedValues = translateManyOnDevice(sourceValues, question.languageCode, targetCode)
                                             val translatedPrompt = translatedValues.first()
                                             val translatedOptions = translatedValues.subList(1, 1 + question.options.size)
