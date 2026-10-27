@@ -9,17 +9,14 @@ alter table edulock.tasks
 alter table edulock.questions
   add column if not exists picture_path text;
 
--- A child can read question images only through a signed URL issued to a linked
--- family member. The bucket is private; no public object reads are permitted.
+-- The question images bucket is private. No direct public reads are enabled.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('question-images', 'question-images', false, 5242880, array['image/jpeg','image/png','image/webp'])
-on conflict (id) do update
-set public = false,
-    file_size_limit = excluded.file_size_limit,
-    allowed_mime_types = excluded.allowed_mime_types;
+on conflict (id) do update set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
--- Paths are stored as family-id/question-id/object-name. The first path component
--- is checked against the caller's owned family; object names are opaque.
 drop policy if exists edulock_question_images_parent_insert on storage.objects;
 create policy edulock_question_images_parent_insert on storage.objects
   for insert to authenticated
@@ -27,9 +24,9 @@ create policy edulock_question_images_parent_insert on storage.objects
     bucket_id = 'question-images'
     and (storage.foldername(name))[1] ~* '^[0-9a-f-]{36}$'
     and exists (
-      select 1 from edulock.families f
+      select 1 from edulock.family_profiles f
       where f.id::text = (storage.foldername(name))[1]
-        and f.parent_user_id = (select auth.uid())
+        and f.owner_user_id = (select auth.uid())
     )
   );
 
@@ -39,9 +36,9 @@ create policy edulock_question_images_parent_select on storage.objects
   using (
     bucket_id = 'question-images'
     and exists (
-      select 1 from edulock.families f
+      select 1 from edulock.family_profiles f
       where f.id::text = (storage.foldername(name))[1]
-        and f.parent_user_id = (select auth.uid())
+        and f.owner_user_id = (select auth.uid())
     )
   );
 
@@ -62,8 +59,6 @@ create policy edulock_question_images_child_select on storage.objects
     )
   );
 
--- Daily streak table is keyed by child and UTC day. A single transaction/function
--- should update it when a task passes; uniqueness prevents duplicate daily awards.
 create table if not exists edulock.child_task_streaks (
   child_id uuid primary key references edulock.children(id) on delete cascade,
   last_passed_day date,
@@ -88,7 +83,6 @@ create policy child_task_streaks_child_read on edulock.child_task_streaks
 grant select on edulock.child_task_streaks to authenticated;
 revoke insert, update, delete on edulock.child_task_streaks from anon, authenticated;
 
--- Extend latest device status with enforcement/current-screen heartbeat fields.
 alter table edulock.child_device_status
   add column if not exists device_locked boolean not null default false,
   add column if not exists guard_mode text not null default 'unknown'
@@ -97,9 +91,6 @@ alter table edulock.child_device_status
   add column if not exists screen_on boolean,
   add column if not exists blocked_app_events integer not null default 0
     check (blocked_app_events >= 0);
-
--- Device clients may update their linked child's status via the existing RLS policy.
--- Repeated heartbeat rows update one row per child; no app-event history is stored.
 
 create index if not exists child_task_streaks_last_passed_day_idx
   on edulock.child_task_streaks(last_passed_day);
