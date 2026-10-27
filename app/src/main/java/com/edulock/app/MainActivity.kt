@@ -759,7 +759,10 @@ private fun EduLockApp(repository: EduLockRepository) {
         large = RoundedCornerShape(29.dp)
     )
     MaterialTheme(colorScheme = eduLockColors, shapes = eduLockShapes) {
-        CompositionLocalProvider(LocalLayoutDirection provides directionFor(parentDisplayLanguageCode)) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides directionFor(parentDisplayLanguageCode),
+            LocalEduLockDisplayLanguage provides parentDisplayLanguageCode
+        ) {
         if (countryPickerOpen) {
             val countryOptions = remember(countrySearch) {
                 Locale.getISOCountries().map { code ->
