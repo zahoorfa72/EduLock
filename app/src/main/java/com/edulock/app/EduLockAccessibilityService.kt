@@ -217,6 +217,26 @@ class EduLockAccessibilityService : AccessibilityService() {
                 }
             }
         }
+        val targetTaskId = lockPrefs().getStringSet(KEY_APP_DAILY_LIMITS, emptySet()).orEmpty()
+            .firstOrNull { it.startsWith("screen_time_task_id=") }
+            ?.substringAfter("=")
+            ?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) }
+        if (targetTaskId != null) {
+            val learningButton = Button(this).apply {
+                text = "Answer a learning question"
+                setOnClickListener {
+                    val launch = packageManager.getLaunchIntentForPackage(applicationContext.packageName)
+                    if (launch != null) {
+                        lockPrefs().edit()
+                            .putString("pending_task_id", targetTaskId)
+                            .apply()
+                        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                        startActivity(launch)
+                    }
+                }
+            }
+            panel.addView(learningButton, LinearLayout.LayoutParams(-1, -2))
+        }
         panel.addView(title, LinearLayout.LayoutParams(-1, -2))
         panel.addView(detail, LinearLayout.LayoutParams(-1, -2))
         panel.addView(button, LinearLayout.LayoutParams(-1, -2))
