@@ -92,7 +92,7 @@ private fun studyTrackLabel(code: String): String = when (code) {
 private enum class AppScreen {
     DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ, KIDS_GAMES, LEARNING_3D_LAB, DRAWING_STUDIO,
     SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
-    REPORTS, ALLOWED_APPS, PROTECTION_STATUS, CHILD_LOCATIONS, APP_USAGE_REPORT, PLAY_TASK, TASK_RESULT
+    REPORTS, ALLOWED_APPS, PROTECTION_STATUS, CHILD_LOCATIONS, APP_USAGE_REPORT, APP_SETTINGS, PLAY_TASK, TASK_RESULT
 }
 
 @Composable
@@ -721,6 +721,7 @@ private fun EduLockApp(repository: EduLockRepository) {
             AppScreen.PLAY_TASK, AppScreen.TASK_RESULT -> AppScreen.CHILD_HOME
             AppScreen.SOLAR_SYSTEM_QUIZ -> solarQuizReturnScreen
             AppScreen.KIDS_GAMES -> AppScreen.CHILD_HOME
+            AppScreen.APP_SETTINGS -> AppScreen.PARENT_HOME
             AppScreen.LEARNING_3D_LAB -> AppScreen.PARENT_HOME
             AppScreen.DRAWING_STUDIO -> if (childProfile != null) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME
         }
