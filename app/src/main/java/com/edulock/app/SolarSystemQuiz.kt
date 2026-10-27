@@ -224,7 +224,7 @@ private fun learning3DHtml(modelType: String): String {
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#070c22;color:#f5f7ff;font-family:system-ui,sans-serif}
 .wrap{padding:8px}.stage{height:178px;position:relative;overflow:hidden;border:1px solid #344476;border-radius:16px;background:radial-gradient(ellipse at 50% 40%,#283d77,#0a112f 72%);perspective:700px;touch-action:pan-y}
 .star{position:absolute;width:2px;height:2px;border-radius:50%;background:#dce7ff;box-shadow:30px 26px #dce7ff,72px 93px #9db4f5,145px 20px #fff,210px 120px #dce7ff,260px 46px #8faaff,330px 85px #fff,385px 27px #dce7ff,410px 135px #b5c5ff}
-.caption{padding:7px 3px 2px;color:#bfd0ff;font-size:12px;line-height:1.4}.title{font-size:14px;font-weight:800;color:#f7f4ff}
+.caption{padding:7px 3px 2px;color:#bfd0ff;font-size:12px;line-height:1.4}.title{font-size:14px;font-weight:800;color:#f7f4ff}.detail{margin-top:7px;min-height:48px;padding:9px 11px;background:linear-gradient(135deg,#172650,#142c48);border:1px solid #3a6191;border-radius:12px;color:#dceaff;font-size:12px;line-height:1.45}.detail strong{color:#82f0db;font-size:13px}
 .atom,.molecule,.cube,.cell,.earth,.circuit{position:absolute;left:50%;top:49%;transform:translate(-50%,-50%);transform-style:preserve-3d}
 .atom{width:128px;height:110px;animation:float 4s ease-in-out infinite}.nucleus{position:absolute;left:54px;top:44px;width:25px;height:25px;border-radius:50%;background:radial-gradient(circle at 30% 25%,#ffc2ba,#e64756 42%,#67184f);box-shadow:0 0 19px #f05c9b}
 .orbit{position:absolute;left:9px;top:24px;width:110px;height:60px;border:2px solid #65d9ff;border-radius:50%;transform-style:preserve-3d}.orbit1{transform:rotateX(65deg) rotateZ(22deg)}.orbit2{transform:rotateX(65deg) rotateZ(82deg)}.orbit3{transform:rotateX(65deg) rotateZ(143deg)}.orbit b{position:absolute;left:90%;top:18%;width:12px;height:12px;background:radial-gradient(circle at 30% 20%,white,#46c8ff 55%,#1e53a8);border-radius:50%;box-shadow:0 0 12px #42d6ff;animation:electron 2s linear infinite}.orbit2 b{animation-delay:-.65s}.orbit3 b{animation-delay:-1.2s}
@@ -236,8 +236,54 @@ private fun learning3DHtml(modelType: String): String {
 .earth{width:116px;height:116px;border-radius:50%;overflow:hidden;background:radial-gradient(circle at 30% 24%,#a7f8ff 0%,#3899f5 28%,#1750ba 65%,#08184c 100%);box-shadow:inset -18px -7px 22px #030924b8,0 0 17px #5fb5ff88;animation:spin 14s linear infinite}.land{position:absolute;background:linear-gradient(120deg,#7cf1a2,#1c9865);border-radius:48% 30% 55% 45%;box-shadow:inset -3px -4px 5px #0a553f99}.l1{width:36px;height:48px;left:25px;top:20px;transform:rotate(22deg)}.l2{width:25px;height:37px;left:58px;top:57px;transform:rotate(-17deg)}.l3{width:29px;height:21px;left:70px;top:21px;transform:rotate(15deg)}.atmosphere{position:absolute;inset:-4px;border:3px solid #88dfff;border-radius:50%;box-shadow:0 0 13px #5ec9ff}
 .circuit{width:140px;height:96px}.wire{position:absolute;background:#88c9ff;box-shadow:0 0 9px #77e3ff}.wire.top{left:20px;top:5px;width:100px;height:4px}.wire.right{right:17px;top:5px;width:4px;height:84px}.wire.bottom{left:20px;bottom:7px;width:100px;height:4px}.wire.left{left:17px;top:5px;width:4px;height:84px}.battery{position:absolute;left:10px;top:34px;width:18px;height:30px;background:linear-gradient(90deg,#e5efff,#8fa6d6);border:2px solid #fff;border-radius:3px}.lamp{position:absolute;right:7px;top:31px;width:24px;height:24px;border-radius:50%;background:radial-gradient(circle,#fff8bd,#ffd44c 54%,#ac7721);box-shadow:0 0 18px #ffd44c}.electron{position:absolute;width:9px;height:9px;border-radius:50%;background:#b8fdff;box-shadow:0 0 12px #70fff6;animation:electron 2.5s linear infinite}.e1{left:40px;top:1px}.e2{left:116px;top:63px;animation-delay:-.8s}.e3{left:57px;bottom:2px;animation-delay:-1.6s}
 @keyframes spin{to{transform:translate(-50%,-50%) rotateY(360deg) rotateX(22deg)}}@keyframes float{0%,100%{margin-top:0}50%{margin-top:-8px}}@keyframes electron{0%{transform:rotate(0deg) translateX(-42px)}100%{transform:rotate(360deg) translateX(-42px)}}@keyframes roll{0%,100%{left:30%;transform:rotate(0)}50%{left:63%;transform:rotate(320deg)}}@keyframes pulse{50%{transform:scale(1.2);opacity:.6}}@keyframes drift{0%{margin-left:-10px}50%{margin-left:15px}100%{margin-left:-10px}}@keyframes rain{0%{transform:translateY(-5px) rotate(25deg);opacity:0}35%{opacity:1}100%{transform:translateY(50px) rotate(25deg);opacity:0}}
-</style></head><body><div class="wrap"><div class="title">${title}</div><div class="stage" id="stage"><div class="star"></div>${shape}</div><div class="caption">${description} Touch the scene to spin the model.</div></div>
-<script>(function(){const stage=document.getElementById('stage');let down=false,lastX=0,angle=0;stage.addEventListener('pointerdown',e=>{down=true;lastX=e.clientX;stage.setPointerCapture(e.pointerId)});stage.addEventListener('pointermove',e=>{if(!down)return;angle+=e.clientX-lastX;lastX=e.clientX;stage.style.perspectiveOrigin=(50+angle*.12)+'% 50%';const model=stage.querySelector('.cube,.atom,.molecule,.cell,.earth,.circuit');if(model){model.style.animationPlayState='paused';model.style.transform='translate(-50%,-50%) rotateY('+angle+'deg) rotateX('+(angle*.35)+'deg)'}});stage.addEventListener('pointerup',()=>{down=false});stage.addEventListener('pointercancel',()=>{down=false});})();</script>
+</style></head><body><div class="wrap"><div class="title">${title}</div><div class="stage" id="stage"><div class="star"></div>${shape}</div><div class="caption">${description} Touch any object to reveal its name and facts. Drag to rotate.</div><div id="detail" class="detail"><strong>Explore the model</strong><br>Tap a visible object to discover what it does.</div></div>
+<script>(function(){
+const stage=document.getElementById('stage'),detail=document.getElementById('detail');
+const detailMap={
+'.nucleus':['Nucleus','The central region of an atom contains protons and neutrons.'],
+'.orbit':['Electron region','Electrons occupy quantum orbitals; this orbit is a simplified teaching illustration.'],
+'.orbit b':['Electron','Electrons have a negative electric charge.'],
+'.oxygen':['Oxygen atom','The red sphere represents oxygen in this water molecule model.'],
+'.hydrogen':['Hydrogen atom','Water contains two hydrogen atoms bonded to one oxygen atom.'],
+'.bond':['Covalent bond','Atoms share electron pairs to form a covalent bond.'],
+'.face.front':['Front face','This is one of the six square faces of a cube.'],
+'.face.back':['Back face','The hidden opposite face is also a square.'],
+'.face.right':['Right face','A cube has six equal square faces and twelve edges.'],
+'.face.left':['Left face','Edges meet at vertices; a cube has eight vertices.'],
+'.face.top':['Top face','Rotate the cube to compare all six faces.'],
+'.face.bottom':['Bottom face','The bottom face is equal in size to the other cube faces.'],
+'.membrane':['Cell membrane','The membrane controls movement of substances into and out of the cell.'],
+'.cell-nucleus':['Cell nucleus','The nucleus contains most of an animal cell’s DNA.'],
+'.organelle':['Organelle','Organelles perform specialised jobs inside a cell.'],
+'.ball':['Moving ball','An unbalanced force changes an object’s speed or direction.'],
+'.ramp':['Ramp','The ramp provides an inclined surface; its slope affects the motion.'],
+'.arrow1':['Force arrow','An arrow shows the direction of a force or motion in this illustration.'],
+'.arrow2':['Upward arrow','Forces have both magnitude and direction.'],
+'.sun':['Sunlight','Solar energy helps drive evaporation in the water cycle.'],
+'.cloud':['Cloud','Cooling water vapour condenses into tiny droplets or ice crystals.'],
+'.drop':['Precipitation','Water falls from clouds as rain, snow or other precipitation.'],
+'.ocean':['Collection','Water gathers in oceans, lakes and other bodies after precipitation.'],
+'.earth':['Earth','Earth rotates on its axis, producing the day-and-night cycle.'],
+'.land':['Land','Continents and islands are parts of Earth’s solid surface.'],
+'.atmosphere':['Atmosphere','Earth’s atmosphere contains the gases that surround the planet.'],
+'.battery':['Battery','A battery supplies electrical energy to a simple circuit.'],
+'.lamp':['Lamp','Current through the lamp can transfer electrical energy into light and heat.'],
+'.wire':['Wire','A conducting path connects circuit components.'],
+'.electron':['Charge marker','The moving dots are illustrative markers, not a scale drawing of individual electrons.']
+};
+Object.keys(detailMap).forEach(selector=>stage.querySelectorAll(selector).forEach(el=>{
+  el.style.cursor='pointer';el.setAttribute('role','button');el.setAttribute('tabindex','0');
+  el.setAttribute('aria-label',detailMap[selector][0]);
+  const show=()=>{detail.innerHTML='<strong>'+detailMap[selector][0]+'</strong><br>'+detailMap[selector][1];};
+  el.addEventListener('click',e=>{e.stopPropagation();show()});
+  el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show()}});
+}));
+let down=false,lastX=0,angle=0;
+stage.addEventListener('pointerdown',e=>{down=true;lastX=e.clientX;stage.setPointerCapture(e.pointerId)});
+stage.addEventListener('pointermove',e=>{if(!down)return;angle+=e.clientX-lastX;lastX=e.clientX;stage.style.perspectiveOrigin=(50+angle*.12)+'% 50%';const model=stage.querySelector('.cube,.atom,.molecule,.cell,.earth,.circuit');if(model){model.style.animationPlayState='paused';model.style.transform='translate(-50%,-50%) rotateY('+angle+'deg) rotateX('+(angle*.35)+'deg)'}});
+stage.addEventListener('pointerup',()=>{down=false});
+stage.addEventListener('pointercancel',()=>{down=false});
+})();</script>
 </body></html>
 """.trimIndent()
 }
