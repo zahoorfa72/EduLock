@@ -209,10 +209,8 @@ private fun suggestedSubjectsForCountry(countryCode: String): List<SubjectSugges
         "IN" -> listOf(SubjectSuggestion("Hindi", "hi"), SubjectSuggestion("Urdu", "ur"))
         else -> emptyList()
     }
-    val religions = religiousStudyOptionsForCountry(countryCode)
-        .filter { it.first != "none" }
-        .map { (track, _) -> SubjectSuggestion(religiousSubjectTitle(track), "en", track) }
-    return (common + local + religions).distinctBy { it.title.lowercase(Locale.ROOT) + ":" + it.languageCode }
+    // Religious education is an optional child-profile choice, never a general subject suggestion.
+    return (common + local).distinctBy { it.title.lowercase(Locale.ROOT) + ":" + it.languageCode }
 }
 
 private fun fourDTemplatesForSubject(subjectTitle: String, languageCode: String): List<ParentLearningTemplate> {
@@ -2007,7 +2005,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }, modifier = Modifier.fillMaxWidth()) { AppUiText("Create subject") }
 
                     AppUiText("Suggested subjects for " + displayCountryName(parentCountryCode), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    AppUiText("These are starting suggestions, not restrictions. Add extra subjects when needed. Religious subjects are only assigned to children whose parent-selected track matches.")
+                    AppUiText("These are starting suggestions, not restrictions. Add extra subjects when needed. Religious education is chosen separately inside each child profile.")
                     val suggestions = suggestedSubjectsForCountry(parentCountryCode).filter { suggestion ->
                         subjects.none { subject ->
                             subject.title.equals(suggestion.title, ignoreCase = true) &&
