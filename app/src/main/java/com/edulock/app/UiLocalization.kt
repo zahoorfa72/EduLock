@@ -602,7 +602,16 @@ private val sindhiUi = mapOf(
     "Optional. Choose the learning track you want EduLock to use; it does not infer a family's religion from its country." to "اختياري. ديني نصاب چونڊيو؛ ايپ ملڪ جي بنياد تي خاندان جو مذهب نه ٿي سمجهي."
 )
 
+private fun exactEduLockUiText(text: String, languageCode: String): String? =
+    when (languageCode.lowercase().substringBefore('-')) {
+        "ur" -> urduUi[text]
+        "hi" -> hindiUi[text]
+        "sd" -> sindhiUi[text]
+        else -> null
+    }
+
 fun translateEduLockUiText(text: String, languageCode: String): String {
+    exactEduLockUiText(text, languageCode)?.let { return it }
     val normalized = languageCode.lowercase().substringBefore('-')
     val dictionary = when (normalized) {
         "ur" -> urduUi
@@ -611,7 +620,6 @@ fun translateEduLockUiText(text: String, languageCode: String): String {
         else -> emptyMap()
     }
     if (dictionary.isEmpty()) return text
-    dictionary[text]?.let { return it }
     var translated = text
     dictionary.entries.sortedByDescending { it.key.length }.forEach { (source, target) ->
         if (source.length > 3 && translated.contains(source)) translated = translated.replace(source, target)
@@ -632,6 +640,8 @@ private object EduLockUiAutoTranslator {
 
     suspend fun translate(text: String, languageCode: String): String? {
         if (text.isBlank() || languageCode.equals("en", true)) return text
+        // Do not mistranslate source-language questions already written in a non-Latin script.
+        if (Regex("[\\u0600-\\u06FF\\u0900-\\u097F\\u4E00-\\u9FFF]").containsMatchIn(text)) return text
         val target = TranslateLanguage.fromLanguageTag(languageCode.lowercase().substringBefore('-')) ?: return null
         val key = "$target\u0000$text"
         cache[key]?.let { return it }
@@ -696,14 +706,15 @@ fun AppUiText(
 ) {
     val language = LocalEduLockDisplayLanguage.current
     val translatedText = produceState(
-        initialValue = translateEduLockUiText(text, language),
+        initialValue = exactEduLockUiText(text, language) ?: text,
         key1 = text,
         key2 = language
     ) {
-        val bundled = translateEduLockUiText(text, language)
-        value = bundled
-        if (bundled == text && !language.equals("en", true)) {
-            value = EduLockUiAutoTranslator.translate(text, language) ?: text
+        val exactBundled = exactEduLockUiText(text, language)
+        value = exactBundled ?: text
+        if (exactBundled == null && !language.equals("en", true)) {
+            value = EduLockUiAutoTranslator.translate(text, language)
+                ?: translateEduLockUiText(text, language)
         }
     }
     Text(
