@@ -947,6 +947,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                         val currentProfile = repository.loadCurrentChild() ?: linked
                         childProfile = currentProfile
                         tasks = repository.loadChildTasks(activeChildId)
+                        allowedApps = repository.loadAllowedApps(activeChildId)
+                        appGroups = repository.loadAppGroups(activeChildId)
                         earnedToday = repository.refreshChildDeviceRestrictions(currentProfile)
                         childRulesLastSyncedAt = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
                             .getLong("rules_synced_at", System.currentTimeMillis())
