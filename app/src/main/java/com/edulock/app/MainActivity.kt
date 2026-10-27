@@ -1555,7 +1555,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             targetChild.id, curriculumCountryCode, grade, age,
                                             curriculumSubjectCode, curriculumLanguageCode, curriculumSelectedIds.toList()
                                         )
-                                        subjects = repository.loadSubjects(familyId)
+                                        subjects = repository.loadSubjects(familyId, parentCountryCode)
                                         selectedSubject = subjects.firstOrNull { it.id == imported.subjectId }
                                         val targetSubject = selectedSubject
                                             ?: throw IllegalStateException("Questions imported, but the subject could not be reloaded.")
@@ -1689,7 +1689,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 template.languageCode,
                                                 parentCountryCode
                                             )
-                                            subjects = repository.loadSubjects(familyId)
+                                            subjects = repository.loadSubjects(familyId, parentCountryCode)
                                             selectedSubject = targetSubject
                                             questions = repository.loadQuestions(targetSubject.id)
                                             questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
@@ -1742,7 +1742,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Button(onClick = {
                         execute {
                             repository.addSubject(familyId, subjectTitle, subjectLanguage, parentCountryCode)
-                            subjects = repository.loadSubjects(familyId)
+                            subjects = repository.loadSubjects(familyId, parentCountryCode)
                             screen = AppScreen.SUBJECTS
                             notice = "Subject saved."
                         }
