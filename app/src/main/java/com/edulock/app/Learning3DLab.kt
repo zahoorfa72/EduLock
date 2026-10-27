@@ -69,11 +69,19 @@ fun Learning4DLabScreen(
 ) {
     val selected = LearningModelOptions.firstOrNull { it.id == selectedModel } ?: LearningModelOptions.first()
     val questionBankSubject = if (selected.subject == "Earth Science") "General Science" else selected.subject
-    val bankQuestions = FourDQuestionBanks.all
-        .filter {
-            it.subjectTitle.equals(questionBankSubject, ignoreCase = true) &&
-                it.languageCode.equals("en", ignoreCase = true)
-        }
+    val requestedQuestionLanguage = when (questionBankSubject) {
+        "Urdu" -> "ur"
+        "Sindhi" -> "sd"
+        "Hindi" -> "hi"
+        else -> "en"
+    }
+    val subjectQuestionBank = FourDQuestionBanks.all.filter {
+        it.subjectTitle.equals(questionBankSubject, ignoreCase = true)
+    }
+    val bankQuestions = subjectQuestionBank
+        .filter { it.languageCode.equals(requestedQuestionLanguage, ignoreCase = true) }
+        .ifEmpty { subjectQuestionBank.filter { it.languageCode.equals("en", ignoreCase = true) } }
+        .distinctBy { it.conceptKey }
         .take(10)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Card(
