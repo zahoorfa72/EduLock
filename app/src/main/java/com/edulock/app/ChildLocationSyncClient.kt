@@ -118,12 +118,22 @@ internal object ChildLocationSyncClient {
         }
     }
 
-    fun loadParentDeviceStatuses(context: Context): JSONArray =
-        authorizedJsonRequest(
-            context,
-            "rest/v1/child_device_status?select=child_id,last_seen_at,sharing_enabled,battery_percent",
-            expectedRole = "parent"
-        )
+    fun loadParentDeviceStatuses(context: Context): JSONArray {
+        try {
+            return authorizedJsonRequest(
+                context,
+                "rest/v1/child_device_status?select=child_id,last_seen_at,sharing_enabled,battery_percent,device_locked,guard_mode,current_app_package,screen_on,blocked_app_events",
+                expectedRole = "parent"
+            )
+        } catch (_: IOException) {
+            // Keep the parent status screen usable before migration 0033 is applied.
+            return authorizedJsonRequest(
+                context,
+                "rest/v1/child_device_status?select=child_id,last_seen_at,sharing_enabled,battery_percent",
+                expectedRole = "parent"
+            )
+        }
+    }
 
     fun loadParentChildren(context: Context): JSONArray =
         authorizedJsonRequest(
