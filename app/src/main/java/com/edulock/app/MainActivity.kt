@@ -360,6 +360,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var taskPassPercent by remember { mutableStateOf("70") }
     var taskRewardMinutes by remember { mutableStateOf("3") }
     var taskDailyCapMinutes by remember { mutableStateOf("60") }
+    var taskTimeLimitSeconds by remember { mutableStateOf("0") }
     var taskRewardPackageName by remember { mutableStateOf("") }
     var taskRewardGroupId by remember { mutableStateOf("") }
     var selectedTaskSubjectIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -2802,6 +2803,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Field(taskRewardMinutes, { taskRewardMinutes = it.filter(Char::isDigit).take(4) }, "Reward minutes per correct answer (0–1440)", keyboardType = KeyboardType.Number)
                     AppUiText("Each correct answer earns this many minutes, even if the child does not pass. Rewards can go to general mobile time, one app, or a group of apps, within daily caps.")
                     Field(taskDailyCapMinutes, { taskDailyCapMinutes = it.filter(Char::isDigit).take(4) }, "Task daily reward cap (0–1440)", keyboardType = KeyboardType.Number)
+                    Field(taskTimeLimitSeconds, { taskTimeLimitSeconds = it.filter(Char::isDigit).take(4) }, "Task countdown seconds (0 = no timer; 10–3600)", keyboardType = KeyboardType.Number)
+                    AppUiText("When a timer is set, answers submit automatically at zero. Use 0 to keep the task untimed.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     AppUiText("Where should correct-answer reward time apply?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     OutlinedButton(onClick = { taskRewardPackageName = ""; taskRewardGroupId = "" }, modifier = Modifier.fillMaxWidth()) {
                         AppUiText((if (taskRewardPackageName.isBlank() && taskRewardGroupId.isBlank()) "✓ " else "") + "General mobile screen time")
