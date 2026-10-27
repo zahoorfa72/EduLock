@@ -122,7 +122,9 @@ data class TaskRow(
     val passPercent: Int,
     val rewardMinutes: Int,
     val dailyCapMinutes: Int,
-    val active: Boolean
+    val active: Boolean,
+    val rewardPackageName: String? = null,
+    val rewardGroupId: String? = null
 )
 
 data class AllowedApp(
@@ -133,6 +135,13 @@ data class AllowedApp(
     val enabled: Boolean = true,
     val dailyLimitMinutes: Int = 1440,
     val weeklyScheduleJson: String = "{}"
+)
+
+data class AppGroup(
+    val id: String,
+    val childId: String,
+    val name: String,
+    val packageNames: Set<String> = emptySet()
 )
 
 data class AppDayWindow(
@@ -955,76 +964,103 @@ class EduLockRepository(context: Context) {
     }
 
     suspend fun addTask(
-        familyId: String, child: ChildProfile, subject: SubjectRow, title: String,
+        familyId: String, child: ChildProfile, subjects: List<SubjectRow>, title: String,
         questionCount: Int, passPercent: Int, rewardMinutes: Int, taskDailyCapMinutes: Int,
-        rewardPackageName: String? = null
+        rewardPackageName: String? = null, rewardGroupId: String? = null
     ) {
         requireSession("parent")
+        val selectedSubjects = subjects.distinctBy { it.id }.take(20)
+        require(selectedSubjects.isNotEmpty()) { "Choose at least one subject." }
         require(title.trim().isNotEmpty()) { "Enter a task title" }
         require(questionCount in 1..500) { "Question count must be from 1 to 500" }
         require(passPercent in 0..100) { "Passing score must be from 0 to 100 percent" }
-        require(rewardMinutes in 0..1440) { "Reward must be from 0 to 1440 minutes" }
+        require(rewardMinutes in 0..1440) { "Reward is out of range." }
         require(taskDailyCapMinutes in 0..1440) { "Task daily cap must be from 0 to 1440 minutes" }
-        val count = loadQuestions(subject.id, 500).size
-        require(count > 0) { "Add at least one question to this subject first" }
-        require(questionCount <= count) { "This subject has only $count questions. Add questions or lower the task question count." }
-        restArray("tasks?select=id", "POST",
+        require(rewardPackageName.isNullOrBlank() || rewardGroupId.isNullOrBlank()) {
+            "Choose either one app or one app group as the reward destination, not both."
+        }
+        if (!rewardGroupId.isNullOrBlank()) {
+            require(loadAppGroups(child.id).any { it.id == rewardGroupId && it.packageNames.isNotEmpty() }) {
+                "The selected app group is empty or no longer available."
+            }
+        }
+        val pools = selectedSubjects.map { subject -> loadQuestions(subject.id, 500) }
+        val available = pools.sumOf { it.size }
+        require(available > 0) { "Add at least one question to the selected subject bank first." }
+        require(questionCount <= available) {
+            "The selected subject banks contain only $available questions. Add questions or lower the task question count."
+        }
+        // Round-robin selection balances questions across selected subject banks.
+        val selectedQuestions = mutableListOf<QuestionRow>()
+        var poolIndex = 0
+        while (selectedQuestions.size < questionCount) {
+            var selectedAny = false
+            pools.forEach { pool ->
+                if (poolIndex < pool.size && selectedQuestions.size < questionCount) {
+                    selectedQuestions += pool[poolIndex]
+                    selectedAny = true
+                }
+            }
+            if (!selectedAny) break
+            poolIndex++
+        }
+        require(selectedQuestions.size == questionCount) { "Could not assemble the requested task questions." }
+        val createdRows = restArray("tasks?select=id", "POST",
             JSONObject()
                 .put("family_id", familyId)
                 .put("child_id", child.id)
-                .put("subject_id", subject.id)
+                .put("subject_id", selectedSubjects.first().id)
                 .put("title", title.trim().take(160))
                 .put("question_count", questionCount)
                 .put("pass_percent", passPercent)
                 .put("reward_minutes", rewardMinutes)
                 .put("reward_package_name", rewardPackageName?.takeIf { it.isNotBlank() } ?: JSONObject.NULL)
+                .put("reward_group_id", rewardGroupId?.takeIf { it.isNotBlank() } ?: JSONObject.NULL)
                 .put("daily_cap_minutes", minOf(taskDailyCapMinutes, child.dailyCapMinutes))
                 .put("active", true))
+        val taskId = createdRows.optJSONObject(0)?.optString("id")
+            ?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) }
+            ?: throw IOException("Supabase did not return the new task ID.")
+        try {
+            val questionLinks = JSONArray()
+            selectedQuestions.forEachIndexed { index, question ->
+                questionLinks.put(JSONObject().put("task_id", taskId).put("question_id", question.id).put("sort_order", index))
+            }
+            val savedLinks = restArray("task_questions?select=task_id,question_id", "POST", questionLinks, prefer = "return=representation")
+            if (savedLinks.length() != selectedQuestions.size) {
+                throw IOException("Supabase linked only ${savedLinks.length()} of ${selectedQuestions.size} task questions.")
+            }
+        } catch (error: Exception) {
+            try { send("rest/v1/tasks?id=eq.$taskId", "DELETE", null, authenticated = true, profile = true) } catch (_: Exception) { }
+            throw error
+        }
     }
 
     suspend fun loadChildTasks(childId: String): List<TaskRow> {
         requireSession("child")
-        val rows = restArray("tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active&child_id=eq.$childId&active=eq.true&order=created_at.desc")
+        val rows = restArray("tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id&child_id=eq.$childId&active=eq.true&order=created_at.desc")
         return (0 until rows.length()).mapNotNull { i -> rows.optJSONObject(i)?.toTaskRow() }
     }
 
-    suspend fun submitTask(
-        taskId: String, answers: Map<String, String>, answerLanguages: Map<String, String>
-    ): TaskResult {
+    suspend fun loadQuestionsForTask(taskId: String, fallbackSubjectId: String?, limit: Int): List<QuestionRow> {
         requireSession("child")
-        val payload = JSONArray()
-        answers.forEach { (questionId, answer) ->
-            val languageCode = answerLanguages[questionId].orEmpty()
-            require(languageCode.matches(Regex("[A-Za-z][A-Za-z0-9-]{1,15}"))) {
-                "Select a valid language for every answer."
-            }
-            payload.put(JSONObject()
-                .put("question_id", questionId)
-                .put("answer", answer)
-                .put("language_code", languageCode))
-        }
-        val result = requestFunction("submit-task-attempt", JSONObject().put("task_id", taskId).put("answers", payload))
-        return TaskResult(
-            scorePercent = result.optInt("score_percent"),
-            passed = result.optBoolean("passed"),
-            awardedMinutes = result.optInt("awarded_minutes"),
-            dailyUsedMinutes = result.optInt("daily_used_minutes_after"),
-            dailyCapMinutes = result.optInt("daily_cap_minutes")
-        )
-    }
-
-    suspend fun loadAttempts(): List<AttemptRow> {
-        requireSession("parent")
-        val rows = restArray("attempts?select=id,child_id,task_id,score_percent,passed,awarded_minutes,completed_at&order=completed_at.desc&limit=100")
-        return (0 until rows.length()).mapNotNull { i ->
-            rows.optJSONObject(i)?.let { row ->
-                AttemptRow(
-                    row.optString("id"), row.optString("child_id"), row.optString("task_id"),
-                    row.optInt("score_percent"), row.optBoolean("passed"),
-                    row.optInt("awarded_minutes"), row.optString("completed_at")
-                )
+        require(taskId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid task." }
+        val links = restArray("task_questions?select=question_id,sort_order&task_id=eq.$taskId&order=sort_order.asc")
+        val ids = (0 until links.length()).mapNotNull { index ->
+            links.optJSONObject(index)?.optString("question_id")?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) }
+        }.take(limit.coerceIn(1, 500))
+        if (ids.isEmpty()) return fallbackSubjectId?.let { loadQuestions(it, limit) } ?: emptyList()
+        val byId = linkedMapOf<String, QuestionRow>()
+        ids.chunked(50).forEach { chunk ->
+            val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,created_at&id=in.(" +
+                chunk.joinToString(",") + ")&limit=50")
+            for (i in 0 until rows.length()) {
+                val row = rows.optJSONObject(i) ?: continue
+                val question = row.toQuestionRow()
+                byId[question.id] = question
             }
         }
+        return ids.mapNotNull { byId[it] }
     }
 
     suspend fun loadChildLocationSnapshot(childId: String): ChildLocationSnapshot {
@@ -1178,6 +1214,72 @@ class EduLockRepository(context: Context) {
         }
     }
 
+    suspend fun loadAppGroups(childId: String): List<AppGroup> {
+        requireSession()
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        val rows = restArray("app_groups?select=id,child_id,name&child_id=eq.$childId&order=name.asc")
+        val memberships = restArray("app_group_apps?select=group_id,package_name&child_id=eq.$childId")
+        val packagesByGroup = linkedMapOf<String, MutableSet<String>>()
+        for (i in 0 until memberships.length()) {
+            val row = memberships.optJSONObject(i) ?: continue
+            val groupId = row.optString("group_id")
+            val packageName = row.optString("package_name")
+            if (groupId.isNotBlank() && packageName.isNotBlank()) packagesByGroup.getOrPut(groupId) { linkedSetOf() }.add(packageName)
+        }
+        return (0 until rows.length()).mapNotNull { i ->
+            rows.optJSONObject(i)?.let { row ->
+                val id = row.optString("id")
+                AppGroup(id, row.optString("child_id"), row.optString("name"), packagesByGroup[id].orEmpty())
+            }
+        }
+    }
+
+    suspend fun saveAppGroup(childId: String, name: String, packageNames: Set<String>, groupId: String? = null): AppGroup {
+        requireSession("parent")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        val normalizedName = name.trim().take(80)
+        require(normalizedName.isNotBlank()) { "Enter a name for the app group." }
+        val packages = packageNames.map { it.trim() }.filter { it.isNotBlank() }.toSet()
+        require(packages.isNotEmpty()) { "Select at least one enabled app for this group." }
+        require(packages.size <= 50) { "An app group can contain up to 50 apps." }
+        val enabledPackages = loadAllowedApps(childId).filter { it.enabled }.map { it.packageName }.toSet()
+        require(packages.all { it in enabledPackages }) { "Every group app must have an enabled parent-approved app rule." }
+        val savedId = if (groupId.isNullOrBlank()) {
+            val rows = restArray("app_groups?select=id", "POST", JSONObject().put("child_id", childId).put("name", normalizedName))
+            rows.optJSONObject(0)?.optString("id")?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) }
+                ?: throw IOException("Supabase did not return the app group ID.")
+        } else {
+            require(groupId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid app group." }
+            restArray("app_groups?id=eq.$groupId", "PATCH", JSONObject().put("name", normalizedName))
+            groupId
+        }
+        val packageFilter = packages.joinToString(",")
+        restArray("app_group_apps?child_id=eq.$childId&package_name=in.($packageFilter)&group_id=neq.$savedId", "DELETE")
+        restArray("app_group_apps?group_id=eq.$savedId", "DELETE")
+        val payload = JSONArray()
+        packages.sorted().forEach { packageName ->
+            payload.put(JSONObject().put("group_id", savedId).put("child_id", childId).put("package_name", packageName))
+        }
+        val savedMemberships = restArray("app_group_apps?select=group_id,package_name", "POST", payload)
+        if (savedMemberships.length() != packages.size) {
+            throw IOException("Supabase saved only ${savedMemberships.length()} of ${packages.size} apps in the group.")
+        }
+        val confirmed = loadAppGroups(childId).firstOrNull { it.id == savedId }
+            ?: throw IOException("Supabase did not confirm the app group.")
+        if (confirmed.name != normalizedName || confirmed.packageNames != packages) {
+            throw IOException("Supabase returned different app-group settings. No success was reported.")
+        }
+        return confirmed
+    }
+
+    suspend fun deleteAppGroup(groupId: String) {
+        requireSession("parent")
+        require(groupId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid app group." }
+        restArray("app_groups?id=eq.$groupId", "DELETE")
+        val remaining = restArray("app_groups?select=id&id=eq.$groupId&limit=1")
+        if (remaining.length() > 0) throw IOException("This group is still referenced by a task or could not be removed. Reassign its tasks first.")
+    }
+
     suspend fun updateAllowedAppWeeklySchedule(appId: String, schedule: AppWeeklySchedule) {
         requireSession("parent")
         val json = schedule.toJson()
@@ -1218,48 +1320,78 @@ class EduLockRepository(context: Context) {
         requireSession("child")
         val appRules = loadAllowedApps(child.id)
         val lockdownMode = child.kidsModeEnabled
-        // In Kids Mode, only explicitly enabled apps belong on the allowlist.
         val allowed = appRules.filter { it.enabled }.map { it.packageName }.toMutableSet()
         allowed += "com.edulock.app"
         val blocked = appRules.filter { !it.enabled }.map { it.packageName }.toSet()
-        val appLimits = appRules.filter { it.enabled }
-            .map { it.packageName + "=" + it.dailyLimitMinutes }.toSet()
+        val appLimits = appRules.filter { it.enabled }.map { it.packageName + "=" + it.dailyLimitMinutes }.toSet()
         val weeklySchedules = appRules.filter { rule ->
             try { JSONObject(rule.weeklyScheduleJson).length() > 0 } catch (_: Exception) { false }
         }.map { it.packageName + "=" + it.weeklyScheduleJson }.toSet()
         val startOfDay = LocalDate.now(ZoneOffset.UTC).atStartOfDay().toInstant(ZoneOffset.UTC)
         val stamp = DateTimeFormatter.ISO_INSTANT.format(startOfDay)
-        val ledger = restArray("screen_time_ledger?select=minutes_delta,target_package_name&child_id=eq.${child.id}&created_at=gte.$stamp")
+        val ledger = restArray(
+            "screen_time_ledger?select=minutes_delta,target_package_name,target_group_id&child_id=eq.${child.id}&created_at=gte.$stamp"
+        )
         var generalEarned = 0
         val appEarned = linkedMapOf<String, Int>()
+        val groupEarned = linkedMapOf<String, Int>()
         for (i in 0 until ledger.length()) {
             val row = ledger.optJSONObject(i) ?: continue
             val minutes = row.optInt("minutes_delta").coerceAtLeast(0)
             val targetPackage = row.optString("target_package_name").takeIf { it.isNotBlank() && it != "null" }
-            if (targetPackage == null) generalEarned += minutes
-            else appEarned[targetPackage] = (appEarned[targetPackage] ?: 0) + minutes
+            val targetGroup = row.optString("target_group_id").takeIf { it.isNotBlank() && it != "null" }
+            when {
+                targetGroup != null -> groupEarned[targetGroup] = (groupEarned[targetGroup] ?: 0) + minutes
+                targetPackage != null -> appEarned[targetPackage] = (appEarned[targetPackage] ?: 0) + minutes
+                else -> generalEarned += minutes
+            }
         }
         val earned = generalEarned.coerceIn(0, child.dailyCapMinutes)
-        val appEarnedRules = appEarned.map { (packageName, minutes) -> "$packageName=$minutes" }.toSet()
+        val appEarnedRules = appEarned.map { (pkg, minutes) -> "$pkg=$minutes" }.toSet()
+        val activeTasks = loadChildTasks(child.id)
+        val activeTaskIds = activeTasks.map { it.id }.toSet()
+        val enabledPackageSet = appRules.filter { it.enabled }.map { it.packageName }.toSet()
+        val groups = loadAppGroups(child.id).map { group ->
+            group.copy(packageNames = group.packageNames.filter { it in enabledPackageSet }.toSet())
+        }
+        val groupById = groups.associateBy { it.id }
+        val groupPackageRules = groups.filter { it.packageNames.isNotEmpty() }.map { group ->
+            group.id + "=" + group.packageNames.sorted().joinToString(",")
+        }.toSet()
+        val groupEarnedRules = groupEarned.map { (id, minutes) -> "$id=$minutes" }.toSet()
+        val appTaskRules = linkedMapOf<String, String>()
+        activeTasks.forEach { task ->
+            when {
+                !task.rewardPackageName.isNullOrBlank() -> {
+                    if (!appTaskRules.containsKey(task.rewardPackageName)) appTaskRules[task.rewardPackageName] = task.id
+                }
+                !task.rewardGroupId.isNullOrBlank() -> {
+                    groupById[task.rewardGroupId]?.packageNames?.forEach { pkg ->
+                        if (!appTaskRules.containsKey(pkg)) appTaskRules[pkg] = task.id
+                    }
+                }
+            }
+        }
+        val generalTaskId = activeTasks.firstOrNull {
+            it.rewardPackageName.isNullOrBlank() && it.rewardGroupId.isNullOrBlank()
+        }?.id
         val prefs = appContext.getSharedPreferences(LOCK_PREFS, Context.MODE_PRIVATE)
-        // The Accessibility blocker uses this validated task ID only as a launch hint.
-        // The task itself is loaded through the authenticated child session before display.
         val pendingTask = prefs.getString("pending_task_id", null)
-        val activeTaskIds = loadChildTasks(child.id).map { it.id }.toSet()
-        val launchPrefs = prefs.edit()
-        if (pendingTask != null && pendingTask !in activeTaskIds) launchPrefs.remove("pending_task_id")
-        launchPrefs
+        val editor = prefs.edit()
+        if (pendingTask != null && pendingTask !in activeTaskIds) editor.remove("pending_task_id")
+        editor
             .putBoolean("child_active", true)
             .putString("child_id", child.id)
             .putBoolean("kids_mode_enabled", lockdownMode)
             .putStringSet("allowed_packages", allowed)
             .putStringSet("blocked_packages", blocked)
-            .putStringSet(
-                "app_daily_limits",
-                appLimits + if (activeTaskIds.isEmpty()) emptySet() else setOf("screen_time_task_id=" + activeTaskIds.first())
-            )
+            .putStringSet("app_daily_limits", appLimits)
             .putStringSet("app_weekly_schedules", weeklySchedules)
             .putStringSet("app_earned_minutes", appEarnedRules)
+            .putStringSet("app_earned_groups", groupEarnedRules)
+            .putStringSet("app_group_packages", groupPackageRules)
+            .putStringSet("app_task_rules", appTaskRules.map { (pkg, taskId) -> "$pkg=$taskId" }.toSet())
+            .putString("general_task_id", generalTaskId)
             .putInt("earned_minutes_today", earned)
             .putInt("daily_cap_minutes", child.dailyCapMinutes)
             .putString("budget_day", LocalDate.now(ZoneOffset.UTC).toString())
@@ -1576,7 +1708,9 @@ class EduLockRepository(context: Context) {
         passPercent = optInt("pass_percent", 70).coerceIn(0, 100),
         rewardMinutes = optInt("reward_minutes").coerceIn(0, 1440),
         dailyCapMinutes = optInt("daily_cap_minutes").coerceIn(0, 1440),
-        active = optBoolean("active", true)
+        active = optBoolean("active", true),
+        rewardPackageName = optString("reward_package_name").takeIf { it.isNotBlank() && it != "null" },
+        rewardGroupId = optString("reward_group_id").takeIf { it.isNotBlank() && it != "null" }
     )
 
     private fun JSONObject.toQuestionRow(): QuestionRow {

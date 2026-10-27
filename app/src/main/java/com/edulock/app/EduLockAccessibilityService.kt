@@ -30,6 +30,7 @@ class EduLockAccessibilityService : AccessibilityService() {
     private var blockerDetail: TextView? = null
     private var lastPackage = ""
     private var lastEventAt = 0L
+    private var blockedPackageName = ""
 
     private val ticker = object : Runnable {
         override fun run() {
@@ -90,10 +91,28 @@ class EduLockAccessibilityService : AccessibilityService() {
         }
         val delta = (now - lastEventAt).coerceIn(0L, MAX_SINGLE_DELTA_MS)
         if (delta > 0) {
-            val editor = prefs.edit().putLong(KEY_USED_MS, prefs.getLong(KEY_USED_MS, 0L) + delta)
-            if (lastPackage.isNotBlank()) {
-                val appUsageKey = APP_USED_PREFIX + lastPackage
-                editor.putLong(appUsageKey, prefs.getLong(appUsageKey, 0L) + delta)
+            val appUsageKey = APP_USED_PREFIX + lastPackage
+            val usedBefore = prefs.getLong(appUsageKey, 0L)
+            val editor = prefs.edit()
+                .putLong(KEY_USED_MS, prefs.getLong(KEY_USED_MS, 0L) + delta)
+                .putLong(appUsageKey, usedBefore + delta)
+            val appLimit = prefs.getStringSet(KEY_APP_DAILY_LIMITS, emptySet()).orEmpty()
+                .firstOrNull { it.startsWith("$lastPackage=") }
+                ?.substringAfter("=")?.toIntOrNull()?.coerceIn(1, 1440)
+            val appEarned = prefs.getStringSet(KEY_APP_EARNED_MINUTES, emptySet()).orEmpty()
+                .firstOrNull { it.startsWith("$lastPackage=") }
+                ?.substringAfter("=")?.toIntOrNull()?.coerceIn(0, 1440) ?: 0
+            // Group reward time is shared among all apps in the group. Count only use
+            // beyond this app's ordinary and app-targeted allowance.
+            if (appLimit != null && usedBefore >= (appLimit + appEarned) * MILLIS_PER_MINUTE) {
+                prefs.getStringSet(KEY_APP_GROUP_PACKAGES, emptySet()).orEmpty().forEach { row ->
+                    val groupId = row.substringBefore("=")
+                    val members = row.substringAfter("=", "")
+                    if (groupId.isNotBlank() && members.isNotBlank() && lastPackage in members.split(",")) {
+                        val groupUsageKey = GROUP_USED_PREFIX + groupId
+                        editor.putLong(groupUsageKey, prefs.getLong(groupUsageKey, 0L) + delta)
+                    }
+                }
             }
             editor.apply()
         }
@@ -131,13 +150,26 @@ class EduLockAccessibilityService : AccessibilityService() {
             .firstOrNull { it.startsWith("$packageName=") }
             ?.substringAfter("=")?.toIntOrNull()?.coerceIn(0, 1440) ?: 0
         val effectiveAppLimit = appLimitMinutes?.plus(appEarnedMinutes)
-        val blockedForAppTime = effectiveAppLimit != null && appUsed >= effectiveAppLimit * MILLIS_PER_MINUTE
-        // General rewards grant a shared mobile-time budget. App-targeted rewards add
-        // bonus minutes only to that package, even after the general budget is spent.
+        val matchingGroups = prefs.getStringSet(KEY_APP_GROUP_PACKAGES, emptySet()).orEmpty()
+            .mapNotNull { row ->
+                val groupId = row.substringBefore("=")
+                val members = row.substringAfter("=", "")
+                if (groupId.isNotBlank() && packageName in members.split(",")) groupId else null
+            }
+        val groupTimeAvailable = matchingGroups.any { groupId ->
+            val earnedGroup = prefs.getStringSet(KEY_APP_EARNED_GROUPS, emptySet()).orEmpty()
+                .firstOrNull { it.startsWith("$groupId=") }
+                ?.substringAfter("=")?.toIntOrNull()?.coerceIn(0, 1440) ?: 0
+            val groupUsed = prefs.getLong(GROUP_USED_PREFIX + groupId, 0L)
+            earnedGroup > 0 && groupUsed < earnedGroup * MILLIS_PER_MINUTE
+        }
+        val blockedForAppTime = effectiveAppLimit != null &&
+            appUsed >= effectiveAppLimit * MILLIS_PER_MINUTE && !groupTimeAvailable
+        // A specific app or group reward can still be used when the general reward pool is spent.
         val earnedMinutes = prefs.getInt(KEY_EARNED_MINUTES, 0).coerceIn(0, 1440)
         val totalUsed = prefs.getLong(KEY_USED_MS, 0L).coerceAtLeast(0L)
         val blockedForEarnedTime = earnedMinutes > 0 &&
-            totalUsed >= earnedMinutes * MILLIS_PER_MINUTE && appEarnedMinutes == 0
+            totalUsed >= earnedMinutes * MILLIS_PER_MINUTE && appEarnedMinutes == 0 && !groupTimeAvailable
         val blockedForSchedule = !isWithinWeeklySchedule(packageName)
         if (blockedByKidsMode || explicitlyBlocked || blockedForAppTime || blockedForEarnedTime || blockedForSchedule) {
             val message = when {
@@ -147,7 +179,7 @@ class EduLockAccessibilityService : AccessibilityService() {
                 blockedForEarnedTime -> "Your earned screen time has been used. Complete learning tasks to earn more time."
                 else -> "This app is outside the allowed hours set by your parent."
             }
-            showBlocker(message)
+            showBlocker(message, packageName)
         } else {
             hideBlocker()
         }
@@ -178,7 +210,8 @@ class EduLockAccessibilityService : AccessibilityService() {
             true
         }
     }
-    private fun showBlocker(message: String) {
+    private fun showBlocker(message: String, packageName: String) {
+        blockedPackageName = packageName
         if (blocker != null) {
             blockerDetail?.text = message
             return
@@ -212,11 +245,7 @@ class EduLockAccessibilityService : AccessibilityService() {
             setOnClickListener {
                 val launch = packageManager.getLaunchIntentForPackage(applicationContext.packageName)
                 if (launch != null) {
-                    val targetTaskId = lockPrefs().getStringSet(KEY_APP_DAILY_LIMITS, emptySet()).orEmpty()
-                        .firstOrNull { it.startsWith("screen_time_task_id=") }
-                        ?.substringAfter("=")
-                        ?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) }
-                    if (targetTaskId != null) {
+                    taskIdForPackage(blockedPackageName)?.let { targetTaskId ->
                         lockPrefs().edit().putString("pending_task_id", targetTaskId).apply()
                     }
                     launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -224,10 +253,6 @@ class EduLockAccessibilityService : AccessibilityService() {
                 }
             }
         }
-        val targetTaskId = lockPrefs().getStringSet(KEY_APP_DAILY_LIMITS, emptySet()).orEmpty()
-            .firstOrNull { it.startsWith("screen_time_task_id=") }
-            ?.substringAfter("=")
-            ?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) }
         panel.addView(title, LinearLayout.LayoutParams(-1, -2))
         panel.addView(detail, LinearLayout.LayoutParams(-1, -2))
         panel.addView(button, LinearLayout.LayoutParams(-1, -2))
@@ -247,12 +272,20 @@ class EduLockAccessibilityService : AccessibilityService() {
                 .remove(KEY_LAST_BLOCKER_ERROR)
                 .apply()
         } catch (error: Exception) {
-            // Never report enforcement as successful if Android rejected the restriction overlay.
             lockPrefs().edit()
                 .putString(KEY_LAST_BLOCKER_ERROR, error.javaClass.simpleName + ": " + (error.message ?: "Android rejected the blocker"))
                 .putLong(KEY_LAST_BLOCKER_ERROR_AT, System.currentTimeMillis())
                 .apply()
         }
+    }
+
+    private fun taskIdForPackage(packageName: String): String? {
+        val prefs = lockPrefs()
+        val targeted = prefs.getStringSet(KEY_APP_TASK_RULES, emptySet()).orEmpty()
+            .firstOrNull { it.startsWith("$packageName=") }
+            ?.substringAfter("=")
+        val candidate = targeted ?: prefs.getString("general_task_id", null)
+        return candidate?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) }
     }
 
     private fun hideBlocker() {
@@ -268,8 +301,11 @@ class EduLockAccessibilityService : AccessibilityService() {
 
     private fun resetDailyUsage(prefs: android.content.SharedPreferences, today: String) {
         val editor = prefs.edit().putString(KEY_DAY, today).putLong(KEY_USED_MS, 0L)
-            .putInt(KEY_EARNED_MINUTES, 0).putStringSet(KEY_APP_EARNED_MINUTES, emptySet())
-        prefs.all.keys.filter { it.startsWith(APP_USED_PREFIX) }.forEach { editor.remove(it) }
+            .putInt(KEY_EARNED_MINUTES, 0)
+            .putStringSet(KEY_APP_EARNED_MINUTES, emptySet())
+            .putStringSet(KEY_APP_EARNED_GROUPS, emptySet())
+        prefs.all.keys.filter { it.startsWith(APP_USED_PREFIX) || it.startsWith(GROUP_USED_PREFIX) }
+            .forEach { editor.remove(it) }
         editor.apply()
     }
 
@@ -331,8 +367,12 @@ class EduLockAccessibilityService : AccessibilityService() {
         const val KEY_DAY = "budget_day"
         const val KEY_APP_DAILY_LIMITS = "app_daily_limits"
         const val KEY_APP_EARNED_MINUTES = "app_earned_minutes"
+        const val KEY_APP_EARNED_GROUPS = "app_earned_groups"
+        const val KEY_APP_GROUP_PACKAGES = "app_group_packages"
+        const val KEY_APP_TASK_RULES = "app_task_rules"
         const val KEY_APP_WEEKLY_SCHEDULES = "app_weekly_schedules"
         const val APP_USED_PREFIX = "app_used_millis_"
+        const val GROUP_USED_PREFIX = "group_used_millis_"
         const val MILLIS_PER_MINUTE = 60_000L
         const val MAX_SINGLE_DELTA_MS = 20_000L
         const val TICK_MILLIS = 10_000L
