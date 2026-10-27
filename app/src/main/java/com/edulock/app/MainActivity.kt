@@ -1118,6 +1118,98 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                 }
 
+                AppScreen.APP_SETTINGS -> ScreenFrame("App settings", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
+                    AppUiText("Everything in one place", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                    AppUiText("Choose the curriculum country, learning language and optional religious-study track. You can change these settings at any time.")
+                    AppUiText("Family learning preferences", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashboardIconTile(
+                                icon = "🌍", title = "Country", subtitle = displayCountryName(parentCountryCode),
+                                modifier = Modifier.weight(1f), accent = Color(0xFF138DB8),
+                                onClick = { countryPickerTarget = "parent"; countrySearch = ""; countryPickerOpen = true }
+                            )
+                            DashboardIconTile(
+                                icon = "📚", title = "Learning language", subtitle = languageLabel(parentLearningLanguageCode),
+                                modifier = Modifier.weight(1f), accent = Color(0xFF078C87),
+                                onClick = { languagePickerTarget = "parent-learning"; languageSearch = ""; languagePickerOpen = true }
+                            )
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashboardIconTile(
+                                icon = "🕊️", title = "Religious education", subtitle = studyTrackLabel(parentStudyTrack),
+                                modifier = Modifier.weight(1f), accent = Color(0xFF9A6ACA),
+                                onClick = { studyTrackPickerOpen = true }
+                            )
+                            DashboardIconTile(
+                                icon = "🌐", title = "App language", subtitle = languageLabel(parentDisplayLanguageCode),
+                                modifier = Modifier.weight(1f), accent = Color(0xFFDA6195),
+                                onClick = { languagePickerTarget = "display"; languageSearch = ""; languagePickerOpen = true }
+                            )
+                        }
+                    }
+                    AppUiText("App & child controls", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashboardIconTile(
+                                icon = "👨‍👩‍👧", title = "Child profiles", subtitle = "Profiles, pairing and daily limits",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF6756E8),
+                                onClick = { screen = AppScreen.CHILDREN; execute { children = repository.loadChildren(familyId) } }
+                            )
+                            DashboardIconTile(
+                                icon = "📵", title = "App limits", subtitle = "Allowed apps and screen-time schedules",
+                                modifier = Modifier.weight(1f), accent = Color(0xFFE19B32),
+                                onClick = { screen = AppScreen.CHILDREN; execute { children = repository.loadChildren(familyId) } }
+                            )
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashboardIconTile(
+                                icon = "📍", title = "Location & alerts", subtitle = "Family location and offline notifications",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF168DBA),
+                                onClick = {
+                                    screen = AppScreen.CHILD_LOCATIONS
+                                    execute {
+                                        val latestChildren = repository.loadChildren(familyId)
+                                        children = latestChildren
+                                        childLocationRows = latestChildren.map { repository.loadChildLocationSnapshot(it.id) }
+                                    }
+                                }
+                            )
+                            DashboardIconTile(
+                                icon = "🛡️", title = "Device protection", subtitle = "Accessibility and managed-device status",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF0C948F),
+                                onClick = { refreshProtectionStatus(); screen = AppScreen.PROTECTION_STATUS }
+                            )
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashboardIconTile(
+                                icon = "🔔", title = "Notifications", subtitle = if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) "Tap to enable alerts" else "Notification permission status",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF8A72D6),
+                                onClick = {
+                                    if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    } else {
+                                        notice = "Notification permission is already granted or is managed by Android on this device."
+                                    }
+                                }
+                            )
+                            DashboardIconTile(
+                                icon = "🚪", title = "Sign out", subtitle = "Sign out of the parent account",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF69758C),
+                                onClick = {
+                                    repository.signOut()
+                                    session = null
+                                    childProfile = null
+                                    screen = AppScreen.AUTH
+                                    isRegistering = false
+                                    notice = "Signed out."
+                                }
+                            )
+                        }
+                    }
+                    AppUiText("Religious learning content is optional and follows the track selected by the parent. Country selection helps filter curriculum; it does not assume a family's personal beliefs.")
+                }
+
                 AppScreen.PARENT_HOME -> ScreenFrame("Parent dashboard", notice = notice, busy = busy) {
                     AppUiText("Your family is protected by your signed-in parent account.")
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
