@@ -922,5 +922,5 @@ ParentLearningTemplate(
             solution = "जैन धर्म में अहिंसा और जीवों के प्रति सावधानी बहुत महत्वपूर्ण मानी जाती है।",
             countryCode = "IN"
         )
-    )
+    ) + FourDQuestionBanks.all
 }
