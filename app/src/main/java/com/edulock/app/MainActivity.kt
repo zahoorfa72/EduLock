@@ -119,6 +119,8 @@ private fun EduLockApp(repository: EduLockRepository) {
     var allowedApps by remember { mutableStateOf(emptyList<AllowedApp>()) }
     var childInstalledApps by remember { mutableStateOf(emptyList<ChildInstalledApp>()) }
     var installedAppLimitEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var weeklyScheduleEditIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var weeklyScheduleEdits by remember { mutableStateOf<Map<String, AppWeeklySchedule>>(emptyMap()) }
     var lastPairingCode by remember { mutableStateOf("") }
     var pairingChildName by remember { mutableStateOf("") }
     var pairingCodeExpiry by remember { mutableStateOf(0) }
@@ -278,6 +280,14 @@ private fun EduLockApp(repository: EduLockRepository) {
     ) { granted ->
         notice = if (granted) "EduLock notifications are enabled." else
             "Notifications are disabled. EduLock can show status in the app, but Android may suppress notifications."
+    }
+
+    fun changeWeeklyWindow(appId: String, dayKey: String, update: (AppDayWindow) -> AppDayWindow) {
+        val current = weeklyScheduleEdits[appId]
+            ?: allowedApps.firstOrNull { it.id == appId }?.let { AppWeeklySchedule.parse(it.weeklyScheduleJson) }
+            ?: AppWeeklySchedule.defaultSchedule()
+        val oldWindow = current.days[dayKey] ?: AppDayWindow(enabled = false)
+        weeklyScheduleEdits = weeklyScheduleEdits + (appId to AppWeeklySchedule(current.days + (dayKey to update(oldWindow))))
     }
 
     fun execute(action: suspend () -> Unit) {
@@ -640,6 +650,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     if (countryPickerTarget == "child") childCountryCode = code
                                     else {
                                         curriculumCountryCode = code
+                                        curriculumSubjectCode = "math"
+                                        curriculumLanguageCode = "en"
                                         curriculumSearchResult = null
                                         curriculumSelectedIds = emptySet()
                                     }
@@ -1072,22 +1084,36 @@ private fun EduLockApp(repository: EduLockRepository) {
                         )
 
                         Text("Subject", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        listOf(
-                            Triple("math", "Mathematics", "Numbers, arithmetic, fractions and problem solving"),
-                            Triple("english", "English", "Vocabulary, reading and grammar"),
-                            Triple("science", "General Science", "Living things, health, matter and Earth science"),
-                            Triple("social", "Social Studies", "Community, geography and civic life"),
-                            Triple("computer", "Computer Skills", "Devices, digital skills and online safety"),
-                            Triple("urdu", "Urdu", "Urdu vocabulary, opposites and reading practice"),
-                            Triple("sindhi", "Sindhi", "Sindhi vocabulary, reading and language practice"),
-                            Triple("hindi", "Hindi", "Hindi vocabulary, reading and language practice")
-                        ).forEach { (code, name, detail) ->
+                        buildList {
+                            add(Triple("math", "Mathematics", "Numbers, arithmetic, fractions and problem solving"))
+                            add(Triple("english", "English", "Vocabulary, reading and grammar"))
+                            add(Triple("science", "General Science", "Living things, health, matter and Earth science"))
+                            add(Triple("physics", "Physics", "Motion, energy, forces and electricity"))
+                            add(Triple("chemistry", "Chemistry", "Atoms, materials, reactions and mixtures"))
+                            add(Triple("biology", "Biology", "Cells, organisms, ecosystems and genetics"))
+                            add(Triple("geography", "Geography", "Maps, landscapes, climate and people"))
+                            add(Triple("social", "Social Studies", "Community, geography and civic life"))
+                            add(Triple("computer", "Computer Skills", "Devices, digital skills and online safety"))
+                            add(Triple("health", "Health & Safety", "Healthy habits, safety and first aid"))
+                            add(Triple("arts", "Art & Design", "Colour, shapes, patterns and composition"))
+                            add(Triple("astronomy", "Astronomy", "Planets, stars, orbits and space"))
+                            when (curriculumCountryCode.uppercase()) {
+                                "PK" -> {
+                                    add(Triple("urdu", "Urdu", "Urdu vocabulary, opposites and reading practice"))
+                                    add(Triple("sindhi", "Sindhi", "Sindhi vocabulary, opposites and reading practice"))
+                                }
+                                "IN" -> add(Triple("hindi", "Hindi", "Hindi vocabulary, opposites and reading practice"))
+                            }
+                        }.forEach { (code, name, detail) ->
                             Card(
                                 modifier = Modifier.fillMaxWidth().clickable {
                                     curriculumSubjectCode = code
-                                    if (code == "urdu") curriculumLanguageCode = "ur"
-                                    if (code == "sindhi") curriculumLanguageCode = "sd"
-                                    if (code == "hindi") curriculumLanguageCode = "hi"
+                                    curriculumLanguageCode = when (code) {
+                                        "urdu" -> "ur"
+                                        "sindhi" -> "sd"
+                                        "hindi" -> "hi"
+                                        else -> "en"
+                                    }
                                     curriculumSearchResult = null
                                     curriculumSelectedIds = emptySet()
                                 },
@@ -1643,7 +1669,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             Text("App access overview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text("$cleanedAppCount apps detected • " + allowedApps.count { it.enabled } + " allowed • " + allowedApps.count { !it.enabled } + " blocked")
-                            Text("Everything starts allowed. Parent limits and blocks sync to the child's phone when it is online.")
+                            Text("Everything starts allowed. Parent controls include enable/disable, daily minute caps and day-by-day weekly access windows in 24-hour time.")
                         }
                     }
                     OutlinedTextField(
@@ -1748,6 +1774,69 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         }
                                     }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                                         Text(if (existingRule.enabled) "Disable on child's phone" else "Enable on child's phone")
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            weeklyScheduleEditIds = if (existingRule.id in weeklyScheduleEditIds)
+                                                weeklyScheduleEditIds - existingRule.id else weeklyScheduleEditIds + existingRule.id
+                                            if (existingRule.id !in weeklyScheduleEdits) {
+                                                weeklyScheduleEdits = weeklyScheduleEdits + (
+                                                    existingRule.id to AppWeeklySchedule.parse(existingRule.weeklyScheduleJson)
+                                                )
+                                            }
+                                        },
+                                        enabled = !busy,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { Text(if (existingRule.id in weeklyScheduleEditIds) "Hide weekly timetable" else "🗓 Set weekly timetable (24-hour clock)") }
+                                    if (existingRule.id in weeklyScheduleEditIds) {
+                                        val schedule = weeklyScheduleEdits[existingRule.id]
+                                            ?: AppWeeklySchedule.parse(existingRule.weeklyScheduleJson)
+                                        Text("Select allowed weekdays and start/end time. Disabled days block this app all day. Times use the child's phone local clock; overnight windows are supported.")
+                                        AppWeeklySchedule.DAY_KEYS.forEachIndexed { dayIndex, dayKey ->
+                                            val dayWindow = schedule.days[dayKey] ?: AppDayWindow(enabled = false)
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = RoundedCornerShape(14.dp),
+                                                colors = CardDefaults.cardColors(containerColor = if (dayWindow.enabled) Color(0xFFE1F7EF) else Color(0xFFFFEEF0))
+                                            ) {
+                                                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                    OutlinedButton(
+                                                        onClick = { changeWeeklyWindow(existingRule.id, dayKey) { it.copy(enabled = !it.enabled) } },
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) { Text((if (dayWindow.enabled) "✓ " else "○ ") + AppWeeklySchedule.DAY_LABELS[dayIndex] +
+                                                        if (dayWindow.enabled) " • Allowed hours" else " • Blocked all day") }
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        OutlinedTextField(
+                                                            value = dayWindow.start,
+                                                            onValueChange = { value -> changeWeeklyWindow(existingRule.id, dayKey) { it.copy(start = value.filter { c -> c.isDigit() || c == ':' }.take(5)) } },
+                                                            modifier = Modifier.weight(1f), singleLine = true,
+                                                            label = { Text("Start (HH:mm)") }, placeholder = { Text("08:00") }
+                                                        )
+                                                        OutlinedTextField(
+                                                            value = dayWindow.end,
+                                                            onValueChange = { value -> changeWeeklyWindow(existingRule.id, dayKey) { it.copy(end = value.filter { c -> c.isDigit() || c == ':' }.take(5)) } },
+                                                            modifier = Modifier.weight(1f), singleLine = true,
+                                                            label = { Text("End (HH:mm)") }, placeholder = { Text("20:00") }
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Button(
+                                            onClick = {
+                                                execute {
+                                                    val edited = weeklyScheduleEdits[existingRule.id] ?: AppWeeklySchedule.parse(existingRule.weeklyScheduleJson)
+                                                    repository.updateAllowedAppWeeklySchedule(existingRule.id, edited)
+                                                    allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
+                                                    weeklyScheduleEditIds = weeklyScheduleEditIds - existingRule.id
+                                                    weeklyScheduleEdits = weeklyScheduleEdits - existingRule.id
+                                                    notice = "Weekly timetable saved. The child's device applies it after syncing."
+                                                }
+                                            },
+                                            enabled = !busy,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) { Text("Save weekly timetable") }
                                     }
                                 }
                             }

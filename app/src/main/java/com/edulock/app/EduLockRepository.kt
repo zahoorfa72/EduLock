@@ -118,8 +118,44 @@ data class AllowedApp(
     val packageName: String,
     val displayName: String,
     val enabled: Boolean = true,
-    val dailyLimitMinutes: Int = 1440
+    val dailyLimitMinutes: Int = 1440,
+    val weeklyScheduleJson: String = "{}"
 )
+
+data class AppDayWindow(
+    val enabled: Boolean = true,
+    val start: String = "00:00",
+    val end: String = "23:59"
+)
+
+data class AppWeeklySchedule(val days: Map<String, AppDayWindow>) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        DAY_KEYS.forEach { key ->
+            val window = days[key] ?: AppDayWindow(enabled = false)
+            put(key, JSONObject().put("enabled", window.enabled).put("start", window.start).put("end", window.end))
+        }
+    }
+
+    companion object {
+        val DAY_KEYS = listOf("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+        val DAY_LABELS = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+        fun defaultSchedule() = AppWeeklySchedule(DAY_KEYS.associateWith { AppDayWindow() })
+        fun parse(raw: String?): AppWeeklySchedule {
+            if (raw.isNullOrBlank()) return defaultSchedule()
+            return try {
+                val root = JSONObject(raw)
+                if (root.length() == 0) return defaultSchedule()
+                AppWeeklySchedule(DAY_KEYS.associateWith { key ->
+                    val item = root.optJSONObject(key)
+                    if (item == null) AppDayWindow(enabled = false)
+                    else AppDayWindow(item.optBoolean("enabled", false), item.optString("start", "00:00"), item.optString("end", "23:59"))
+                })
+            } catch (_: Exception) {
+                defaultSchedule()
+            }
+        }
+    }
+}
 
 data class ChildInstalledApp(
     val childId: String,
@@ -784,13 +820,17 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadAllowedApps(childId: String): List<AllowedApp> {
         requireSession()
-        val rows = restArray("allowed_apps?select=id,child_id,package_name,display_name,enabled,daily_limit_minutes&child_id=eq.$childId&order=display_name.asc")
+        val rows = restArray("allowed_apps?select=id,child_id,package_name,display_name,enabled,daily_limit_minutes,weekly_schedule&child_id=eq.$childId&order=display_name.asc")
         return (0 until rows.length()).mapNotNull { i ->
             rows.optJSONObject(i)?.let { row ->
                 AllowedApp(
-                    row.optString("id"), row.optString("child_id"), row.optString("package_name"),
-                    row.optString("display_name"), row.optBoolean("enabled", true),
-                    row.optInt("daily_limit_minutes", 1440).coerceIn(1, 1440)
+                    id = row.optString("id"),
+                    childId = row.optString("child_id"),
+                    packageName = row.optString("package_name"),
+                    displayName = row.optString("display_name"),
+                    enabled = row.optBoolean("enabled", true),
+                    dailyLimitMinutes = row.optInt("daily_limit_minutes", 1440).coerceIn(1, 1440),
+                    weeklyScheduleJson = row.optJSONObject("weekly_schedule")?.toString() ?: "{}"
                 )
             }
         }
@@ -821,6 +861,20 @@ class EduLockRepository(context: Context) {
         restArray("allowed_apps?id=eq.$appId", "PATCH", JSONObject().put("enabled", enabled))
     }
 
+    suspend fun updateAllowedAppWeeklySchedule(appId: String, schedule: AppWeeklySchedule) {
+        requireSession("parent")
+        val json = schedule.toJson()
+        AppWeeklySchedule.DAY_KEYS.forEach { day ->
+            val window = json.optJSONObject(day) ?: throw IllegalArgumentException("Set a valid schedule for every day.")
+            val start = window.optString("start")
+            val end = window.optString("end")
+            require(start.matches(Regex("^([01]\\d|2[0-3]):[0-5]\\d$"))) { "Use 24-hour start time HH:mm (for example 08:30)." }
+            require(end.matches(Regex("^([01]\\d|2[0-3]):[0-5]\\d$"))) { "Use 24-hour end time HH:mm (for example 20:00)." }
+            if (window.optBoolean("enabled")) require(start != end) { "Start and end time must differ for an enabled day." }
+        }
+        restArray("allowed_apps?id=eq.$appId", "PATCH", JSONObject().put("weekly_schedule", json))
+    }
+
     suspend fun deleteAllowedApp(appId: String) {
         requireSession("parent")
         send("rest/v1/allowed_apps?id=eq.$appId", "DELETE", null, authenticated = true, profile = true)
@@ -835,6 +889,9 @@ class EduLockRepository(context: Context) {
         val blocked = appRules.filter { !it.enabled }.map { it.packageName }.toSet()
         val appLimits = appRules.filter { it.enabled }
             .map { it.packageName + "=" + it.dailyLimitMinutes }.toSet()
+        val weeklySchedules = appRules.filter { rule ->
+            try { JSONObject(rule.weeklyScheduleJson).length() > 0 } catch (_: Exception) { false }
+        }.map { it.packageName + "=" + it.weeklyScheduleJson }.toSet()
         val startOfDay = LocalDate.now(ZoneOffset.UTC).atStartOfDay().toInstant(ZoneOffset.UTC)
         val stamp = DateTimeFormatter.ISO_INSTANT.format(startOfDay)
         val ledger = restArray("screen_time_ledger?select=minutes_delta&child_id=eq.${child.id}&created_at=gte.$stamp")
@@ -847,6 +904,7 @@ class EduLockRepository(context: Context) {
             .putStringSet("allowed_packages", allowed)
             .putStringSet("blocked_packages", blocked)
             .putStringSet("app_daily_limits", appLimits)
+            .putStringSet("app_weekly_schedules", weeklySchedules)
             .putInt("earned_minutes_today", earned)
             .putInt("daily_cap_minutes", child.dailyCapMinutes)
             .putString("budget_day", LocalDate.now(ZoneOffset.UTC).toString())

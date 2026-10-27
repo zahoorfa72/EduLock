@@ -14,6 +14,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneOffset
 import kotlin.math.max
 import kotlin.math.min
@@ -115,12 +116,42 @@ class EduLockAccessibilityService : AccessibilityService() {
             ?.coerceIn(1, 1440)
         val appUsed = prefs.getLong(APP_USED_PREFIX + packageName, 0L)
         val blockedForAppTime = appLimitMinutes != null && appUsed >= appLimitMinutes * MILLIS_PER_MINUTE
-        if (explicitlyBlocked || blockedForAppTime) {
-            val message = if (explicitlyBlocked) "This app has been blocked by your parent."
-                else "Your daily limit for this app has been reached."
+        val blockedForSchedule = !isWithinWeeklySchedule(packageName)
+        if (explicitlyBlocked || blockedForAppTime || blockedForSchedule) {
+            val message = when {
+                explicitlyBlocked -> "This app has been disabled by your parent."
+                blockedForAppTime -> "Your daily limit for this app has been reached."
+                else -> "This app is outside the allowed hours set by your parent."
+            }
             showBlocker(message)
         } else {
             hideBlocker()
+        }
+    }
+
+    private fun isWithinWeeklySchedule(packageName: String): Boolean {
+        val row = lockPrefs().getStringSet(KEY_APP_WEEKLY_SCHEDULES, emptySet()).orEmpty()
+            .firstOrNull { it.startsWith("$packageName=") } ?: return true
+        return try {
+            val json = org.json.JSONObject(row.substringAfter("="))
+            if (json.length() == 0) return true
+            val dayKey = when (LocalDate.now().dayOfWeek.value) {
+                1 -> "mon"; 2 -> "tue"; 3 -> "wed"; 4 -> "thu"
+                5 -> "fri"; 6 -> "sat"; else -> "sun"
+            }
+            val today = json.optJSONObject(dayKey) ?: return false
+            if (!today.optBoolean("enabled", false)) return false
+            val start = LocalTime.parse(today.optString("start"))
+            val end = LocalTime.parse(today.optString("end"))
+            val now = LocalTime.now()
+            when {
+                start == end -> false
+                start.isBefore(end) -> !now.isBefore(start) && now.isBefore(end)
+                else -> !now.isBefore(start) || now.isBefore(end)
+            }
+        } catch (_: Exception) {
+            // Corrupt schedule data must not trap a child outside an app.
+            true
         }
     }
     private fun showBlocker(message: String) {
@@ -231,6 +262,7 @@ class EduLockAccessibilityService : AccessibilityService() {
         const val KEY_USED_MS = "used_millis_today"
         const val KEY_DAY = "budget_day"
         const val KEY_APP_DAILY_LIMITS = "app_daily_limits"
+        const val KEY_APP_WEEKLY_SCHEDULES = "app_weekly_schedules"
         const val APP_USED_PREFIX = "app_used_millis_"
         const val MILLIS_PER_MINUTE = 60_000L
         const val MAX_SINGLE_DELTA_MS = 20_000L
