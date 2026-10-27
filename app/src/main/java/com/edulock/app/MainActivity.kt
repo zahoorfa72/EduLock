@@ -3862,7 +3862,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         if (task.timeLimitSeconds != null) {
                             SummaryCard(
                                 "Time remaining",
-                                (taskSecondsRemaining / 60).toString() + ":" + ((taskSecondsRemaining % 60).toString().let { if (it.length < 2) "0$it" else it }),
+                                String.format(java.util.Locale.ROOT, "%d:%02d", taskSecondsRemaining / 60, taskSecondsRemaining % 60),
                                 "Answers submit automatically when the countdown reaches zero."
                             )
                         }
