@@ -2828,7 +2828,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                             if (questionType == "picture") {
                                 val bytes = questionPictureBytes ?: throw IllegalArgumentException("Choose a picture before saving this picture question.")
                                 val parentChild = selectedChild ?: throw IllegalStateException("Choose the child profile for this question.")
-                                repository.uploadQuestionImage(parentChild.familyId, newQuestionId, bytes)
+                                try {
+                                    repository.uploadQuestionImage(parentChild.familyId, newQuestionId, bytes)
+                                } catch (error: Exception) {
+                                    questionPictureError = error.message ?: "Picture upload failed."
+                                    throw error
+                                }
                             }
                             questions = repository.loadQuestions(subject.id)
                             questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
