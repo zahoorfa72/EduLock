@@ -2893,6 +2893,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                             Field(translationPrompt, { translationPrompt = it }, "Translated question prompt")
                             if (original.questionType == "multiple_choice" || original.questionType == "true_false") {
                                 Field(translationOptions, { translationOptions = it }, "Translated options (one per line)")
+                            } else if (original.questionType == "matching") {
+                                Field(translationOptions, { translationOptions = it }, "Translated matching pairs (one per line: left|right)")
+                                AppUiText("Use localized left|right pairs in the same order as the original pairs. The app will shuffle right-side choices.")
                             }
                             Field(translationAcceptedAnswers, { translationAcceptedAnswers = it }, "Accepted correct answers (one per line)")
                         }
