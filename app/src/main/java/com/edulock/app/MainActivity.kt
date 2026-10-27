@@ -1880,8 +1880,52 @@ private fun EduLockApp(repository: EduLockRepository) {
                 }
 
                 AppScreen.SUBJECTS -> ScreenFrame("Subjects & questions", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
-                    Button(onClick = { subjectTitle = ""; subjectLanguage = "en"; screen = AppScreen.ADD_SUBJECT }, modifier = Modifier.fillMaxWidth()) { AppUiText("Create subject") }
-                    if (subjects.isEmpty()) AppUiText("Create a subject first, for example Mathematics (en), رياضي (ur) or a Sindhi subject.")
+                    Button(onClick = {
+                        editingSubjectId = null
+                        subjectTitle = ""; subjectLanguage = "en"
+                        subjectCountryCode = parentCountryCode; subjectGradeLevel = "1"
+                        screen = AppScreen.ADD_SUBJECT
+                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("Create subject") }
+
+                    AppUiText("Suggested subjects for " + displayCountryName(parentCountryCode), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    AppUiText("These are starting suggestions, not restrictions. Add extra subjects when needed. Religious subjects are only assigned to children whose parent-selected track matches.")
+                    val suggestions = suggestedSubjectsForCountry(parentCountryCode).filter { suggestion ->
+                        subjects.none { subject ->
+                            subject.title.equals(suggestion.title, ignoreCase = true) &&
+                                subject.languageCode.equals(suggestion.languageCode, ignoreCase = true) &&
+                                subject.countryCode.equals(parentCountryCode, ignoreCase = true)
+                        }
+                    }
+                    suggestions.forEach { suggestion ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f).padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                AppUiText(suggestion.title, fontWeight = FontWeight.SemiBold)
+                                AppUiText(
+                                    if (suggestion.studyTrack == null) {
+                                        "Language: " + suggestion.languageCode
+                                    } else {
+                                        "Optional religious-education subject • " + studyTrackLabel(suggestion.studyTrack)
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            OutlinedButton(onClick = {
+                                execute {
+                                    repository.findOrCreateSubject(familyId, suggestion.title, suggestion.languageCode, parentCountryCode)
+                                    subjects = repository.loadSubjects(familyId, parentCountryCode)
+                                    notice = if (suggestion.studyTrack == null) {
+                                        suggestion.title + " added to your subject list."
+                                    } else {
+                                        suggestion.title + " added. Select " + studyTrackLabel(suggestion.studyTrack) + " in the child's profile to enable matching religious tasks."
+                                    }
+                                }
+                            }, enabled = !busy) { AppUiText("＋ Add") }
+                        }
+                    }
+
+                    AppUiText("Your subjects", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    if (subjects.isEmpty()) AppUiText("No subjects yet. Add a suggestion above or create your own subject.")
                     subjects.forEach { subject ->
                         Card(
                             modifier = Modifier.fillMaxWidth().clickable {
@@ -1897,8 +1941,16 @@ private fun EduLockApp(repository: EduLockRepository) {
                         ) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 AppUiText(subject.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                AppUiText("Language: " + subject.languageCode)
-                                AppUiText("Tap to manage questions")
+                                AppUiText("Language: " + subject.languageCode + " • " + displayCountryName(subject.countryCode) + " • Grade " + subject.gradeLevel)
+                                AppUiText("Tap the card to manage questions")
+                                OutlinedButton(onClick = {
+                                    editingSubjectId = subject.id
+                                    subjectTitle = subject.title
+                                    subjectLanguage = subject.languageCode
+                                    subjectCountryCode = subject.countryCode
+                                    subjectGradeLevel = subject.gradeLevel.toString()
+                                    screen = AppScreen.ADD_SUBJECT
+                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("✏️ Edit subject") }
                             }
                         }
                     }
@@ -2057,17 +2109,36 @@ private fun EduLockApp(repository: EduLockRepository) {
                     )
                 }
 
-                AppScreen.ADD_SUBJECT -> ScreenFrame("Create subject", onBack = { screen = AppScreen.SUBJECTS }, notice = notice, busy = busy) {
+                AppScreen.ADD_SUBJECT -> ScreenFrame(if (editingSubjectId == null) "Create subject" else "Edit subject", onBack = { screen = AppScreen.SUBJECTS }, notice = notice, busy = busy) {
                     Field(subjectTitle, { subjectTitle = it }, "Subject name")
-                    Field(subjectLanguage, { subjectLanguage = it }, "Language code (en, ur, sd, or any language)")
+                    Field(subjectLanguage, { subjectLanguage = it.trim().take(16) }, "Language code (en, ur, sd, hi, or any language)")
+                    OutlinedButton(onClick = {
+                        countryPickerTarget = "subject"
+                        countrySearch = ""
+                        countryPickerOpen = true
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        AppUiText("🌍 Subject country: " + displayCountryName(subjectCountryCode))
+                    }
+                    Field(subjectGradeLevel, { subjectGradeLevel = it.filter(Char::isDigit).take(2) }, "Grade level (0 = Kindergarten, 1–13)", keyboardType = KeyboardType.Number)
                     Button(onClick = {
                         execute {
-                            repository.addSubject(familyId, subjectTitle, subjectLanguage, parentCountryCode)
+                            val grade = subjectGradeLevel.toIntOrNull() ?: throw IllegalArgumentException("Enter a grade from 0 to 13.")
+                            require(grade in 0..13) { "Grade must be between Kindergarten (0) and 13." }
+                            val currentSubjectId = editingSubjectId
+                            if (currentSubjectId == null) {
+                                repository.addSubject(familyId, subjectTitle, subjectLanguage, subjectCountryCode, grade)
+                                notice = "Subject saved."
+                            } else {
+                                repository.updateSubject(currentSubjectId, subjectTitle, subjectLanguage, subjectCountryCode, grade)
+                                notice = "Subject updated."
+                            }
                             subjects = repository.loadSubjects(familyId, parentCountryCode)
+                            editingSubjectId = null
                             screen = AppScreen.SUBJECTS
-                            notice = "Subject saved."
                         }
-                    }, enabled = !busy && subjectTitle.isNotBlank(), modifier = Modifier.fillMaxWidth()) { AppUiText("Save subject") }
+                    }, enabled = !busy && subjectTitle.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+                        AppUiText(if (editingSubjectId == null) "Save subject" else "Save subject changes")
+                    }
                 }
 
                 AppScreen.QUESTIONS -> ScreenFrame(selectedSubject?.title ?: "Questions", onBack = { screen = AppScreen.SUBJECTS }, notice = notice, busy = busy) {
