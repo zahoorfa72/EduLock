@@ -943,6 +943,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Button(onClick = {
                         childName = ""; childLanguage = "en"; childDailyCap = "60"
                         childCountryCode = "PK"; childSchoolGrade = "1"; childAgeYears = "8"
+                        childAvatarIcon = "🦊"; childDailyGameLimit = "20"
                         screen = AppScreen.ADD_CHILD
                     }, modifier = Modifier.fillMaxWidth()) { Text("Add child profile") }
                     if (children.isEmpty()) Text("No child profiles yet. Add a child to create the protected parent-child link.")
@@ -952,7 +953,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                Text(child.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Box(Modifier.size(48.dp).background(Color(0xFFE8E7FF), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                                        Text(child.avatarIcon, fontSize = 28.sp)
+                                    }
+                                    Column {
+                                        Text(child.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                        Text("🎮 Educational games: ${child.dailyGameLimitMinutes} min/day", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
                                 Text("Language: " + child.preferredLanguage + " • Daily cap: " + child.dailyCapMinutes + " minutes")
                                 Text(
                                     displayCountryName(child.countryCode) + " • " +
@@ -960,6 +969,27 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         " • Age " + child.ageYears,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                Field(
+                                    childGameLimitEdits[child.id] ?: child.dailyGameLimitMinutes.toString(),
+                                    { value -> childGameLimitEdits = childGameLimitEdits + (child.id to value.filter(Char::isDigit).take(4)) },
+                                    "Daily educational game limit in minutes (0 disables games)",
+                                    keyboardType = KeyboardType.Number
+                                )
+                                OutlinedButton(
+                                    onClick = {
+                                        execute {
+                                            val limit = (childGameLimitEdits[child.id] ?: child.dailyGameLimitMinutes.toString()).toIntOrNull()
+                                                ?: throw IllegalArgumentException("Enter a game limit from 0 to 1440 minutes.")
+                                            require(limit in 0..1440) { "Game limit must be from 0 to 1440 minutes." }
+                                            repository.updateChildGameLimit(child.id, limit)
+                                            children = repository.loadChildren(familyId)
+                                            childGameLimitEdits = childGameLimitEdits - child.id
+                                            notice = "Daily educational game allowance saved for ${child.displayName}."
+                                        }
+                                    },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Save educational game limit") }
                                 OutlinedButton(
                                     onClick = {
                                         selectedChild = child
@@ -1024,6 +1054,16 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.ADD_CHILD -> ScreenFrame("Create your child's learning profile", onBack = { screen = AppScreen.CHILDREN }, notice = notice, busy = busy) {
                     Text("Personalize lessons to the child's country, grade and age. You can update these later from the curriculum screen.")
                     Field(childName, { childName = it }, "Child's name")
+                    Text("Choose a profile icon", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    listOf("🦊","🐼","🐯","🐸","🐰","🦄","🐻","🐨","🐵","🐧","🦋","🐢").chunked(6).forEach { rowIcons ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            rowIcons.forEach { avatar ->
+                                OutlinedButton(onClick = { childAvatarIcon = avatar }, modifier = Modifier.weight(1f)) {
+                                    Text((if (childAvatarIcon == avatar) "✓ " else "") + avatar, fontSize = 18.sp)
+                                }
+                            }
+                        }
+                    }
                     OutlinedButton(onClick = {
                         countryPickerTarget = "child"
                         countrySearch = ""
@@ -1036,6 +1076,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Field(childLanguage, { childLanguage = it.trim().take(16) }, "Preferred learning language (en, ur, sd...)")
                     Text("The question bank filters by country, grade, age and language. When a reviewed local-language set isn't available, EduLock clearly labels the starter-bank fallback.")
                     Field(childDailyCap, { childDailyCap = it.filter(Char::isDigit).take(4) }, "Maximum reward minutes per day (0–1440)", keyboardType = KeyboardType.Number)
+                    Field(childDailyGameLimit, { childDailyGameLimit = it.filter(Char::isDigit).take(4) }, "Educational games per day in minutes (0 disables; max 1440)", keyboardType = KeyboardType.Number)
                     Button(onClick = {
                         execute {
                             val grade = childSchoolGrade.toIntOrNull() ?: throw IllegalArgumentException("Enter a grade from 0 to 13.")
@@ -1044,12 +1085,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                             require(age in 3..19) { "Age must be between 3 and 19." }
                             val created = repository.addChild(
                                 familyId, childName, childLanguage, childDailyCap.toIntOrNull() ?: 60,
-                                childCountryCode, grade, age
+                                childCountryCode, grade, age, childAvatarIcon,
+                                childDailyGameLimit.toIntOrNull() ?: 20
                             )
                             children = repository.loadChildren(familyId)
                             selectedChild = created
                             screen = AppScreen.CHILDREN
-                            notice = "Learning profile saved. Open Country syllabus & question bank to choose age-matched questions."
+                            notice = "Learning profile saved. The avatar and daily educational-game allowance are ready."
                         }
                     }, enabled = !busy && childName.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Save learning profile") }
                 }
