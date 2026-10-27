@@ -50,7 +50,7 @@ class LocationWatchdogWorker(
                 val alertKey = ALERT_PREFIX + childId
                 val sharing = row.optBoolean("sharing_enabled", false)
                 val lastSeen = parseInstant(row.optString("last_seen_at"))?.toEpochMilli()
-                val stale = sharing && lastSeen != null && now - lastSeen >= STALE_AFTER_MS
+                val stale = lastSeen != null && now - lastSeen >= STALE_AFTER_MS
                 if (stale) {
                     if (!prefs.getBoolean(alertKey, false) && canPostNotifications()) {
                         postOfflineNotification(childId, names[childId] ?: "Your child", lastSeen!!)
@@ -114,7 +114,7 @@ class LocationWatchdogWorker(
         private const val PREFS = "edulock_location_watchdog"
         private const val ALERT_PREFIX = "offline_alerted_"
         private const val CHANNEL_ID = "edulock_child_offline"
-        private const val STALE_AFTER_MS = 15 * 60 * 1000L
+        private const val STALE_AFTER_MS = 10 * 60 * 1000L
 
         fun schedule(context: Context) {
             val constraints = Constraints.Builder()
