@@ -101,7 +101,9 @@ class EduLockAccessibilityService : AccessibilityService() {
     }
 
     private fun isAllowedPackageForUsage(packageName: String): Boolean {
-        if (packageName == applicationContext.packageName || packageName in essentialPackages() || isInternalSystemPackage(packageName)) return false
+        if (packageName == applicationContext.packageName ||
+            packageName in essentialPackages(lockPrefs().getBoolean(KEY_KIDS_MODE_ENABLED, false)) ||
+            isInternalSystemPackage(packageName)) return false
         return !lockPrefs().getStringSet(KEY_BLOCKED_PACKAGES, emptySet()).orEmpty().contains(packageName)
     }
 

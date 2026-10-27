@@ -38,14 +38,18 @@ private data class ArcadeQuestion(
     val explanation: String
 )
 
-private fun arcadeQuestion(mode: String): ArcadeQuestion {
+private fun arcadeQuestion(mode: String, previouslySeen: Set<String> = emptySet()): ArcadeQuestion {
     if (mode == "math") {
-        val a = Random.nextInt(2, 20)
-        val b = Random.nextInt(1, 15)
-        val answer = a + b
-        val choices = (setOf(answer, answer + Random.nextInt(1, 5), (answer - Random.nextInt(1, 5)).coerceAtLeast(0), answer + Random.nextInt(5, 10)))
-            .map { it.toString() }.shuffled()
-        return ArcadeQuestion("Math Dash: what is $a + $b?", choices, answer.toString(), "$a + $b = $answer. Great thinking!")
+        // A finite 252-prompt addition pool avoids repeats until the bank is exhausted.
+        val all = (2..19).flatMap { a ->
+            (1..14).map { b ->
+                val answer = a + b
+                val choices = listOf(answer, answer + 2, (answer - 1).coerceAtLeast(0), answer + 4)
+                    .distinct().map { it.toString() }.shuffled()
+                ArcadeQuestion("Math Dash: what is $a + $b?", choices, answer.toString(), "$a + $b = $answer. Great thinking!")
+            }
+        }
+        return all.filterNot { it.prompt in previouslySeen }.ifEmpty { all }.random()
     }
     val bank = when (mode) {
         "science" -> listOf(
@@ -53,14 +57,32 @@ private fun arcadeQuestion(mode: String): ArcadeQuestion {
             ArcadeQuestion("Which part of a plant absorbs most water?", listOf("Roots", "Petals", "Fruit", "Seeds only"), "Roots", "Roots take in water and minerals from the soil."),
             ArcadeQuestion("Which particle has a negative electric charge?", listOf("Electron", "Proton", "Neutron", "Nucleus"), "Electron", "Electrons are negatively charged."),
             ArcadeQuestion("What do green plants use to make sugar during photosynthesis?", listOf("Light energy", "Moonlight only", "Plastic", "Sand only"), "Light energy", "Plants use light energy with water and carbon dioxide to make sugars."),
-            ArcadeQuestion("What force pulls objects toward Earth?", listOf("Gravity", "Sound", "Colour", "Magnetism only"), "Gravity", "Gravity attracts objects with mass.")
+            ArcadeQuestion("What force pulls objects toward Earth?", listOf("Gravity", "Sound", "Colour", "Magnetism only"), "Gravity", "Gravity attracts objects with mass."),
+            ArcadeQuestion("Which poles of two magnets attract?", listOf("North and south", "North and north", "South and south"), "North and south", "Opposite magnet poles attract."),
+            ArcadeQuestion("What state of matter is ice?", listOf("Solid", "Liquid", "Gas"), "Solid", "Ice is water in its solid state."),
+            ArcadeQuestion("What forms when an object blocks light?", listOf("A shadow", "A sound", "A smell"), "A shadow", "A shadow forms where light is blocked."),
+            ArcadeQuestion("What does a closed switch do?", listOf("Completes the circuit", "Breaks every wire", "Removes a battery"), "Completes the circuit", "A closed switch completes a conducting path."),
+            ArcadeQuestion("What is liquid water becoming vapour called?", listOf("Evaporation", "Condensation", "Freezing"), "Evaporation", "Evaporation changes liquid water into vapour."),
+            ArcadeQuestion("Which tool measures temperature?", listOf("Thermometer", "Ruler", "Compass"), "Thermometer", "A thermometer measures temperature."),
+            ArcadeQuestion("Which organ pumps blood?", listOf("Heart", "Lungs", "Stomach"), "Heart", "The heart pumps blood around the body."),
+            ArcadeQuestion("Which material conducts electricity well?", listOf("Copper", "Rubber", "Dry paper"), "Copper", "Copper is a good electrical conductor."),
+            ArcadeQuestion("What do green plants use light energy to make?", listOf("Sugar", "Plastic", "Metal"), "Sugar", "Photosynthesis helps plants make sugars.")
         )
         "words" -> listOf(
             ArcadeQuestion("Choose the opposite of 'hot'.", listOf("Cold", "Warm", "Boiling", "Bright"), "Cold", "Cold is the opposite of hot."),
             ArcadeQuestion("Which word is a noun?", listOf("Garden", "Quickly", "Blue", "Running"), "Garden", "A noun names a person, place, thing or idea."),
             ArcadeQuestion("Which spelling is correct?", listOf("Because", "Becaus", "Beacause", "Becuase"), "Because", "The correct spelling is because."),
             ArcadeQuestion("Which word rhymes with 'star'?", listOf("Car", "Tree", "Moon", "Book"), "Car", "Star and car share the same ending sound."),
-            ArcadeQuestion("In Urdu, what is the opposite of خوش?", listOf("اداس", "تیز", "کتاب", "گھر"), "اداس", "خوش کا مخالف لفظ اداس ہے۔")
+            ArcadeQuestion("In Urdu, what is the opposite of خوش?", listOf("اداس", "تیز", "کتاب", "گھر"), "اداس", "خوش کا مخالف لفظ اداس ہے۔"),
+            ArcadeQuestion("Which word tells an action?", listOf("Jump", "Garden", "Blue"), "Jump", "A verb can name an action."),
+            ArcadeQuestion("Which punctuation mark can end a question?", listOf("Question mark", "Full stop only", "Hyphen"), "Question mark", "Questions commonly end with a question mark."),
+            ArcadeQuestion("What is the plural of child?", listOf("Children", "Childs", "Childes"), "Children", "The plural of child is children."),
+            ArcadeQuestion("Which is a vowel?", listOf("A", "B", "T"), "A", "A, E, I, O and U are vowels in English."),
+            ArcadeQuestion("Complete this sentence: The sun ___ bright.", listOf("is", "are", "am"), "is", "The correct sentence is: The sun is bright."),
+            ArcadeQuestion("Which word rhymes with light?", listOf("Night", "Book", "Tree"), "Night", "Light and night rhyme."),
+            ArcadeQuestion("Which word is an adjective in 'a red ball'?", listOf("Red", "Ball", "A"), "Red", "An adjective describes a noun."),
+            ArcadeQuestion("Which word is opposite to early?", listOf("Late", "Soon", "Quick"), "Late", "Late is the opposite of early."),
+            ArcadeQuestion("Complete the sentence: They ___ playing.", listOf("are", "is", "am"), "are", "Use 'are' with the plural subject 'they'.")
         )
         else -> {
             val count = Random.nextInt(3, 8)
@@ -72,11 +94,19 @@ private fun arcadeQuestion(mode: String): ArcadeQuestion {
                 ArcadeQuestion("Memory Count: count the glowing stars.\n$display", options, count.toString(), "There are $count stars. Look carefully, then count once."),
                 ArcadeQuestion("Pattern Quest: what comes next? 🔴 🔵 🔴 🔵 🔴 ?", listOf("🔵", "🔴", "🟢", "⭐"), "🔵", "The pattern alternates red, blue, red, blue."),
                 ArcadeQuestion("Shape Safari: how many sides does a triangle have?", listOf("3", "4", "5", "6"), "3", "A triangle has three straight sides."),
-                ArcadeQuestion("Space Ranger: which object gives Earth most of its light?", listOf("The Sun", "Mars", "The Moon", "Saturn"), "The Sun", "Sunlight is the main source of light and energy for Earth.")
+                ArcadeQuestion("Space Ranger: which object gives Earth most of its light?", listOf("The Sun", "Mars", "The Moon", "Saturn"), "The Sun", "Sunlight is the main source of light and energy for Earth."),
+                ArcadeQuestion("Pattern Quest: what comes next? 🟩 🟩 🔺 🟩 🟩 🔺 ?", listOf("🟩", "🔺", "⚪", "⭐"), "🟩", "The pattern repeats two green squares, then a triangle."),
+                ArcadeQuestion("Memory Match: which pair is exactly the same?", listOf("🌟🌙 and 🌟🌙", "🌟🌙 and 🌙🌟", "🔵🔴 and 🔵🟢"), "🌟🌙 and 🌟🌙", "A matching pair has the same items in the same order."),
+                ArcadeQuestion("Shape Safari: which shape has no corners?", listOf("Circle", "Triangle", "Rectangle"), "Circle", "A circle has no corners."),
+                ArcadeQuestion("Memory Count: which number is largest?", listOf("8", "5", "3", "6"), "8", "Eight is greater than five, three and six."),
+                ArcadeQuestion("Pattern Quest: what comes next? ⭐ 🌙 ⭐ 🌙 ⭐ ?", listOf("🌙", "⭐", "☀️", "☁️"), "🌙", "The pattern alternates star and moon."),
+                ArcadeQuestion("Shape Safari: how many corners has a rectangle?", listOf("4", "3", "5", "6"), "4", "A rectangle has four corners."),
+                ArcadeQuestion("Memory Match: which shape is different? 🔵 🔵 🔺 🔵", listOf("The triangle", "The first circle", "The last circle"), "The triangle", "Three objects are circles and one is a triangle.")
             )
         }
     }
-    return bank[Random.nextInt(bank.size)]
+    val uniqueBank = bank.distinctBy { it.prompt.trim().lowercase(java.util.Locale.ROOT) }
+    return uniqueBank.filterNot { it.prompt in previouslySeen }.ifEmpty { uniqueBank }.random()
 }
 
 @Composable
@@ -93,6 +123,7 @@ fun KidsGamesScreen(
     var feedback by remember { mutableStateOf("") }
     var score by remember { mutableStateOf(0) }
     var played by remember { mutableStateOf(0) }
+    var usedQuestionPrompts by remember { mutableStateOf<Set<String>>(emptySet()) }
     val timedOut = remainingSeconds <= 0
     val choices = listOf(
         Triple("math", "🔢", "Math Dash"),
@@ -102,7 +133,9 @@ fun KidsGamesScreen(
     )
     fun startGame(nextMode: String) {
         mode = nextMode
-        question = arcadeQuestion(nextMode)
+        val first = arcadeQuestion(nextMode, emptySet())
+        question = first
+        usedQuestionPrompts = setOf(first.prompt)
         selectedAnswer = null
         feedback = ""
     }
@@ -136,7 +169,7 @@ fun KidsGamesScreen(
                 )
                 AppUiText(
                     if (timedOut) "Your game time has finished. Ask a parent to allow more time."
-                    else "Games use your parent's daily allowance: $dailyLimitMinutes minutes. Learning tasks and your 3D Solar System are separate.",
+                    else "Games continue until your parent's daily time allowance runs out. There is no question-count cap; questions avoid repeats until the selected bank has been used. Learning tasks and the 4D Solar System are separate.",
                     color = if (timedOut) MaterialTheme.colorScheme.error else Color(0xFF626987),
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -193,7 +226,16 @@ fun KidsGamesScreen(
                     if (feedback.isNotBlank()) {
                         AppUiText(feedback, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         OutlinedButton(
-                            onClick = { if (!timedOut) { question = arcadeQuestion(mode); selectedAnswer = null; feedback = "" } },
+                            onClick = {
+                                if (!timedOut) {
+                                    val next = arcadeQuestion(mode, usedQuestionPrompts)
+                                    usedQuestionPrompts = if (next.prompt in usedQuestionPrompts) setOf(next.prompt)
+                                        else usedQuestionPrompts + next.prompt
+                                    question = next
+                                    selectedAnswer = null
+                                    feedback = ""
+                                }
+                            },
                             enabled = !timedOut,
                             modifier = Modifier.fillMaxWidth()
                         ) { AppUiText("Next challenge ✨") }
