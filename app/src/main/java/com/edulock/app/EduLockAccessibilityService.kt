@@ -37,6 +37,7 @@ class EduLockAccessibilityService : AccessibilityService() {
     private var lastEventAt = 0L
     private var blockedPackageName = ""
     private var blockedAppEvents = 0
+    private var lastBlockedPackageName = ""
     private var lastStatusReportAt = 0L
     private val statusExecutor = Executors.newSingleThreadExecutor()
     private val statusReportInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -187,8 +188,11 @@ class EduLockAccessibilityService : AccessibilityService() {
             totalUsed >= earnedMinutes * MILLIS_PER_MINUTE && appEarnedMinutes == 0 && !groupTimeAvailable
         val blockedForSchedule = !isWithinWeeklySchedule(packageName)
         if (blockedByKidsMode || explicitlyBlocked || blockedForAppTime || blockedForEarnedTime || blockedForSchedule) {
-            blockedAppEvents = (blockedAppEvents + 1).coerceAtMost(Int.MAX_VALUE - 1)
-            prefs.edit().putInt(KEY_BLOCKED_APP_EVENTS, blockedAppEvents).apply()
+            if (packageName != lastBlockedPackageName) {
+                blockedAppEvents = (blockedAppEvents + 1).coerceAtMost(Int.MAX_VALUE - 1)
+                lastBlockedPackageName = packageName
+                prefs.edit().putInt(KEY_BLOCKED_APP_EVENTS, blockedAppEvents).apply()
+            }
             val message = when {
                 blockedByKidsMode -> "Kids Mode is on. Ask your parent to allow this app in EduLock."
                 explicitlyBlocked -> "This app has been disabled by your parent."
@@ -198,6 +202,7 @@ class EduLockAccessibilityService : AccessibilityService() {
             }
             showBlocker(message, packageName)
         } else {
+            lastBlockedPackageName = ""
             hideBlocker()
         }
     }
