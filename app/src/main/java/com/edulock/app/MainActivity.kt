@@ -85,6 +85,7 @@ private fun studyTrackLabel(code: String): String = when (code) {
     "sikh" -> "Sikhism"
     "buddhist" -> "Buddhism"
     "jewish" -> "Judaism"
+    "jain" -> "Jainism"
     "other" -> "Other"
     else -> "Not selected"
 }
@@ -771,6 +772,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         "child" -> childCountryCode = code
                                         "parent" -> {
                                             parentCountryCode = code
+                                            selectedSubject = null
+                                            curriculumCountryCode = code
                                             if (familyId.isNotBlank() && session?.accountRole == "parent") {
                                                 execute {
                                                     repository.updateParentLearningSettings(familyId, parentCountryCode, parentLearningLanguageCode, parentStudyTrack, parentDisplayLanguageCode)
@@ -873,16 +876,39 @@ private fun EduLockApp(repository: EduLockRepository) {
                 text = {
                     Column(Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState())) {
                         AppUiText("Optional. Choose the learning track you want EduLock to use; it does not infer a family's religion from its country.")
-                        listOf(
-                            "none" to "No religious-education track",
-                            "islamic" to "Islam",
-                            "hindu" to "Hinduism",
-                            "christian" to "Christianity",
-                            "sikh" to "Sikhism",
-                            "buddhist" to "Buddhism",
-                            "jewish" to "Judaism",
-                            "other" to "Other / parent-created"
-                        ).forEach { (code, label) ->
+                        val trackOptions = when (parentCountryCode) {
+                            "PK" -> listOf(
+                                "none" to "No religious-education track",
+                                "islamic" to "Islam",
+                                "hindu" to "Hinduism",
+                                "christian" to "Christianity",
+                                "sikh" to "Sikhism",
+                                "buddhist" to "Buddhism",
+                                "other" to "Other / parent-created"
+                            )
+                            "IN" -> listOf(
+                                "none" to "No religious-education track",
+                                "hindu" to "Hinduism",
+                                "islamic" to "Islam",
+                                "sikh" to "Sikhism",
+                                "christian" to "Christianity",
+                                "buddhist" to "Buddhism",
+                                "jain" to "Jainism",
+                                "other" to "Other / parent-created"
+                            )
+                            else -> listOf(
+                                "none" to "No religious-education track",
+                                "islamic" to "Islam",
+                                "hindu" to "Hinduism",
+                                "christian" to "Christianity",
+                                "sikh" to "Sikhism",
+                                "buddhist" to "Buddhism",
+                                "jewish" to "Judaism",
+                                "jain" to "Jainism",
+                                "other" to "Other / parent-created"
+                            )
+                        }
+                        trackOptions.forEach { (code, label) ->
                             TextButton(onClick = {
                                 parentStudyTrack = code
                                 studyTrackPickerOpen = false
