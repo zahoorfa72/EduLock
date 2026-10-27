@@ -895,6 +895,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 "christian" to "Christianity",
                                 "sikh" to "Sikhism",
                                 "buddhist" to "Buddhism",
+                                "jain" to "Jainism",
+                                "jewish" to "Judaism",
                                 "other" to "Other / parent-created"
                             )
                             "IN" -> listOf(
@@ -902,9 +904,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 "hindu" to "Hinduism",
                                 "islamic" to "Islam",
                                 "sikh" to "Sikhism",
-                                "christian" to "Christianity",
-                                "buddhist" to "Buddhism",
                                 "jain" to "Jainism",
+                                "buddhist" to "Buddhism",
+                                "christian" to "Christianity",
+                                "jewish" to "Judaism",
                                 "other" to "Other / parent-created"
                             )
                             else -> listOf(
