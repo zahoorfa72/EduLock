@@ -10,7 +10,14 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.UserManager
 
-/** Device-owner-only kiosk policy. Ordinary installs use Accessibility fallback blocking. */
+/**
+ * Device-owner-only kiosk policy.
+ *
+ * In Kids Mode, Lock Task is the enforcement boundary: the child's normal launcher is
+ * deliberately not allowlisted, because allowlisting HOME lets the child leave EduLock.
+ * Android system UI/permission and telephony packages remain available for safety-critical
+ * prompts and calls. Ordinary installs still require the explicit Accessibility fallback.
+ */
 object ChildDeviceKioskPolicy {
     private const val LOCK_PREFS = "edulock_lock_state"
     private const val KEY_KIDS_MODE = "kids_mode_enabled"
@@ -34,11 +41,13 @@ object ChildDeviceKioskPolicy {
                 manager.clearUserRestriction(admin, UserManager.DISALLOW_APPS_CONTROL)
                 manager.clearUserRestriction(admin, UserManager.DISALLOW_UNINSTALL_APPS)
             }
+            // Never add the device's ordinary HOME launcher while Kids Mode is on.
+            // A launcher in the Lock Task allowlist can let the child exit the kiosk.
             val homePackage = resolveHomePackage(context)
             val candidates = linkedSetOf(context.packageName)
-            if (homePackage.isNotBlank()) candidates += homePackage
+            if (!kidsModeEnabled && homePackage.isNotBlank()) candidates += homePackage
             if (kidsModeEnabled) {
-                candidates += allowedPackages
+                candidates += allowedPackages.filter { it != homePackage }
                 candidates += setOf(
                     "com.android.systemui",
                     "com.android.permissioncontroller",
@@ -55,8 +64,12 @@ object ChildDeviceKioskPolicy {
             if (context.packageName !in installed) throw IllegalStateException("EduLock is missing from the kiosk allowlist.")
             manager.setLockTaskPackages(admin, installed.toTypedArray())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                // Keep Home disabled in kiosk mode; enabling LOCK_TASK_FEATURE_HOME lets
+                // users navigate to a launcher (which is intentionally not allowlisted).
+                // Permit status/system info, while leaving notifications, recents and global
+                // actions disabled by omission.
                 val features = if (kidsModeEnabled) {
-                    DevicePolicyManager.LOCK_TASK_FEATURE_HOME or DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
+                    DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
                 } else DevicePolicyManager.LOCK_TASK_FEATURE_NONE
                 manager.setLockTaskFeatures(admin, features)
             }
@@ -68,8 +81,11 @@ object ChildDeviceKioskPolicy {
                 !userManager.hasUserRestriction(UserManager.DISALLOW_APPS_CONTROL) &&
                     !userManager.hasUserRestriction(UserManager.DISALLOW_UNINSTALL_APPS)
             }
+            val actualAllowlist = manager.getLockTaskPackages(admin).toSet()
+            val homeExcluded = !kidsModeEnabled || homePackage.isBlank() || homePackage !in actualAllowlist
             val confirmed = manager.isDeviceOwnerApp(context.packageName) &&
-                context.packageName in manager.getLockTaskPackages(admin) &&
+                context.packageName in actualAllowlist &&
+                homeExcluded &&
                 manager.isUninstallBlocked(admin, context.packageName) == kidsModeEnabled &&
                 restrictionsMatch
             context.getSharedPreferences(LOCK_PREFS, Context.MODE_PRIVATE)
@@ -91,10 +107,26 @@ object ChildDeviceKioskPolicy {
             prefs.getBoolean(KEY_POLICY_APPLIED, false) && manager.isLockTaskPermitted(context.packageName)
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         try {
-            if (enabled && activityManager.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_LOCKED) activity.startLockTask()
-            else if (!enabled && activityManager.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_LOCKED) activity.stopLockTask()
-        } catch (_: Exception) { /* UI does not report a failed request as success. */ }
+            if (enabled && activityManager.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_LOCKED) {
+                activity.startLockTask()
+                // Verify after the request; a non-device-owner or OEM failure must not be
+                // silently presented as a successful kiosk lock.
+                val locked = (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager)
+                    .lockTaskModeState == ActivityManager.LOCK_TASK_MODE_LOCKED
+                prefs.edit().putBoolean(KEY_KIOSK_ACTIVE, locked).apply()
+            } else if (!enabled && activityManager.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_LOCKED) {
+                activity.stopLockTask()
+                prefs.edit().putBoolean(KEY_KIOSK_ACTIVE, false).apply()
+            } else {
+                prefs.edit().putBoolean(KEY_KIOSK_ACTIVE, enabled &&
+                    activityManager.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_LOCKED).apply()
+            }
+        } catch (_: Exception) {
+            prefs.edit().putBoolean(KEY_KIOSK_ACTIVE, false).apply()
+        }
     }
+
+    private const val KEY_KIOSK_ACTIVE = "lock_task_kiosk_active"
 
     private fun resolveHomePackage(context: Context): String = try {
         context.packageManager.resolveActivity(
