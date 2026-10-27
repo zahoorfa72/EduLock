@@ -58,8 +58,8 @@ fun Learning3DLabScreen(
             colors = CardDefaults.cardColors(containerColor = Color(0xFFECEBFF))
         ) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                AppUiText("✨ Touch. Explore. Discover.", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color(0xFF29245F))
-                AppUiText("Choose a subject model below. Tap visible objects to reveal their names and facts; drag the model to rotate it.", color = Color(0xFF566080))
+                AppUiText("✨ 4D Learning Lab • Touch. Explore. Discover.", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color(0xFF29245F))
+                AppUiText("Explore animated, time-based 3D models (a 4D-style learning experience). Tap visible objects to reveal names and facts; drag to rotate. A phone screen cannot display a true four-spatial-dimension object, so the fourth dimension is shown through motion and changing states.", color = Color(0xFF566080))
             }
         }
 
@@ -96,7 +96,7 @@ fun Learning3DLabScreen(
                 Button(
                     onClick = { onCreateQuestion(selected) },
                     modifier = Modifier.fillMaxWidth()
-                ) { AppUiText("Create a question from this model") }
+                ) { AppUiText("Create a 4D-style question from this model") }
                 if (selected.id == "solar-system") {
                     OutlinedButton(onClick = onStartSolarQuiz, modifier = Modifier.fillMaxWidth()) {
                         AppUiText("🚀 Start planet identification challenge")
