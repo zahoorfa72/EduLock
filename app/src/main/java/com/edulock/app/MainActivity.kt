@@ -388,12 +388,6 @@ private fun EduLockApp(repository: EduLockRepository) {
     var questionPictureError by remember { mutableStateOf<String?>(null) }
     var displayedQuestionImageUrl by remember { mutableStateOf<String?>(null) }
     var questionImageLoading by remember { mutableStateOf(false) }
-    var questionPictureUri by remember { mutableStateOf<Uri?>(null) }
-    var questionPictureBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var questionPicturePreview by remember { mutableStateOf<Bitmap?>(null) }
-    var questionPictureError by remember { mutableStateOf<String?>(null) }
-    var displayedQuestionImageUrl by remember { mutableStateOf<String?>(null) }
-    var questionImageLoading by remember { mutableStateOf(false) }
     var question3DModel by remember { mutableStateOf("none") }
     var questionType by remember { mutableStateOf("multiple_choice") }
     var questionOptions by remember { mutableStateOf("") }
