@@ -9,14 +9,73 @@ object FourDQuestionBanks {
     private fun bank(category: String, subject: String, model: String, items: List<FourDQuestionSeed>,
         language: String = "en", country: String = "ZZ", conceptPrefix: String? = null
     ): List<ParentLearningTemplate> = items.mapIndexed { index, item ->
+        val questionModel = if (conceptPrefix == null) modelForQuestion(subject, item.prompt, model) else model
         ParentLearningTemplate(
             title = "$subject • 4D discovery ${index + 1}", category = category, subjectTitle = subject,
             languageCode = language, questionType = "multiple_choice", prompt = item.prompt, options = item.options,
             answer = item.answer,
-            conceptKey = conceptPrefix?.let { "$it:${index + 1}" } ?: "4d:$model:${slug(subject)}-${index + 1}",
+            conceptKey = conceptPrefix?.let { "$it:${index + 1}" } ?: "4d:$questionModel:${slug(subject)}-${index + 1}",
             solution = item.explanation,
             countryCode = country
         )
+    }
+
+    // Each starter question points to a model matching the concept it tests.
+    private fun modelForQuestion(subject: String, prompt: String, fallback: String): String {
+        val p = prompt.lowercase()
+        return when (subject.lowercase()) {
+            "mathematics" -> when {
+                "tesseract" in p || "four-dimensional" in p -> "tesseract"
+                "cylinder" in p -> "cylinder"
+                "triangular prism" in p || "prism" in p -> "prism"
+                "sphere" in p -> "sphere"
+                "cone" in p -> "cone"
+                "cuboid" in p || "box" in p -> "cuboid"
+                else -> "geometry"
+            }
+            "physics" -> when {
+                listOf("circuit", "wire", "lamp", "current", "switch").any { it in p } -> "circuit"
+                "magnet" in p || "poles" in p -> "magnet"
+                else -> "force"
+            }
+            "chemistry" -> when {
+                "evaporation" in p || "water vapour" in p -> "water-cycle"
+                "molecule" in p || "h₂o" in p || "chemical bond" in p -> "molecule"
+                else -> "atom"
+            }
+            "biology" -> when {
+                "flower" in p || "pollinator" in p || "petals" in p -> "flower"
+                "ecosystem" in p -> "earth"
+                else -> "cell"
+            }
+            "general science" -> when {
+                listOf("vapour", "evaporation", "condensation", "precipitation", "cloud").any { it in p } -> "water-cycle"
+                "conductor" in p || "electrical" in p -> "circuit"
+                "gravity" in p || "force" in p -> "force"
+                "sun" in p || "shadow" in p -> "solar-system"
+                else -> "book"
+            }
+            "astronomy" -> "solar-system"
+            "geography" -> when {
+                "volcano" in p -> "volcano"
+                listOf("river", "ocean", "water").any { it in p } -> "water-cycle"
+                else -> "earth"
+            }
+            "social studies" -> if (listOf("globe", "map", "compass").any { it in p }) "earth" else "book"
+            "computer skills" -> if (listOf("circuit", "battery", "switch", "energy").any { it in p }) "circuit" else "book"
+            "health & safety" -> if (listOf("germ", "lungs", "organ", "blood").any { it in p }) "cell" else "book"
+            "art & design" -> when {
+                "sphere" in p -> "sphere"
+                listOf("triangle", "shape", "symmetry").any { it in p } -> "geometry"
+                else -> "flower"
+            }
+            "drawing & colour" -> when {
+                "sphere" in p -> "sphere"
+                listOf("perspective", "overlapping", "shape", "contour", "horizon").any { it in p } -> "geometry"
+                else -> "flower"
+            }
+            else -> fallback
+        }
     }
 
     private val maths = listOf(
@@ -29,7 +88,7 @@ object FourDQuestionBanks {
         q("🍦 Ice-cream shop: which 3D shape has a round base that narrows to one tip?", "Cone|Cylinder|Cuboid", "Cone", "A cone has a circular base and a single apex."),
         q("📦 Robot delivery box: how many straight edges does a cuboid have?", "8|10|12", "12", "A cuboid has twelve edges."),
         q("🎁 Gift-box mission: a box is 4 cm long, 3 cm wide and 2 cm high. What space does it hold?", "9 cm³|24 cm³|36 cm³", "24 cm³", "Multiply length × width × height: 4 × 3 × 2 = 24 cm³."),
-        q("🧭 3D explorer challenge: which drawing lets you see the front, side and top of a solid together?", "Isometric view|Single straight line|A dot only", "Isometric view", "An isometric drawing shows three dimensions in one view.")
+        q("🧊 4D explorer challenge: what is the four-dimensional analogue of a cube called?", "Tesseract|Cylinder|Sphere", "Tesseract", "A tesseract is the four-dimensional analogue of a cube; its projection can be explored as two linked cubes.")
     )
     private val physics = listOf(
         q("⚽ Space-arena challenge: kick the glowing ball. What can an unbalanced force change about its motion?", "Speed or direction|Mass always|The object's material automatically", "Speed or direction", "A net force changes velocity: speed, direction, or both."),
