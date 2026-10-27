@@ -1,3 +1,104 @@
+-- Additive EduLock enhancements. Existing family, task, question and ledger rows are preserved.
+begin;
+
+alter table edulock.tasks
+  add column if not exists time_limit_seconds integer
+  check (time_limit_seconds is null or time_limit_seconds between 10 and 3600);
+
+alter table edulock.questions
+  add column if not exists picture_path text;
+alter table edulock.questions
+  drop constraint if exists questions_question_type_check;
+alter table edulock.questions
+  add constraint questions_question_type_check
+  check (question_type in ('multiple_choice','true_false','short_answer','numeric','matching','picture'));
+
+-- Private picture storage; objects are addressed by family UUID / question UUID / file name.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('question-images', 'question-images', false, 5242880, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do update set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists edulock_question_images_parent_insert on storage.objects;
+create policy edulock_question_images_parent_insert on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'question-images'
+    and (storage.foldername(name))[1] ~* '^[0-9a-f-]{36}$'
+    and exists (
+      select 1 from edulock.family_profiles f
+      where f.id::text = (storage.foldername(name))[1]
+        and f.owner_user_id = (select auth.uid())
+    )
+  );
+
+drop policy if exists edulock_question_images_parent_select on storage.objects;
+create policy edulock_question_images_parent_select on storage.objects
+  for select to authenticated
+  using (
+    bucket_id = 'question-images'
+    and exists (
+      select 1 from edulock.family_profiles f
+      where f.id::text = (storage.foldername(name))[1]
+        and f.owner_user_id = (select auth.uid())
+    )
+  );
+
+drop policy if exists edulock_question_images_child_select on storage.objects;
+create policy edulock_question_images_child_select on storage.objects
+  for select to authenticated
+  using (
+    bucket_id = 'question-images'
+    and exists (
+      select 1
+      from edulock.questions q
+      join edulock.subjects s on s.id = q.subject_id
+      join edulock.children c on c.family_id = s.family_id
+      where c.child_user_id = (select auth.uid())
+        and s.family_id::text = (storage.foldername(name))[1]
+        and q.id::text = (storage.foldername(name))[2]
+        and q.picture_path = name
+    )
+  );
+
+create table if not exists edulock.child_task_streaks (
+  child_id uuid primary key references edulock.children(id) on delete cascade,
+  last_passed_day date,
+  consecutive_days integer not null default 0 check (consecutive_days >= 0),
+  last_streak_bonus_day date
+);
+alter table edulock.child_task_streaks enable row level security;
+
+drop policy if exists child_task_streaks_parent_read on edulock.child_task_streaks;
+create policy child_task_streaks_parent_read on edulock.child_task_streaks
+  for select to authenticated
+  using (edulock.owns_child(child_id));
+
+drop policy if exists child_task_streaks_child_read on edulock.child_task_streaks;
+create policy child_task_streaks_child_read on edulock.child_task_streaks
+  for select to authenticated
+  using (exists (
+    select 1 from edulock.children c
+    where c.id = child_task_streaks.child_id and c.child_user_id = (select auth.uid())
+  ));
+
+grant select on edulock.child_task_streaks to authenticated;
+revoke insert, update, delete on edulock.child_task_streaks from anon, authenticated;
+
+alter table edulock.child_device_status
+  add column if not exists device_locked boolean not null default false,
+  add column if not exists guard_mode text not null default 'unknown'
+    check (guard_mode in ('unknown','kiosk','accessibility','off')),
+  add column if not exists current_app_package text,
+  add column if not exists screen_on boolean,
+  add column if not exists blocked_app_events integer not null default 0
+    check (blocked_app_events >= 0);
+
+create index if not exists child_task_streaks_last_passed_day_idx
+  on edulock.child_task_streaks(last_passed_day);
+
 create or replace function edulock.grade_and_award_task(
   p_user_id uuid, p_task_id uuid, p_answers jsonb
 ) returns jsonb
@@ -163,41 +264,6 @@ begin
     values (v_task.id, v_child.id, p_answers, v_score, v_passed, v_award)
     returning id into v_attempt_id;
 
-  -- Update the streak once per UTC date, under the per-child advisory transaction lock.
-  if v_passed then
-    insert into edulock.child_task_streaks(child_id, last_passed_day, consecutive_days, last_streak_bonus_day)
-      values (v_child.id, v_today_date, 0, null)
-      on conflict (child_id) do nothing;
-    select * into v_streak from edulock.child_task_streaks
-      where child_id = v_child.id for update;
-    if v_streak.last_passed_day < v_today_date then
-      if v_streak.last_passed_day = v_yesterday then
-        update edulock.child_task_streaks
-          set consecutive_days = least(consecutive_days + 1, 30), last_passed_day = v_today_date
-          where child_id = v_child.id returning * into v_streak;
-      elsif v_streak.last_passed_day < v_yesterday then
-        update edulock.child_task_streaks
-          set consecutive_days = 1, last_passed_day = v_today_date
-          where child_id = v_child.id returning * into v_streak;
-      end if;
-    end if;
-    if v_streak.last_streak_bonus_day is distinct from v_today_date then
-      v_streak_bonus := least(30, greatest(0, v_streak.consecutive_days * 5),
-        greatest(0, v_child.daily_cap_minutes - v_daily_used - v_award));
-      if v_streak_bonus > 0 then
-        update edulock.child_task_streaks set last_streak_bonus_day = v_today_date
-          where child_id = v_child.id;
-        v_award := v_award + v_streak_bonus;
-        insert into edulock.screen_time_ledger(
-          child_id, source_attempt_id, minutes_delta, reason, target_package_name, target_group_id
-        ) values (
-          v_child.id, v_attempt_id, v_streak_bonus, 'Daily streak bonus',
-          v_task.reward_package_name, v_task.reward_group_id
-        );
-      end if;
-    end if;
-  end if;
-
   insert into edulock.attempt_answers(attempt_id, question_id, concept_key, language_code, is_correct)
     select v_attempt_id, x.question_id, x.concept_key, x.language_code, x.is_correct
     from jsonb_to_recordset(v_details) as x(
@@ -214,6 +280,57 @@ begin
       );
   end if;
 
+  -- Passed tasks advance the daily streak once per UTC day. The +5-minute-per-day
+  -- bonus is awarded at most once daily and remains inside the child's daily limit.
+  if v_passed then
+    insert into edulock.child_task_streaks(child_id, last_passed_day, consecutive_days, last_streak_bonus_day)
+      values (v_child.id, null, 0, null)
+      on conflict (child_id) do nothing;
+    select * into v_streak
+      from edulock.child_task_streaks
+      where child_id = v_child.id
+      for update;
+
+    if v_streak.last_passed_day is distinct from v_today_date then
+      if v_streak.last_passed_day = v_yesterday then
+        update edulock.child_task_streaks
+          set consecutive_days = least(consecutive_days + 1, 30),
+              last_passed_day = v_today_date
+          where child_id = v_child.id
+          returning * into v_streak;
+      else
+        update edulock.child_task_streaks
+          set consecutive_days = 1,
+              last_passed_day = v_today_date
+          where child_id = v_child.id
+          returning * into v_streak;
+      end if;
+    end if;
+
+    if v_streak.last_streak_bonus_day is distinct from v_today_date then
+      v_streak_bonus := least(
+        30,
+        greatest(0, v_streak.consecutive_days * 5),
+        greatest(0, v_child.daily_cap_minutes - v_daily_used - v_award)
+      );
+      if v_streak_bonus > 0 then
+        update edulock.child_task_streaks
+          set last_streak_bonus_day = v_today_date
+          where child_id = v_child.id;
+        insert into edulock.screen_time_ledger(
+          child_id, source_attempt_id, minutes_delta, reason, target_package_name, target_group_id
+        ) values (
+          v_child.id, v_attempt_id, v_streak_bonus, 'Daily streak bonus',
+          v_task.reward_package_name, v_task.reward_group_id
+        );
+        v_award := v_award + v_streak_bonus;
+        update edulock.attempts
+          set awarded_minutes = v_award
+          where id = v_attempt_id;
+      end if;
+    end if;
+  end if;
+
   return jsonb_build_object(
     'attempt_id', v_attempt_id, 'score_percent', v_score, 'passed', v_passed,
     'awarded_minutes', v_award, 'daily_used_minutes_after', v_daily_used + v_award,
@@ -221,12 +338,8 @@ begin
   );
 end;
 $$;
-
 revoke all on function edulock.grade_and_award_task(uuid, uuid, jsonb) from public, anon, authenticated;
 grant execute on function edulock.grade_and_award_task(uuid, uuid, jsonb) to service_role;
-
-create index if not exists child_task_streaks_last_passed_day_idx
-  on edulock.child_task_streaks(last_passed_day);
 
 notify pgrst, 'reload schema';
 commit;
