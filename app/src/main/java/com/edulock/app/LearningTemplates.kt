@@ -631,6 +631,134 @@ ParentLearningTemplate(
             options = listOf("Lungs", "Stomach", "Kidneys"), answer = "Lungs",
             conceptKey = "3d:cell:respiratory-system",
             solution = "Gas exchange takes place in the alveoli of the lungs."
+        ),
+        ParentLearningTemplate(
+            title = "Colour mixing: red and yellow", category = "Drawing & Colour", subjectTitle = "Drawing & Colour",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "In basic paint mixing, what colour do red and yellow make?",
+            options = listOf("Orange", "Green", "Blue"), answer = "Orange",
+            conceptKey = "art:colour-mixing-orange",
+            solution = "Mixing red and yellow paint commonly makes orange. Try small amounts first and observe the shade."
+        ),
+        ParentLearningTemplate(
+            title = "Colour families", category = "Drawing & Colour", subjectTitle = "Drawing & Colour",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Which set contains traditional primary paint colours?",
+            options = listOf("Red, yellow and blue", "Orange, green and purple", "Black, grey and brown"), answer = "Red, yellow and blue",
+            conceptKey = "art:primary-paint-colours",
+            solution = "Traditional beginner paint lessons often use red, yellow and blue as primary colours."
+        ),
+        ParentLearningTemplate(
+            title = "Shape sketch challenge", category = "Drawing & Colour", subjectTitle = "Drawing & Colour",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Which shape has three straight sides?",
+            options = listOf("Triangle", "Circle", "Oval"), answer = "Triangle",
+            conceptKey = "art:triangle-sketch",
+            solution = "A triangle has three sides. Draw one, then colour each side a different colour."
+        ),
+        ParentLearningTemplate(
+            title = "Light and shade", category = "Drawing & Colour", subjectTitle = "Drawing & Colour",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "What helps a drawing of a sphere look three-dimensional?",
+            options = listOf("Light and shadow", "Only one flat line", "Removing all contrast"), answer = "Light and shadow",
+            conceptKey = "art:light-and-shadow",
+            solution = "Highlights and shadows help suggest a rounded surface and the direction of light."
+        ),
+        ParentLearningTemplate(
+            title = "Islamic studies: sacred text", category = "Religious Education", subjectTitle = "Islamic Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "In Islam, which book is regarded as the sacred scripture?",
+            options = listOf("Qur'an", "Torah", "Tripitaka"), answer = "Qur'an",
+            conceptKey = "faith:islamic:sacred-text",
+            solution = "The Qur'an is the sacred scripture of Islam. Parents and teachers can adapt explanations to the child's age."
+        ),
+        ParentLearningTemplate(
+            title = "Islamic studies: Ramadan", category = "Religious Education", subjectTitle = "Islamic Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Which month is associated with fasting from dawn to sunset by many Muslims?",
+            options = listOf("Ramadan", "Shawwal", "Muharram"), answer = "Ramadan",
+            conceptKey = "faith:islamic:ramadan",
+            solution = "Ramadan is the month in which Muslims commonly observe fasting from dawn to sunset."
+        ),
+        ParentLearningTemplate(
+            title = "Hindu studies: Diwali", category = "Religious Education", subjectTitle = "Hindu Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Which festival is widely known as the festival of lights in Hindu traditions?",
+            options = listOf("Diwali", "Vaisakhi", "Vesak"), answer = "Diwali",
+            conceptKey = "faith:hindu:diwali",
+            solution = "Diwali is widely known as the festival of lights and is celebrated in different ways across communities."
+        ),
+        ParentLearningTemplate(
+            title = "Hindu studies: ahimsa", category = "Religious Education", subjectTitle = "Hindu Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "What does the Sanskrit term ahimsa commonly mean?",
+            options = listOf("Non-harm or non-violence", "A type of musical instrument", "A season"), answer = "Non-harm or non-violence",
+            conceptKey = "faith:hindu:ahimsa",
+            solution = "Ahimsa is commonly understood as non-harm or non-violence and is important in several Indian traditions."
+        ),
+        ParentLearningTemplate(
+            title = "Christian studies: scripture", category = "Religious Education", subjectTitle = "Christian Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Which book is the central scripture of Christianity?",
+            options = listOf("The Bible", "The Vedas", "The Guru Granth Sahib"), answer = "The Bible",
+            conceptKey = "faith:christian:scripture",
+            solution = "The Bible is the central scripture of Christianity."
+        ),
+        ParentLearningTemplate(
+            title = "Christian studies: Easter", category = "Religious Education", subjectTitle = "Christian Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "According to Christian belief, what does Easter commemorate?",
+            options = listOf("The resurrection of Jesus", "The birth of the Buddha", "The start of Ramadan"), answer = "The resurrection of Jesus",
+            conceptKey = "faith:christian:easter",
+            solution = "Easter commemorates the resurrection of Jesus in Christian belief."
+        ),
+        ParentLearningTemplate(
+            title = "Sikh studies: scripture", category = "Religious Education", subjectTitle = "Sikh Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Which scripture is central in Sikhism?",
+            options = listOf("Guru Granth Sahib", "The Bible", "The Tripitaka"), answer = "Guru Granth Sahib",
+            conceptKey = "faith:sikh:scripture",
+            solution = "The Guru Granth Sahib is the central scripture of Sikhism."
+        ),
+        ParentLearningTemplate(
+            title = "Sikh studies: langar", category = "Religious Education", subjectTitle = "Sikh Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "What is langar in Sikh tradition?",
+            options = listOf("A community meal served freely", "A type of planet", "A maths symbol"), answer = "A community meal served freely",
+            conceptKey = "faith:sikh:langar",
+            solution = "Langar is a community kitchen or meal offered freely, emphasising service and shared dignity."
+        ),
+        ParentLearningTemplate(
+            title = "Buddhist studies: teacher", category = "Religious Education", subjectTitle = "Buddhist Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Whose teachings are foundational to Buddhism?",
+            options = listOf("The Buddha", "Guru Nanak", "Confucius only"), answer = "The Buddha",
+            conceptKey = "faith:buddhist:teacher",
+            solution = "Buddhism is based on the teachings of the Buddha."
+        ),
+        ParentLearningTemplate(
+            title = "Buddhist studies: practice", category = "Religious Education", subjectTitle = "Buddhist Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Which practice is commonly used by many Buddhists to develop attention and awareness?",
+            options = listOf("Meditation", "Orbit drawing", "Circuit soldering"), answer = "Meditation",
+            conceptKey = "faith:buddhist:meditation",
+            solution = "Meditation is practised in many Buddhist traditions, with methods varying by school."
+        ),
+        ParentLearningTemplate(
+            title = "Jewish studies: Torah", category = "Religious Education", subjectTitle = "Jewish Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Which text is a central part of the Jewish Torah?",
+            options = listOf("The Five Books of Moses", "The Qur'an", "The Tripitaka"), answer = "The Five Books of Moses",
+            conceptKey = "faith:jewish:torah",
+            solution = "The Torah refers especially to the Five Books of Moses and is central to Judaism."
+        ),
+        ParentLearningTemplate(
+            title = "Jewish studies: Shabbat", category = "Religious Education", subjectTitle = "Jewish Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "What is Shabbat in Jewish tradition?",
+            options = listOf("A weekly day of rest", "A planet", "A colour-mixing technique"), answer = "A weekly day of rest",
+            conceptKey = "faith:jewish:shabbat",
+            solution = "Shabbat is the weekly Jewish day of rest and observance."
         )
     )
 }
