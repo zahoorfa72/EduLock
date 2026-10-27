@@ -80,7 +80,8 @@ class EduLockAccessibilityService : AccessibilityService() {
         val prefs = lockPrefs()
         val today = utcDay()
         if (prefs.getString(KEY_DAY, null) != today) resetDailyUsage(prefs, today)
-        if (!prefs.getBoolean(KEY_CHILD_ACTIVE, false) || !isAllowedPackageForUsage(lastPackage)) {
+        // Do not charge the child for time spent on EduLock's full-screen restriction notice.
+        if (blocker != null || !prefs.getBoolean(KEY_CHILD_ACTIVE, false) || !isAllowedPackageForUsage(lastPackage)) {
             lastEventAt = now
             return
         }
