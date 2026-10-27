@@ -3760,8 +3760,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                         val minutesSinceSeen = lastSeenMillis?.let { ((System.currentTimeMillis() - it).coerceAtLeast(0L) / 60_000L) }
                         val statusText = when {
                             snapshot == null || snapshot.lastSeenAt == null -> "Waiting for the child's first device check-in"
-                            !snapshot.sharingEnabled -> "Location sharing is paused on the child's device"
-                            minutesSinceSeen != null && minutesSinceSeen >= 15 -> "Not reporting for about $minutesSinceSeen minutes. The phone may be offline, switched off, or EduLock may be stopped."
+                            minutesSinceSeen != null && minutesSinceSeen >= 10 -> "Not reporting for about $minutesSinceSeen minutes. The phone may be offline, switched off, or EduLock may be stopped."
+                            !snapshot.sharingEnabled -> "Location sharing is paused; device-status check-ins may still be available"
                             else -> "Device checking in • last contact ${snapshot.lastSeenAt.replace("T", " ").take(19)}"
                         }
                         Card(
