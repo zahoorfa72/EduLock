@@ -61,7 +61,12 @@ internal object ChildLocationSyncClient {
         context: Context,
         childId: String,
         sharingEnabled: Boolean,
-        batteryPercent: Int?
+        batteryPercent: Int?,
+        deviceLocked: Boolean? = null,
+        guardMode: String? = null,
+        currentAppPackage: String? = null,
+        screenOn: Boolean? = null,
+        blockedAppEvents: Int? = null
     ) {
         val now = Instant.now().toString()
         val body = JSONObject()
@@ -72,15 +77,45 @@ internal object ChildLocationSyncClient {
         if (batteryPercent != null && batteryPercent in 0..100) {
             body.put("battery_percent", batteryPercent)
         }
-        authorizedRequest(
-            context,
-            "rest/v1/child_device_status?on_conflict=child_id",
-            "POST",
-            body,
-            profile = true,
-            prefer = "resolution=merge-duplicates,return=minimal",
-            expectedRole = "child"
-        )
+        if (deviceLocked != null) body.put("device_locked", deviceLocked)
+        if (guardMode != null && guardMode in setOf("unknown", "kiosk", "accessibility", "off")) {
+            body.put("guard_mode", guardMode)
+        }
+        if (currentAppPackage != null) body.put("current_app_package", currentAppPackage.take(255))
+        if (screenOn != null) body.put("screen_on", screenOn)
+        if (blockedAppEvents != null) body.put("blocked_app_events", blockedAppEvents.coerceAtLeast(0))
+
+        try {
+            authorizedRequest(
+                context,
+                "rest/v1/child_device_status?on_conflict=child_id",
+                "POST",
+                body,
+                profile = true,
+                prefer = "resolution=merge-duplicates,return=minimal",
+                expectedRole = "child"
+            )
+        } catch (error: IOException) {
+            // Backward compatibility: older installations without migration 0033 still
+            // record an ordinary heartbeat instead of losing all presence reports.
+            if (deviceLocked == null && guardMode == null && currentAppPackage == null &&
+                screenOn == null && blockedAppEvents == null) throw error
+            val legacyBody = JSONObject()
+                .put("child_id", childId)
+                .put("last_seen_at", now)
+                .put("sharing_enabled", sharingEnabled)
+                .put("updated_at", now)
+            if (batteryPercent != null && batteryPercent in 0..100) legacyBody.put("battery_percent", batteryPercent)
+            authorizedRequest(
+                context,
+                "rest/v1/child_device_status?on_conflict=child_id",
+                "POST",
+                legacyBody,
+                profile = true,
+                prefer = "resolution=merge-duplicates,return=minimal",
+                expectedRole = "child"
+            )
+        }
     }
 
     fun loadParentDeviceStatuses(context: Context): JSONArray =
