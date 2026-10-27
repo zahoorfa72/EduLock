@@ -1036,6 +1036,63 @@ class EduLockRepository(context: Context) {
         }
     }
 
+
+    /**
+     * Submit a completed child task through the trusted server grading function.
+     * Answer keys remain server-side; the client sends only question IDs, answers and
+     * optional language selections. The function validates the linked child/task and
+     * creates attempt/reward ledger rows atomically.
+     */
+    suspend fun submitTask(taskId: String, answers: List<TaskAnswer>): TaskSubmissionResult {
+        requireSession("child")
+        require(taskId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid task." }
+        require(answers.isNotEmpty() && answers.size <= 500) { "Answer every question before submitting." }
+        val seen = mutableSetOf<String>()
+        val payload = JSONArray()
+        answers.forEach { answer ->
+            require(answer.questionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid question." }
+            require(seen.add(answer.questionId)) { "Each question may be answered only once." }
+            require(answer.answer.length <= 10000) { "An answer is too long." }
+            val row = JSONObject()
+                .put("question_id", answer.questionId)
+                .put("answer", answer.answer)
+            if (answer.languageCode.isNotBlank()) row.put("language_code", answer.languageCode.take(16))
+            payload.put(row)
+        }
+        val response = requestFunction(
+            "submit-task-attempt",
+            JSONObject().put("task_id", taskId).put("answers", payload)
+        )
+        return TaskSubmissionResult(
+            attemptId = response.optString("attempt_id").takeIf { it.isNotBlank() && it != "null" },
+            scorePercent = response.optInt("score_percent", 0).coerceIn(0, 100),
+            passed = response.optBoolean("passed", false),
+            awardedMinutes = response.optInt("awarded_minutes", 0).coerceIn(0, 1440),
+            dailyUsedMinutesAfter = response.optInt("daily_used_minutes_after", 0).coerceAtLeast(0),
+            dailyCapMinutes = response.optInt("daily_cap_minutes", 0).coerceIn(0, 1440)
+        )
+    }
+
+    /** Load recent attempts for parent progress/report screens. */
+    suspend fun loadAttempts(): List<AttemptRow> {
+        requireSession("parent")
+        val rows = restArray(
+            "attempts?select=id,task_id,child_id,score_percent,passed,awarded_minutes,created_at&order=created_at.desc&limit=1000"
+        )
+        return (0 until rows.length()).mapNotNull { index ->
+            val row = rows.optJSONObject(index) ?: return@mapNotNull null
+            AttemptRow(
+                id = row.optString("id"),
+                taskId = row.optString("task_id"),
+                childId = row.optString("child_id"),
+                scorePercent = row.optInt("score_percent", 0).coerceIn(0, 100),
+                passed = row.optBoolean("passed", false),
+                awardedMinutes = row.optInt("awarded_minutes", 0).coerceAtLeast(0),
+                createdAt = row.optString("created_at").takeIf { it.isNotBlank() && it != "null" }
+            )
+        }
+    }
+
     suspend fun loadChildTasks(childId: String): List<TaskRow> {
         requireSession("child")
         val rows = restArray("tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id&child_id=eq.$childId&active=eq.true&order=created_at.desc")
