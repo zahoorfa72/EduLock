@@ -26,7 +26,9 @@ data class ChildProfile(
     val dailyCapMinutes: Int,
     val countryCode: String = "PK",
     val schoolGrade: Int = 1,
-    val ageYears: Int = 8
+    val ageYears: Int = 8,
+    val avatarIcon: String = "🦊",
+    val dailyGameLimitMinutes: Int = 20
 )
 
 data class SubjectRow(
@@ -236,9 +238,14 @@ class EduLockRepository(context: Context) {
             .put("data", JSONObject()
                 .put("account_role", accountRole)
                 .put("display_name", displayName.trim().take(120)))
-        val json = authRequest("auth/v1/signup", body)
+        val normalizedEmail = email.trim().lowercase(Locale.ROOT)
+        val json = authRequest("auth/v1/signup", body.put("email", normalizedEmail))
         val user = json.optJSONObject("user") ?: json.optJSONObject("data")?.optJSONObject("user")
         val token = sessionFrom(json, accountRole)
+        val identities = user?.optJSONArray("identities")
+        if (token == null && identities != null && identities.length() == 0) {
+            throw IOException("This email is already registered. Switch to Sign in and use your existing password, or use your account recovery option.")
+        }
         if (token != null) {
             sessionStore.save(token)
             return AuthResult(token, "Account created successfully.")
@@ -255,7 +262,7 @@ class EduLockRepository(context: Context) {
         ensureConfigured()
         require(email.trim().contains("@")) { "Enter a valid email address" }
         val code = token.filter(Char::isDigit)
-        require(code.length == 8) { "Enter the eight-digit code from your email" }
+        require(code.length in 6..8) { "Enter the 6–8 digit code from your email. Use every digit shown in the latest message." }
         require(accountRole == "parent") { "Email verification is for parent accounts. Pair child devices with a one-time code." }
         val json = authRequest(
             "auth/v1/verify",
@@ -270,7 +277,21 @@ class EduLockRepository(context: Context) {
     suspend fun resendSignupOtp(email: String) {
         ensureConfigured()
         require(email.trim().contains("@")) { "Enter a valid email address" }
-        authRequest("auth/v1/resend", JSONObject().put("type", "signup").put("email", email.trim()))
+        try {
+            authRequest("auth/v1/resend", JSONObject().put("type", "signup").put("email", email.trim().lowercase(Locale.ROOT)))
+        } catch (e: Exception) {
+            val raw = e.message.orEmpty()
+            val friendly = when {
+                raw.contains("rate", true) || raw.contains("security purposes", true) || raw.contains("too many", true) ->
+                    "Email provider is rate-limiting new codes. Wait a little longer, then request once more. Check Inbox, Spam and Promotions before retrying."
+                raw.contains("already confirmed", true) || raw.contains("already verified", true) ->
+                    "This email is already verified. Return to Sign in and use your password."
+                raw.contains("not found", true) || raw.contains("user not found", true) ->
+                    "No pending signup was found for this email. Return to Create account and try again, or sign in if you already registered."
+                else -> raw
+            }
+            throw IOException(friendly.ifBlank { "Could not request a new verification code. Check your connection and try again." }, e)
+        }
     }
 
     /**
@@ -377,11 +398,15 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadChildren(familyId: String): List<ChildProfile> {
         requireSession("parent")
-        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years&family_id=eq.$familyId&order=created_at.desc")
+        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes&family_id=eq.$familyId&order=created_at.desc")
         return (0 until rows.length()).mapNotNull { i -> rows.optJSONObject(i)?.toChildProfile() }
     }
 
-    suspend fun addChild(familyId: String, name: String, languageCode: String, dailyCap: Int, countryCode: String = "PK", schoolGrade: Int = 1, ageYears: Int = 8): ChildProfile {
+    suspend fun addChild(
+        familyId: String, name: String, languageCode: String, dailyCap: Int,
+        countryCode: String = "PK", schoolGrade: Int = 1, ageYears: Int = 8,
+        avatarIcon: String = "🦊", dailyGameLimitMinutes: Int = 20
+    ): ChildProfile {
         requireSession("parent")
         require(name.trim().isNotEmpty()) { "Enter the child’s name" }
         require(dailyCap in 0..1440) { "Daily screen-time limit must be from 0 to 1440 minutes" }
@@ -390,7 +415,9 @@ class EduLockRepository(context: Context) {
         require(language.matches(Regex("[a-z][a-z0-9-]{1,15}"))) { "Use a valid language code such as en, ur, sd or hi." }
         require(schoolGrade in 0..13) { "Choose a grade from kindergarten to grade 13." }
         require(ageYears in 3..19) { "Child age must be from 3 to 19 years." }
-        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years", "POST",
+        require(dailyGameLimitMinutes in 0..1440) { "Daily educational game time must be from 0 to 1440 minutes." }
+        val safeAvatar = avatarIcon.takeIf { it in CHILD_AVATAR_ICONS } ?: "🦊"
+        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes", "POST",
             JSONObject()
                 .put("family_id", familyId)
                 .put("display_name", name.trim().take(120))
@@ -398,7 +425,9 @@ class EduLockRepository(context: Context) {
                 .put("daily_cap_minutes", dailyCap)
                 .put("country_code", countryCode.trim().uppercase())
                 .put("school_grade", schoolGrade)
-                .put("age_years", ageYears))
+                .put("age_years", ageYears)
+                .put("avatar_icon", safeAvatar)
+                .put("daily_game_limit_minutes", dailyGameLimitMinutes))
         return rows.optJSONObject(0)?.toChildProfile() ?: throw IOException("Could not create this child profile")
     }
 
@@ -423,6 +452,13 @@ class EduLockRepository(context: Context) {
         }
     }
 
+    suspend fun updateChildGameLimit(childId: String, dailyGameLimitMinutes: Int) {
+        requireSession("parent")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        require(dailyGameLimitMinutes in 0..1440) { "Daily educational game time must be from 0 to 1440 minutes." }
+        restArray("children?id=eq.$childId", "PATCH", JSONObject().put("daily_game_limit_minutes", dailyGameLimitMinutes))
+    }
+
     suspend fun updateChildCurriculum(
         childId: String, countryCode: String, schoolGrade: Int, ageYears: Int, languageCode: String
     ) {
@@ -440,7 +476,7 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadCurrentChild(): ChildProfile? {
         val session = requireSession("child")
-        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years&child_user_id=eq.${session.userId}&limit=1")
+        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes&child_user_id=eq.${session.userId}&limit=1")
         return rows.optJSONObject(0)?.toChildProfile()
     }
 
@@ -1138,6 +1174,22 @@ class EduLockRepository(context: Context) {
             val message = listOf("msg", "message", "error_description", "error", "hint")
                 .firstNotNullOfOrNull { key -> json.optString(key).takeIf { it.isNotBlank() && it != "null" } }
             if (message != null) {
+                if (message.contains("user already registered", ignoreCase = true) ||
+                    message.contains("email already registered", ignoreCase = true) ||
+                    message.contains("already been registered", ignoreCase = true)) {
+                    return "This email is already registered. Switch to Sign in and use your existing password."
+                }
+                if (message.contains("token has expired", ignoreCase = true) ||
+                    message.contains("otp_expired", ignoreCase = true) ||
+                    message.contains("invalid token", ignoreCase = true)) {
+                    return "This verification code has expired or is incorrect. Request a fresh code and enter the latest email's code."
+                }
+                if (message.contains("email rate limit", ignoreCase = true) ||
+                    message.contains("over_email_send_rate_limit", ignoreCase = true) ||
+                    message.contains("for security purposes", ignoreCase = true) ||
+                    message.contains("too many requests", ignoreCase = true)) {
+                    return "Too many email-code requests. Wait a little longer, check Inbox/Spam/Promotions, then request just one fresh code."
+                }
                 if (message.contains("anonymous_provider_disabled", ignoreCase = true) ||
                     message.contains("anonymous sign-ins are disabled", ignoreCase = true)) {
                     return "Child pairing needs Anonymous Sign-Ins enabled in the EduLock Supabase project: Authentication → Sign In / Providers → Anonymous."
@@ -1151,6 +1203,7 @@ class EduLockRepository(context: Context) {
             // Fall through to safe generic message.
         }
         return when (status) {
+            429 -> "Too many email-code requests. Wait a little longer, check Inbox/Spam/Promotions, then request one fresh code."
             400 -> "The request could not be accepted. Check the entered values."
             401 -> "Sign-in required. Check your email and password."
             403 -> "You do not have permission to perform this action."
@@ -1183,7 +1236,9 @@ class EduLockRepository(context: Context) {
         dailyCapMinutes = optInt("daily_cap_minutes", 60).coerceIn(0, 1440),
         countryCode = optString("country_code", "PK").uppercase().takeIf { it.matches(Regex("[A-Z]{2}")) } ?: "PK",
         schoolGrade = optInt("school_grade", 1).coerceIn(0, 13),
-        ageYears = optInt("age_years", 8).coerceIn(3, 19)
+        ageYears = optInt("age_years", 8).coerceIn(3, 19),
+        avatarIcon = optString("avatar_icon", "🦊").takeIf { it in CHILD_AVATAR_ICONS } ?: "🦊",
+        dailyGameLimitMinutes = optInt("daily_game_limit_minutes", 20).coerceIn(0, 1440)
     )
 
     private fun JSONObject.toTaskRow() = TaskRow(
@@ -1214,6 +1269,7 @@ class EduLockRepository(context: Context) {
     private fun ensureConfiguredIfNeeded() = ensureConfigured()
 
     private companion object {
+        val CHILD_AVATAR_ICONS = setOf("🦊","🐼","🐯","🐸","🐰","🦄","🐻","🐨","🐵","🐧","🦋","🐢")
         const val LOCK_PREFS = "edulock_lock_state"
         const val APP_USED_PREFIX = "app_used_millis_"
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
