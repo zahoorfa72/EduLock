@@ -383,6 +383,8 @@ private fun EduLockApp(repository: EduLockRepository) {
     var questionPictureBytes by remember { mutableStateOf<ByteArray?>(null) }
     var questionPicturePreview by remember { mutableStateOf<Bitmap?>(null) }
     var questionPictureError by remember { mutableStateOf<String?>(null) }
+    var displayedQuestionImageUrl by remember { mutableStateOf<String?>(null) }
+    var questionImageLoading by remember { mutableStateOf(false) }
     var question3DModel by remember { mutableStateOf("none") }
     var questionType by remember { mutableStateOf("multiple_choice") }
     var questionOptions by remember { mutableStateOf("") }
@@ -891,6 +893,24 @@ private fun EduLockApp(repository: EduLockRepository) {
 
     LaunchedEffect(resendSeconds) {
         if (resendSeconds > 0) { delay(1000); resendSeconds -= 1 }
+    }
+
+    LaunchedEffect(screen, activeTask?.id, questions.getOrNull(questionIndex)?.id) {
+        val picture = questions.getOrNull(questionIndex)?.picturePath
+        if (screen == AppScreen.PLAY_TASK && picture != null) {
+            displayedQuestionImageUrl = null
+            questionImageLoading = true
+            try {
+                displayedQuestionImageUrl = repository.createSignedQuestionImageUrl(picture)
+            } catch (error: Exception) {
+                notice = error.message ?: "Could not load the private question picture."
+            } finally {
+                questionImageLoading = false
+            }
+        } else {
+            displayedQuestionImageUrl = null
+            questionImageLoading = false
+        }
     }
 
     LaunchedEffect(screen, activeTask?.id) {
@@ -2851,6 +2871,21 @@ private fun EduLockApp(repository: EduLockRepository) {
                         AppUiText("Choose a question first.")
                     } else {
                         AppUiText("Original: " + original.prompt)
+                        if (original.questionType == "picture" && original.picturePath != null) {
+                            var originalPictureUrl by remember(original.id) { mutableStateOf<String?>(null) }
+                            LaunchedEffect(original.id, original.picturePath) {
+                                originalPictureUrl = try { repository.createSignedQuestionImageUrl(original.picturePath) } catch (_: Exception) { null }
+                            }
+                            originalPictureUrl?.let { url ->
+                                AndroidView(
+                                    factory = { ctx -> WebView(ctx).apply { settings.javaScriptEnabled = false; webViewClient = WebViewClient() } },
+                                    update = { view ->
+                                        view.loadDataWithBaseURL(null, "<html><body style='margin:0'><img src='$url' style='max-width:100%;height:auto'/></body></html>", "text/html", "UTF-8", null)
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(220.dp)
+                                )
+                            } ?: AppUiText("Loading or unavailable family picture.")
+                        }
                         AppUiText("Concept tag: " + original.conceptKey + " • Original language: " + original.languageCode)
                         AppUiText("Save each translated question with its translated options and accepted correct answers. The child can switch between these language versions without changing the underlying question or concept.")
                         Field(translationLanguage, { translationLanguage = it }, "Target language code (en, ur, sd, etc.)")
@@ -3970,7 +4005,32 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         CompositionLocalProvider(LocalLayoutDirection provides directionFor(selectedLanguage)) {
                             AppUiText(promptForLanguage, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                            if (question.questionType == "matching") {
+                            if (question.questionType == "picture") {
+                                when {
+                                    questionImageLoading -> AppUiText("Loading family picture…")
+                                    displayedQuestionImageUrl != null -> AndroidView(
+                                        factory = { ctx -> WebView(ctx).apply { settings.javaScriptEnabled = false; webViewClient = WebViewClient() } },
+                                        update = { view ->
+                                            view.loadDataWithBaseURL(
+                                                null,
+                                                "<html><body style='margin:0'><img src='$displayedQuestionImageUrl' style='max-width:100%;height:auto'/></body></html>",
+                                                "text/html", "UTF-8", null
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxWidth().height(250.dp)
+                                    )
+                                    else -> AppUiText("The family picture is not available.")
+                                }
+                                questionOptions.filterNot { it.startsWith("L|") || it.startsWith("R|") }.forEach { option ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().clickable { answers = answers + (question.id to option) }.padding(vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(selected = answers[question.id] == option, onClick = { answers = answers + (question.id to option) })
+                                        AppUiText(option)
+                                    }
+                                }
+                            } else if (question.questionType == "matching") {
                                 val leftItems = question.options.filter { it.startsWith("L|") }.map { it.substringAfter("L|") }
                                 val rightItems = question.options.filter { it.startsWith("R|") }.map { it.substringAfter("R|") }
                                 val selectedPairs = answers[question.id].orEmpty().split(";").filter { it.contains("=") }
