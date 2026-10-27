@@ -58,8 +58,8 @@ fun Learning3DLabScreen(
             colors = CardDefaults.cardColors(containerColor = Color(0xFFECEBFF))
         ) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text("✨ Touch. Explore. Discover.", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color(0xFF29245F))
-                Text("Choose a subject model below. Tap visible objects to reveal their names and facts; drag the model to rotate it.", color = Color(0xFF566080))
+                AppUiText("✨ Touch. Explore. Discover.", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color(0xFF29245F))
+                AppUiText("Choose a subject model below. Tap visible objects to reveal their names and facts; drag the model to rotate it.", color = Color(0xFF566080))
             }
         }
 
@@ -72,9 +72,9 @@ fun Learning3DLabScreen(
                         shape = RoundedCornerShape(17.dp)
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text(item.icon, style = MaterialTheme.typography.headlineSmall)
-                            Text(if (selected.id == item.id) "✓ " + item.title else item.title, fontWeight = if (selected.id == item.id) FontWeight.ExtraBold else FontWeight.SemiBold)
-                            Text(item.subject, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            AppUiText(item.icon, style = MaterialTheme.typography.headlineSmall)
+                            AppUiText(if (selected.id == item.id) "✓ " + item.title else item.title, fontWeight = if (selected.id == item.id) FontWeight.ExtraBold else FontWeight.SemiBold)
+                            AppUiText(item.subject, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -88,18 +88,18 @@ fun Learning3DLabScreen(
             colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F8FF))
         ) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(selected.icon + " " + selected.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-                Text(selected.question, fontWeight = FontWeight.SemiBold)
+                AppUiText(selected.icon + " " + selected.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                AppUiText(selected.question, fontWeight = FontWeight.SemiBold)
                 if (selected.id == "solar-system") SolarSystemModelPreview()
                 else Learning3DPreview(selected.id)
-                Text(selected.detail, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                AppUiText(selected.detail, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Button(
                     onClick = { onCreateQuestion(selected) },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("Create a question from this model") }
+                ) { AppUiText("Create a question from this model") }
                 if (selected.id == "solar-system") {
                     OutlinedButton(onClick = onStartSolarQuiz, modifier = Modifier.fillMaxWidth()) {
-                        Text("🚀 Start planet identification challenge")
+                        AppUiText("🚀 Start planet identification challenge")
                     }
                 }
             }
