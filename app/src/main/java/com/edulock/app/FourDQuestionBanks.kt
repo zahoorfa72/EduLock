@@ -400,6 +400,105 @@ object FourDQuestionBanks {
         )
         else -> emptyList()
     }
+    private fun earlyFaithSeeds(track: String): List<FourDQuestionSeed> = when (track) {
+        "islamic" -> listOf(
+            q("Which book is sacred in Islam?", "Qur'an|Vedas|Tripitaka", "Qur'an", "The Qur'an is the sacred scripture of Islam."),
+            q("What is a mosque?", "A Muslim place of worship|A school subject|A planet", "A Muslim place of worship", "A mosque is a place where Muslims gather for prayer and community."),
+            q("What does the greeting salam wish for?", "Peace|Rain|A game", "Peace", "Salam is a greeting associated with peace."),
+            q("Which month is associated with fasting in Islam?", "Ramadan|January for everyone|Vesak", "Ramadan", "Ramadan is the month when many Muslims fast."),
+            q("What is salah?", "Ritual prayer|A map|A colour", "Ritual prayer", "Salah is the daily ritual prayer in Islam."),
+            q("What is wudu before prayer?", "Ritual washing|A holiday meal|A drawing tool", "Ritual washing", "Wudu is a form of ritual washing."),
+            q("Which celebration comes after Ramadan fasting?", "Eid al-Fitr|Vesak|Diwali", "Eid al-Fitr", "Eid al-Fitr marks the end of Ramadan fasting."),
+            q("What does charity help people do?", "Support people in need|Waste food|Hide books", "Support people in need", "Charity and care for others are important themes in Islam."),
+            q("Which action shows kindness?", "Help a classmate|Laugh at someone hurt|Break a toy", "Help a classmate", "Kindness means treating people with care."),
+            q("What is a good way to share food?", "Offer some to others|Throw it away|Hide all of it", "Offer some to others", "Sharing food can be a way to help others.")
+        )
+        "hindu" -> listOf(
+            q("Which festival is often called the festival of lights?", "Diwali|Vesak|Hanukkah only", "Diwali", "Diwali is celebrated as a festival of lights in many Hindu communities."),
+            q("What is a mandir?", "A Hindu place of worship|A computer part|A planet", "A Hindu place of worship", "A mandir is a Hindu temple."),
+            q("What is puja?", "A form of worship|A kind of map|A maths sign", "A form of worship", "Puja is a form of worship in many Hindu traditions."),
+            q("Which epic tells the story of Rama?", "Ramayana|A weather chart|A science workbook", "Ramayana", "The Ramayana is an important epic in Hindu traditions."),
+            q("What can prasad be?", "An offering shared after worship|A school ruler|A moon crater", "An offering shared after worship", "Prasad is an offering shared in many Hindu traditions."),
+            q("What does ahimsa mean?", "Non-harm|Making noise|Breaking things", "Non-harm", "Ahimsa is an important idea of avoiding harm."),
+            q("What is rangoli?", "A decorative design made with colours|A type of cloud|A computer password", "A decorative design made with colours", "Rangoli designs are made in some homes and festivals."),
+            q("Which action shows respect?", "Listen politely to others|Interrupt every person|Damage a shared place", "Listen politely to others", "Respect means treating other people and traditions thoughtfully."),
+            q("What can prayer express?", "Devotion or thanks|A temperature|A distance", "Devotion or thanks", "Prayer can express devotion, gratitude or reflection."),
+            q("How should we treat people with different traditions?", "With respect|By mocking them|By excluding them", "With respect", "Respect helps people live and learn together.")
+        )
+        "christian" -> listOf(
+            q("Which book is central to Christianity?", "The Bible|The Vedas|The Tripitaka", "The Bible", "The Bible is the central collection of Christian scriptures."),
+            q("What is a church?", "A Christian place of worship|A mountain|A computer app", "A Christian place of worship", "Churches are places where Christian communities gather for worship."),
+            q("What does Christmas celebrate in Christian tradition?", "The birth of Jesus|The start of the school year|The Moon landing", "The birth of Jesus", "Christmas celebrates the birth of Jesus."),
+            q("What does Easter commemorate in Christian belief?", "The resurrection of Jesus|A map invention|A science fair", "The resurrection of Jesus", "Easter commemorates the resurrection of Jesus in Christian belief."),
+            q("What is a parable?", "A story that teaches a lesson|A type of rock|A planet", "A story that teaches a lesson", "Parables use stories to teach ideas or values."),
+            q("What can prayer express?", "Thanks or a request for guidance|A measurement|A colour", "Thanks or a request for guidance", "Prayer can take different forms across Christian traditions."),
+            q("Which symbol is strongly associated with Christianity?", "The cross|A compass|A traffic light", "The cross", "The cross is a widely used Christian symbol."),
+            q("What does forgiveness try to support?", "Peace and repairing relationships|More harm|Dishonesty", "Peace and repairing relationships", "Forgiveness is important in many Christian teachings."),
+            q("Which action shows love of neighbour?", "Help someone who needs it|Mock someone|Take another person's things", "Help someone who needs it", "Helping others is a common Christian value."),
+            q("How should people with different beliefs be treated?", "With dignity and respect|With cruelty|By excluding them", "With dignity and respect", "Respect for each person supports a caring community.")
+        )
+        "sikh" -> listOf(
+            q("Which scripture is central in Sikhism?", "Guru Granth Sahib|The Bible|The Tripitaka", "Guru Granth Sahib", "The Guru Granth Sahib is the central Sikh scripture."),
+            q("What is a gurdwara?", "A Sikh place of worship|A planet|A kind of paint", "A Sikh place of worship", "A gurdwara is a Sikh place of worship and community."),
+            q("What is langar?", "A free community meal|A computer key|A mountain", "A free community meal", "Langar is a shared meal that expresses service and equality."),
+            q("What does seva mean?", "Selfless service|A weather report|A number", "Selfless service", "Seva means service to others."),
+            q("Who founded Sikhism?", "Guru Nanak|The Buddha|Confucius", "Guru Nanak", "Guru Nanak is the founder of Sikhism."),
+            q("Which festival is important in Sikh history?", "Vaisakhi|Halloween|Vesak only", "Vaisakhi", "Vaisakhi is important in Sikh history, including the formation of the Khalsa."),
+            q("What does equality mean?", "Every person deserves dignity|Only rich people matter|Some people do not deserve respect", "Every person deserves dignity", "Equality and human dignity are important Sikh values."),
+            q("What does sharing langar show?", "Service and community|Keeping people apart|Wasting food", "Service and community", "Langar welcomes people to share a meal."),
+            q("What is honest work an example of?", "Responsibility|Dishonesty|Carelessness", "Responsibility", "Honest work is an important value in Sikh teachings."),
+            q("How can a child show seva at school?", "Help someone who needs support|Make fun of a classmate|Damage shared books", "Help someone who needs support", "Helping others is one practical way to serve.")
+        )
+        "buddhist" -> listOf(
+            q("Whose teachings are foundational to Buddhism?", "The Buddha|Guru Nanak|Confucius", "The Buddha", "Buddhist traditions are based on the Buddha's teachings."),
+            q("What can meditation help develop?", "Calm attention|A louder voice|A map", "Calm attention", "Many Buddhist traditions include meditation."),
+            q("What does compassion mean?", "Caring about another person's suffering|Ignoring everyone|Breaking things", "Caring about another person's suffering", "Compassion means caring about suffering and well-being."),
+            q("Which festival is important in many Buddhist communities?", "Vesak|Vaisakhi only|Halloween", "Vesak", "Vesak is linked to important events in the Buddha's life."),
+            q("What does Dharma refer to in Buddhist traditions?", "The Buddha's teachings|A compass|A kind of paint", "The Buddha's teachings", "Dharma can refer to the Buddha's teachings and path."),
+            q("What is mindfulness?", "Paying attention to the present|Never listening|Running quickly", "Paying attention to the present", "Mindfulness is awareness of present experience."),
+            q("Which flower is a common symbol in Buddhist art?", "Lotus|Rose only|Daisy only", "Lotus", "The lotus is a common symbol in Buddhist art."),
+            q("What does generosity mean?", "Sharing to help others|Keeping everything unfairly|Damaging things", "Sharing to help others", "Generosity is encouraged in many Buddhist communities."),
+            q("What is the Sangha?", "The Buddhist community|A planet|A drawing tool", "The Buddhist community", "Sangha commonly refers to a Buddhist community."),
+            q("Which action can reduce suffering?", "Treat living beings with care|Be cruel on purpose|Ignore someone who is hurt", "Treat living beings with care", "Care and non-harm can reduce suffering.")
+        )
+        "jewish" -> listOf(
+            q("Which text is central to Jewish tradition?", "The Torah|The Tripitaka|The Vedas", "The Torah", "The Torah is central to Jewish life and learning."),
+            q("What is a synagogue?", "A Jewish place of worship|A planet|A paintbrush", "A Jewish place of worship", "A synagogue is a Jewish place for prayer and community."),
+            q("What is Shabbat?", "A weekly day of rest and observance|A type of cloud|A maths sign", "A weekly day of rest and observance", "Shabbat is the Jewish weekly day of rest and observance."),
+            q("Which festival is associated with lights in Jewish tradition?", "Hanukkah|Diwali only|Vesak", "Hanukkah", "Hanukkah is a Jewish festival often associated with lights."),
+            q("Which festival remembers the Exodus story?", "Passover|Vaisakhi|Vesak", "Passover", "Passover is a Jewish festival connected with the Exodus story."),
+            q("What does kindness help build?", "Friendship and community|Arguments|Fear", "Friendship and community", "Kindness can help build a caring community."),
+            q("What is a menorah?", "A traditional lamp or candle holder|A mountain|A type of animal", "A traditional lamp or candle holder", "The menorah is a traditional symbol in Jewish life."),
+            q("What can a family do during a festival?", "Share stories and traditions|Damage a shared place|Exclude everyone", "Share stories and traditions", "Families often share food, stories and traditions during festivals."),
+            q("Which action shows respect?", "Listen carefully to others|Mock another person|Break shared items", "Listen carefully to others", "Respect helps people learn from one another."),
+            q("How can you help a neighbour?", "Offer kind and safe help|Ignore an emergency|Make fun of them", "Offer kind and safe help", "Helping others is a practical way to show care.")
+        )
+        "jain" -> listOf(
+            q("What does ahimsa mean in Jain traditions?", "Avoiding harm|Being cruel|Wasting things", "Avoiding harm", "Ahimsa is a central Jain principle of non-violence."),
+            q("What is a Jain temple used for?", "Worship and reflection|Computer repairs|A sports race", "Worship and reflection", "Jain temples are places for worship and reflection."),
+            q("What does satya mean?", "Truthfulness|A kind of rock|A colour", "Truthfulness", "Satya means truthfulness."),
+            q("Which observance is important in Jain communities?", "Paryushan|Hanukkah|Christmas", "Paryushan", "Paryushan is an important Jain period of reflection."),
+            q("Why should we handle small creatures carefully?", "To avoid harming them|To frighten them|To damage their homes", "To avoid harming them", "Care toward living beings reflects ahimsa."),
+            q("What does aparigraha encourage?", "Less attachment to possessions|Collecting everything|Wasting food", "Less attachment to possessions", "Aparigraha encourages limiting attachment and possessiveness."),
+            q("What can forgiveness help with?", "Peaceful relationships|More arguments|Dishonesty", "Peaceful relationships", "Forgiveness can help reduce anger and repair relationships."),
+            q("Which action shows care for life?", "Move a small insect carefully out of danger|Step on it for fun|Destroy its shelter", "Move a small insect carefully out of danger", "Careful choices can help avoid harm."),
+            q("What is a truthful choice?", "Admit a mistake honestly|Blame someone else unfairly|Hide the truth", "Admit a mistake honestly", "Honesty means being truthful about what happened."),
+            q("What kind of decision is thoughtful?", "One that avoids needless harm|One that causes harm for fun|One that wastes resources", "One that avoids needless harm", "Thoughtful decisions can reduce harm.")
+        )
+        else -> listOf(
+            q("Why should we learn about different traditions?", "To understand and respect people|To mock them|To assume everyone is the same", "To understand and respect people", "Learning respectfully helps people understand differences."),
+            q("What is a sacred text?", "A text a tradition regards as holy|A weather report|A blank page", "A text a tradition regards as holy", "Different traditions recognise different sacred texts."),
+            q("What is a place of worship?", "A place for religious observance|A sports score|A planet", "A place for religious observance", "Places of worship differ among traditions."),
+            q("What is a religious festival?", "A special community observance|A computer part|A kind of rock", "A special community observance", "Festivals can include family, prayer, food or service."),
+            q("What is empathy?", "Trying to understand another person's feelings|Laughing at others|Ignoring everyone", "Trying to understand another person's feelings", "Empathy helps us understand how other people may feel."),
+            q("What is respectful dialogue?", "Listening and speaking kindly|Shouting to win|Mocking questions", "Listening and speaking kindly", "Respectful dialogue helps people learn from each other."),
+            q("Which value is shared by many traditions?", "Care for others|Cruelty|Dishonesty", "Care for others", "Many traditions value compassion and care."),
+            q("Who can help explain a tradition accurately?", "A trusted adult or teacher|An anonymous rumour|Nobody", "A trusted adult or teacher", "Trusted adults can provide age-appropriate context."),
+            q("Do all people in a country necessarily share one religion?", "No, beliefs can differ|Yes, always|Only children do", "No, beliefs can differ", "People within a country can have many beliefs and traditions."),
+            q("What helps communities live together?", "Kindness and cooperation|Bullying|Unfair treatment", "Kindness and cooperation", "Kindness and cooperation support a healthy community.")
+        )
+    }
+
     private val maths = listOf(
         q("🚀 Space-builder mission: rotate the floating cube and count its square faces. How many are there?", "4|6|8", "6", "A cube has six square faces, twelve edges and eight vertices."),
         q("🧊 Ice-robot challenge: a cube-shaped ice block is 3 cm on each side. What is its volume?", "9 cm³|18 cm³|27 cm³", "27 cm³", "Volume = side × side × side = 3 × 3 × 3 = 27 cm³."),
@@ -727,15 +826,16 @@ object FourDQuestionBanks {
 
         // Kindergarten/Class 1–2 and young learners receive concrete early-primary prompts.
         if (gradeLevel <= 2 || ageYears <= 7) {
-            val seeds = earlyGradeSeeds(title)
+            val track = listOf("Islamic Studies" to "islamic", "Hindu Studies" to "hindu",
+                "Christian Studies" to "christian", "Sikh Studies" to "sikh",
+                "Buddhist Studies" to "buddhist", "Jewish Studies" to "jewish",
+                "Jain Studies" to "jain", "World Religions & Ethics" to "other")
+                .firstOrNull { it.first.equals(title, ignoreCase = true) }?.second
+            // Faith-track content stays in English when no translated bank exists; never show Hindi text as Urdu/English.
+            val seeds = if (track != null) earlyFaithSeeds(track) else earlyGradeSeeds(title)
             if (seeds.isNotEmpty()) {
                 val first = localized.first()
                 val subjectModel = first.conceptKey.removePrefix("4d:").substringBefore(":")
-                val track = listOf("Islamic Studies" to "islamic", "Hindu Studies" to "hindu",
-                    "Christian Studies" to "christian", "Sikh Studies" to "sikh",
-                    "Buddhist Studies" to "buddhist", "Jewish Studies" to "jewish",
-                    "Jain Studies" to "jain", "World Religions & Ethics" to "other")
-                    .firstOrNull { it.first.equals(title, ignoreCase = true) }?.second
                 return if (track != null) {
                     bank("Religious Education", title, subjectModel, seeds,
                         language = first.languageCode, country = first.countryCode,
