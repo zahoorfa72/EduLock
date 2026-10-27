@@ -70,7 +70,9 @@ object ChildDeviceKioskPolicy {
                 // actions disabled by omission.
                 val features = if (kidsModeEnabled) {
                     DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
-                } else DevicePolicyManager.LOCK_TASK_FEATURE_NONE
+                } else {
+                    DevicePolicyManager.LOCK_TASK_FEATURE_NONE
+                }
                 manager.setLockTaskFeatures(admin, features)
             }
             val userManager = context.getSystemService(Context.USER_SERVICE) as UserManager
