@@ -850,7 +850,8 @@ class EduLockRepository(context: Context) {
 
     suspend fun addTask(
         familyId: String, child: ChildProfile, subject: SubjectRow, title: String,
-        questionCount: Int, passPercent: Int, rewardMinutes: Int, taskDailyCapMinutes: Int
+        questionCount: Int, passPercent: Int, rewardMinutes: Int, taskDailyCapMinutes: Int,
+        rewardPackageName: String? = null
     ) {
         requireSession("parent")
         require(title.trim().isNotEmpty()) { "Enter a task title" }
@@ -870,6 +871,7 @@ class EduLockRepository(context: Context) {
                 .put("question_count", questionCount)
                 .put("pass_percent", passPercent)
                 .put("reward_minutes", rewardMinutes)
+                .put("reward_package_name", rewardPackageName?.takeIf { it.isNotBlank() } ?: JSONObject.NULL)
                 .put("daily_cap_minutes", minOf(taskDailyCapMinutes, child.dailyCapMinutes))
                 .put("active", true))
     }
@@ -1077,9 +1079,18 @@ class EduLockRepository(context: Context) {
         }.map { it.packageName + "=" + it.weeklyScheduleJson }.toSet()
         val startOfDay = LocalDate.now(ZoneOffset.UTC).atStartOfDay().toInstant(ZoneOffset.UTC)
         val stamp = DateTimeFormatter.ISO_INSTANT.format(startOfDay)
-        val ledger = restArray("screen_time_ledger?select=minutes_delta&child_id=eq.${child.id}&created_at=gte.$stamp")
-        val earned = (0 until ledger.length()).sumOf { i -> ledger.optJSONObject(i)?.optInt("minutes_delta") ?: 0 }
-            .coerceAtLeast(0).coerceAtMost(child.dailyCapMinutes)
+        val ledger = restArray("screen_time_ledger?select=minutes_delta,target_package_name&child_id=eq.${child.id}&created_at=gte.$stamp")
+        var generalEarned = 0
+        val appEarned = linkedMapOf<String, Int>()
+        for (i in 0 until ledger.length()) {
+            val row = ledger.optJSONObject(i) ?: continue
+            val minutes = row.optInt("minutes_delta").coerceAtLeast(0)
+            val targetPackage = row.optString("target_package_name").takeIf { it.isNotBlank() && it != "null" }
+            if (targetPackage == null) generalEarned += minutes
+            else appEarned[targetPackage] = (appEarned[targetPackage] ?: 0) + minutes
+        }
+        val earned = generalEarned.coerceIn(0, child.dailyCapMinutes)
+        val appEarnedRules = appEarned.map { (packageName, minutes) -> "$packageName=$minutes" }.toSet()
         val prefs = appContext.getSharedPreferences(LOCK_PREFS, Context.MODE_PRIVATE)
         prefs.edit()
             .putBoolean("child_active", true)
@@ -1088,6 +1099,8 @@ class EduLockRepository(context: Context) {
             .putStringSet("blocked_packages", blocked)
             .putStringSet("app_daily_limits", appLimits)
             .putStringSet("app_weekly_schedules", weeklySchedules)
+            .putStringSet("app_weekly_schedules", weeklySchedules)
+            .putStringSet("app_earned_minutes", appEarnedRules)
             .putInt("earned_minutes_today", earned)
             .putInt("daily_cap_minutes", child.dailyCapMinutes)
             .putString("budget_day", LocalDate.now(ZoneOffset.UTC).toString())
