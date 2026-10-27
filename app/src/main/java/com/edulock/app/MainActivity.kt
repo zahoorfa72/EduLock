@@ -237,6 +237,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var earnedToday by remember { mutableStateOf(0) }
     var activeTask by remember { mutableStateOf<TaskRow?>(null) }
     var questionIndex by remember { mutableStateOf(0) }
+    var expandedFourDQuestionId by remember { mutableStateOf<String?>(null) }
     var answers by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var taskResult by remember { mutableStateOf<TaskResult?>(null) }
 
@@ -1966,11 +1967,22 @@ private fun EduLockApp(repository: EduLockRepository) {
                         Card(
                             modifier = Modifier.fillMaxWidth().clickable {
                                 selectedSubject = subject
+                                expandedFourDQuestionId = null
                                 screen = AppScreen.QUESTIONS
                                 execute {
+                                    // Repair existing subjects created before the full starter bank was seeded.
+                                    val addedStarterCount = repository.ensureTemplateQuestions(
+                                        subject.id,
+                                        fourDTemplatesForSubject(subject.title, subject.languageCode)
+                                    )
                                     questions = repository.loadQuestions(subject.id)
                                     questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
                                     questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
+                                    notice = if (addedStarterCount > 0) {
+                                        "Added " + addedStarterCount + " missing 4D starter questions to " + subject.title + ". Existing questions were kept."
+                                    } else {
+                                        null
+                                    }
                                 }
                             },
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -2204,6 +2216,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                     val subject = selectedSubject
                     if (subject != null) {
                         AppUiText("Create a question in " + subject.languageCode + " and give related questions the same concept tag. The tag lets Concept Bridge report understanding separately from language.")
+                        AppUiText(
+                            questions.size.toString() + " saved questions in this subject",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
                         OutlinedButton(
                             onClick = { templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES },
                             modifier = Modifier.fillMaxWidth()
@@ -2238,6 +2256,32 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         AppUiText((index + 1).toString() + ". " + question.prompt, fontWeight = FontWeight.SemiBold)
                                         AppUiText("Type: " + readableQuestionType(question.questionType))
                                         AppUiText("Language: " + question.languageCode + " • Concept tag: " + question.conceptKey)
+                                        val fourDModel = when {
+                                            question.conceptKey.startsWith("4d:", ignoreCase = true) ->
+                                                question.conceptKey.substringAfter("4d:").substringBefore(":").takeIf { it.isNotBlank() }
+                                            question.conceptKey.startsWith("3d:", ignoreCase = true) ->
+                                                question.conceptKey.substringAfter("3d:").substringBefore(":").takeIf { it.isNotBlank() }
+                                            else -> null
+                                        }
+                                        if (fourDModel != null) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    expandedFourDQuestionId =
+                                                        if (expandedFourDQuestionId == question.id) null else question.id
+                                                },
+                                                enabled = !busy,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                AppUiText(
+                                                    if (expandedFourDQuestionId == question.id) "Hide interactive 4D model"
+                                                    else "🔎 Explore interactive 4D model"
+                                                )
+                                            }
+                                            if (expandedFourDQuestionId == question.id) {
+                                                if (fourDModel == "solar-system") SolarSystemModelPreview()
+                                                else Learning3DPreview(fourDModel)
+                                            }
+                                        }
                                         if (question.options.isNotEmpty()) AppUiText("Options: " + question.options.joinToString(" • "))
                                         AppUiText("Translations: " + (questionTranslations[question.id]?.size ?: 0))
                                         questionSolutions[question.id]?.let { solution ->
