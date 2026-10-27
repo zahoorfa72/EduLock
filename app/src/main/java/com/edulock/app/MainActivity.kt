@@ -406,9 +406,17 @@ private fun EduLockApp(repository: EduLockRepository) {
     }
 
     suspend fun refreshParentData() {
-        familyId = repository.ensureParentFamily(displayName.ifBlank { "My family" })
+        familyId = repository.ensureParentFamily(
+            displayName.ifBlank { "My family" }, parentCountryCode, parentLearningLanguageCode,
+            parentStudyTrack, parentDisplayLanguageCode
+        )
+        val prefs = repository.loadParentLearningSettings(familyId)
+        parentCountryCode = prefs.countryCode
+        parentLearningLanguageCode = prefs.learningLanguageCode
+        parentStudyTrack = prefs.studyTrack
+        parentDisplayLanguageCode = prefs.displayLanguageCode
         children = repository.loadChildren(familyId)
-        subjects = repository.loadSubjects(familyId)
+        subjects = repository.loadSubjects(familyId, parentCountryCode)
     }
 
     suspend fun finishChildLogin(newSession: AuthSession, suppliedCode: String) {
@@ -470,9 +478,17 @@ private fun EduLockApp(repository: EduLockRepository) {
         accountRole = newSession.accountRole
         if (newSession.accountRole == "parent") {
             childProfile = null
-            familyId = repository.ensureParentFamily(displayName.ifBlank { "My family" })
+            familyId = repository.ensureParentFamily(
+                displayName.ifBlank { "My family" }, parentCountryCode, parentLearningLanguageCode,
+                parentStudyTrack, parentDisplayLanguageCode
+            )
+            val prefs = repository.loadParentLearningSettings(familyId)
+            parentCountryCode = prefs.countryCode
+            parentLearningLanguageCode = prefs.learningLanguageCode
+            parentStudyTrack = prefs.studyTrack
+            parentDisplayLanguageCode = prefs.displayLanguageCode
             children = repository.loadChildren(familyId)
-            subjects = repository.loadSubjects(familyId)
+            subjects = repository.loadSubjects(familyId, parentCountryCode)
             LocationWatchdogWorker.schedule(context)
             screen = AppScreen.PARENT_HOME
         } else {
@@ -1084,7 +1100,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     SummaryCard("Children", children.size.toString() + " profile(s)", "Add children and link their own devices.")
                     SummaryCard("Learning", subjects.size.toString() + " subject(s)", "Create questions in Urdu, Sindhi, English or another language.")
                     Button(onClick = { screen = AppScreen.CHILDREN; execute { children = repository.loadChildren(familyId) } }, modifier = Modifier.fillMaxWidth()) { Text("Manage child profiles") }
-                    Button(onClick = { screen = AppScreen.SUBJECTS; execute { subjects = repository.loadSubjects(familyId) } }, modifier = Modifier.fillMaxWidth()) { Text("Subjects & questions") }
+                    Button(onClick = { screen = AppScreen.SUBJECTS; execute { subjects = repository.loadSubjects(familyId, parentCountryCode) } }, modifier = Modifier.fillMaxWidth()) { Text("Subjects & questions") }
                     OutlinedButton(onClick = { selectedSubject = null; templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES }, modifier = Modifier.fillMaxWidth()) { Text("🧪 Learning templates for all subjects") }
                     OutlinedButton(onClick = { selected3DModel = "solar-system"; screen = AppScreen.LEARNING_3D_LAB }, modifier = Modifier.fillMaxWidth()) { Text("🌌 3D Learning Lab • all models") }
                     OutlinedButton(onClick = { screen = AppScreen.DRAWING_STUDIO }, modifier = Modifier.fillMaxWidth()) { Text("🎨 Drawing & Colour Studio") }
