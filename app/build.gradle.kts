@@ -16,9 +16,11 @@ android {
         applicationId = "com.edulock.app"
         minSdk = 26
         targetSdk = 35
-        // New CI APKs have a higher code so Android recognises them as upgrades.
-        versionCode = maxOf(3, (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1) + 2)
-        versionName = "0.2.${System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 3}"
+        // Keep applicationId unchanged and increase this on every CI build.
+        // Android upgrades require the installed and new APK signing certificates to match.
+        val ciBuildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = maxOf(1000, ciBuildNumber + 1000)
+        versionName = "1.0.$ciBuildNumber"
         buildConfigField("String", "SUPABASE_URL", quotedBuildConfig(supabaseUrl))
         buildConfigField("String", "SUPABASE_ANON_KEY", quotedBuildConfig(supabaseAnonKey))
     }
