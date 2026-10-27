@@ -277,17 +277,19 @@ begin
       on conflict (child_id) do nothing;
     select * into v_streak from edulock.child_task_streaks
       where child_id = v_child.id for update;
-    if v_streak.last_passed_day = v_yesterday then
-      update edulock.child_task_streaks
-        set consecutive_days = least(consecutive_days + 1, 30),
-            last_passed_day = v_today_date
-        where child_id = v_child.id
-        returning * into v_streak;
-    elsif v_streak.last_passed_day < v_yesterday then
-      update edulock.child_task_streaks
-        set consecutive_days = 1, last_passed_day = v_today_date
-        where child_id = v_child.id
-        returning * into v_streak;
+    if v_streak.last_passed_day < v_today_date then
+      if v_streak.last_passed_day = v_yesterday then
+        update edulock.child_task_streaks
+          set consecutive_days = least(consecutive_days + 1, 30),
+              last_passed_day = v_today_date
+          where child_id = v_child.id
+          returning * into v_streak;
+      elsif v_streak.last_passed_day < v_yesterday then
+        update edulock.child_task_streaks
+          set consecutive_days = 1, last_passed_day = v_today_date
+          where child_id = v_child.id
+          returning * into v_streak;
+      end if;
     end if;
     if v_streak.last_streak_bonus_day is distinct from v_today_date then
       v_streak_bonus := least(30, greatest(0, v_streak.consecutive_days * 5),
