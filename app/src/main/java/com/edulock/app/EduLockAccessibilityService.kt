@@ -40,6 +40,7 @@ class EduLockAccessibilityService : AccessibilityService() {
     private var blockedAppEvents = 0
     private var lastBlockedPackageName = ""
     private var lastStatusReportAt = 0L
+    private var lastEduLockRedirectAt = 0L
     private val statusExecutor = Executors.newSingleThreadExecutor()
     private val statusReportInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
 
@@ -217,6 +218,14 @@ class EduLockAccessibilityService : AccessibilityService() {
                 else -> "This app is outside the allowed hours set by your parent."
             }
             showBlocker(message, packageName)
+            // Accessibility overlays can be dismissed or obscured by some OEM launchers.
+            // Bring EduLock itself back to the foreground as a second guard. True device-wide
+            // kiosk enforcement still requires device-owner Lock Task mode.
+            val taskId = taskIdForPackage(packageName)
+            if (blockedForAppTime || blockedForEarnedTime || blockedForSchedule) {
+                if (taskId != null) prefs.edit().putString(KEY_PENDING_TASK_ID, taskId).apply()
+            }
+            redirectToEduLockIfNeeded(packageName)
         } else {
             lastBlockedPackageName = ""
             hideBlocker()
@@ -372,6 +381,27 @@ class EduLockAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun redirectToEduLockIfNeeded(blockedPackage: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastEduLockRedirectAt < REDIRECT_COOLDOWN_MS) return
+        lastEduLockRedirectAt = now
+        try {
+            val launch = packageManager.getLaunchIntentForPackage(applicationContext.packageName) ?: return
+            launch.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            )
+            startActivity(launch)
+        } catch (error: Exception) {
+            lockPrefs().edit()
+                .putString(KEY_LAST_BLOCKER_ERROR, "Foreground redirect failed: " +
+                    error.javaClass.simpleName + ": " + (error.message ?: "Android rejected the activity"))
+                .putLong(KEY_LAST_BLOCKER_ERROR_AT, now)
+                .apply()
+        }
+    }
+
     private fun taskIdForPackage(packageName: String): String? {
         val prefs = lockPrefs()
         val targeted = prefs.getStringSet(KEY_APP_TASK_RULES, emptySet()).orEmpty()
@@ -459,5 +489,6 @@ class EduLockAccessibilityService : AccessibilityService() {
         const val MAX_SINGLE_DELTA_MS = 20_000L
         const val TICK_MILLIS = 10_000L
         const val STATUS_REPORT_INTERVAL_MS = 30_000L
+        const val REDIRECT_COOLDOWN_MS = 1_500L
     }
 }
