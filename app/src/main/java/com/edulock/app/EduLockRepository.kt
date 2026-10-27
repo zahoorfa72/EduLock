@@ -643,11 +643,51 @@ class EduLockRepository(context: Context) {
         requireSession("parent")
         require(subjectId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid subject." }
         if (templates.isEmpty()) return 0
-        val existingConcepts = loadQuestions(subjectId).map { it.conceptKey }.toMutableSet()
+        val existingRows = loadQuestions(subjectId).toMutableList()
+        val existingConcepts = existingRows.map { it.conceptKey }.toMutableSet()
         var created = 0
+
+        fun generatedSeedSuffix(key: String): String? {
+            if (!key.matches(Regex("(?:3d|4d):[^:]+:[a-z0-9-]+-[0-9]+"))) return null
+            return key.removePrefix("3d:").removePrefix("4d:").substringAfter(":", "")
+        }
+
         templates.distinctBy { it.conceptKey }.forEach { template ->
             val key = template.conceptKey.trim()
-            if (key.isNotEmpty() && key !in existingConcepts) {
+            if (key.isEmpty() || key in existingConcepts) return@forEach
+
+            // Model matching is improved over time. Update the existing generated seed
+            // by its stable subject/index suffix instead of creating a duplicate question.
+            val wantedSuffix = generatedSeedSuffix(key)
+            val legacyIndex = if (wantedSuffix == null) -1 else existingRows.indexOfFirst { row ->
+                row.conceptKey != key &&
+                    generatedSeedSuffix(row.conceptKey) == wantedSuffix &&
+                    row.conceptKey !in existingConcepts.minus(row.conceptKey)
+            }
+            if (legacyIndex >= 0) {
+                val legacy = existingRows[legacyIndex]
+                val payload = JSONObject()
+                    .put("prompt", template.prompt)
+                    .put("question_type", template.questionType)
+                    .put("options", JSONArray(template.options))
+                    .put("answer_key", JSONObject().put("answer", template.answer))
+                    .put("language_code", template.languageCode.trim().lowercase(Locale.ROOT))
+                    .put("concept_key", key)
+                restArray("questions?id=eq.${legacy.id}", "PATCH", payload)
+                if (template.solution.isNotBlank()) saveQuestionSolution(legacy.id, template.solution)
+                existingConcepts.remove(legacy.conceptKey)
+                existingConcepts.add(key)
+                existingRows[legacyIndex] = legacy.copy(
+                    prompt = template.prompt,
+                    questionType = template.questionType,
+                    options = template.options,
+                    languageCode = template.languageCode,
+                    conceptKey = key
+                )
+                return@forEach
+            }
+
+            try {
                 addQuestion(
                     subjectId = subjectId,
                     prompt = template.prompt,
@@ -660,6 +700,15 @@ class EduLockRepository(context: Context) {
                 )
                 existingConcepts.add(key)
                 created++
+            } catch (error: Exception) {
+                // A second parent screen may seed at the same time. Only suppress the
+                // error when the server confirms that the key now exists.
+                val current = loadQuestions(subjectId)
+                if (current.any { it.conceptKey == key }) {
+                    existingConcepts.add(key)
+                } else {
+                    throw error
+                }
             }
         }
         return created
