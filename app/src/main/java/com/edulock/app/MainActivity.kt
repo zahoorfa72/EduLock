@@ -1301,7 +1301,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             DashboardIconTile(
                                 icon = "🕊️", title = "Religious education", subtitle = studyTrackLabel(parentStudyTrack),
                                 modifier = Modifier.weight(1f), accent = Color(0xFF9A6ACA),
-                                onClick = { studyTrackPickerOpen = true }
+                                onClick = { studyTrackPickerTarget = "parent"; studyTrackPickerOpen = true }
                             )
                             DashboardIconTile(
                                 icon = "🌐", title = "App language", subtitle = languageLabel(parentDisplayLanguageCode),
@@ -1500,15 +1500,6 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     enabled = !busy,
                                     modifier = Modifier.fillMaxWidth()
                                 ) { AppUiText("Save educational game limit") }
-                                OutlinedButton(
-                                    onClick = {
-                                        studyTrackPickerTarget = "existing-child"
-                                        studyTrackChildId = child.id
-                                        studyTrackPickerOpen = true
-                                    },
-                                    enabled = !busy,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { AppUiText("🕊 Religious education: " + studyTrackLabel(child.studyTrack)) }
                                 OutlinedButton(
                                     onClick = {
                                         studyTrackPickerTarget = "existing-child"
