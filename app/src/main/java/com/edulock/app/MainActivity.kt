@@ -3532,22 +3532,59 @@ private fun EduLockApp(repository: EduLockRepository) {
 
                 AppScreen.CHILD_HOME -> ScreenFrame("Your learning space", notice = notice, busy = busy) {
                     val child = childProfile
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(Modifier.size(58.dp).background(Brush.linearGradient(listOf(Color(0xFFEEE9FF), Color(0xFFDDF8F1))), RoundedCornerShape(20.dp)), contentAlignment = Alignment.Center) {
-                            AppUiText(child?.avatarIcon ?: "🦊", fontSize = 32.sp)
-                        }
-                        Column {
-                            AppUiText("Hello, " + (child?.displayName ?: "learner") + "!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-                            AppUiText("Ready for today's adventure?", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(30.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                    ) {
+                        Column(
+                            Modifier.fillMaxWidth()
+                                .background(Brush.linearGradient(listOf(Color(0xFF594FEA), Color(0xFF148E91))))
+                                .padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                Box(
+                                    Modifier.size(68.dp).background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(23.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) { AppUiText(child?.avatarIcon ?: "🦊", fontSize = 39.sp) }
+                                Column(Modifier.weight(1f)) {
+                                    AppUiText("Hey, " + (child?.displayName ?: "super learner") + "!", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                                    AppUiText("Learn • Play • Earn rewards", color = Color.White.copy(alpha = 0.9f))
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                AppUiText("⭐ " + childStreakDays + " day streak", color = Color.White, fontWeight = FontWeight.Bold)
+                                AppUiText("•", color = Color.White.copy(alpha = 0.75f))
+                                AppUiText("🪙 " + rewardBankMinutes + " reward min", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
-                    // In Kids Mode, keep the child in the learning flow when opening EduLock.
-                    // A parent-approved app list still applies to external apps, while this
-                    // dashboard remains the return destination after a target time expires.
-                    Button(onClick = { openKidsGames() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎮  Learning Games • daily time limit") }
-                    OutlinedButton(onClick = { openKidsDrawingStudio() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎨 Draw & colour • daily time limit") }
-                    OutlinedButton(onClick = { openKids3DLab() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🪐 Explore 4D learning models • timed") }
-                    OutlinedButton(onClick = { openSolarQuiz() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🚀 Play the 4D Solar System explorer • timed") }
+                    // Large illustrated tiles make the child dashboard feel like a learning game hub.
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        DashboardIconTile(
+                            icon = "🎮", title = "Learning games", subtitle = "Play and practise",
+                            modifier = Modifier.weight(1f), accent = Color(0xFF6957E8),
+                            onClick = { openKidsGames() }
+                        )
+                        DashboardIconTile(
+                            icon = "🎨", title = "Draw & colour", subtitle = "Create something",
+                            modifier = Modifier.weight(1f), accent = Color(0xFFE88938),
+                            onClick = { openKidsDrawingStudio() }
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        DashboardIconTile(
+                            icon = "🪐", title = "4D learning lab", subtitle = "Explore 3D/4D models",
+                            modifier = Modifier.weight(1f), accent = Color(0xFF0A9A8B),
+                            onClick = { openKids3DLab() }
+                        )
+                        DashboardIconTile(
+                            icon = "🚀", title = "Solar explorer", subtitle = "Discover the planets",
+                            modifier = Modifier.weight(1f), accent = Color(0xFFDC4C82),
+                            onClick = { openSolarQuiz() }
+                        )
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Column(Modifier.weight(1f)) {
                             SummaryCard("Minutes earned today", earnedToday.toString(), "Minutes available from completed tasks.")
@@ -3556,6 +3593,33 @@ private fun EduLockApp(repository: EduLockRepository) {
                             SummaryCard("Task streak", "$childStreakDays day${if (childStreakDays == 1) "" else "s"}", "Pass at least one task each day to build your streak.")
                         }
                     }
+                    RewardBankPanel(
+                        balanceMinutes = rewardBankMinutes,
+                        approvedApps = allowedApps.filter { it.enabled },
+                        selectedPackage = rewardAppSelection,
+                        onSelectPackage = { rewardAppSelection = it },
+                        minutesText = rewardMinutesToRedeem,
+                        onMinutesTextChange = { rewardMinutesToRedeem = it.filter(Char::isDigit).take(4) },
+                        busy = busy,
+                        onRedeem = {
+                            execute {
+                                val childNow = childProfile ?: throw IllegalStateException("The child profile is not linked.")
+                                val minutes = rewardMinutesToRedeem.toIntOrNull()
+                                    ?: throw IllegalArgumentException("Enter how many reward minutes to use.")
+                                val selectedApp = allowedApps.firstOrNull { it.enabled && it.packageName == rewardAppSelection }
+                                    ?: throw IllegalArgumentException("Choose an app approved by your parent.")
+                                val launchIntent = context.packageManager.getLaunchIntentForPackage(selectedApp.packageName)
+                                    ?: throw IllegalStateException("This app is not installed on this phone. Ask your parent to refresh approved apps.")
+                                val redemption = repository.redeemChildRewardBank(selectedApp.packageName, minutes)
+                                rewardBankMinutes = redemption.balanceMinutes
+                                earnedToday = repository.refreshChildDeviceRestrictions(childNow)
+                                allowedApps = repository.loadAllowedApps(childNow.id)
+                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(launchIntent)
+                                notice = "Reward used: ${redemption.redeemedMinutes} minutes for ${redemption.targetAppName}."
+                            }
+                        }
+                    )
                     AppUiText("My apps", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     if (allowedApps.none { it.enabled }) {
                         AppUiText("No parent-approved apps are currently available.")
@@ -3566,7 +3630,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                             val earnedMs = lockPrefs.getStringSet("app_earned_minutes", emptySet()).orEmpty()
                                 .firstOrNull { it.startsWith(app.packageName + "=") }?.substringAfter("=")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
                             val remaining = (app.dailyLimitMinutes + earnedMs - (usedMs / 60_000L).toInt()).coerceAtLeast(0)
-                            val hasTask = tasks.any { it.rewardPackageName == app.packageName } ||
+                            val hasTask = tasks.any { it.rewardToBank } ||
+                                tasks.any { it.rewardPackageName == app.packageName } ||
                                 tasks.any { task -> !task.rewardGroupId.isNullOrBlank() && appGroups.any { it.id == task.rewardGroupId && app.packageName in it.packageNames } }
                             val status = if (remaining <= 0) "Time's up • answer to unlock" else "$remaining min left"
                             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
@@ -3584,6 +3649,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             } else if (remaining <= 0) {
                                                 val task = tasks.firstOrNull { it.rewardPackageName == app.packageName }
                                                     ?: tasks.firstOrNull { t -> !t.rewardGroupId.isNullOrBlank() && appGroups.any { it.id == t.rewardGroupId && app.packageName in it.packageNames } }
+                                                    ?: tasks.firstOrNull { it.rewardToBank }
                                                 if (task != null) {
                                                     execute {
                                                         val loadedQuestions = repository.loadQuestionsForTask(task.id, task.subjectId, task.questionCount)
@@ -3620,7 +3686,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 AppUiText(task.title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
-                                AppUiText(task.questionCount.toString() + " questions • pass " + task.passPercent + "% • reward " + task.rewardMinutes + " min")
+                                AppUiText(task.questionCount.toString() + " questions • pass " + task.passPercent + "% • " + task.rewardMinutes + " min per correct answer" + if (task.rewardToBank) " • Reward Bank" else "")
                                 Button(onClick = {
                                     execute {
                                         val loadedQuestions = repository.loadQuestionsForTask(task.id, task.subjectId, task.questionCount)
@@ -4309,19 +4375,48 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.TASK_RESULT -> ScreenFrame("Task result", onBack = { screen = AppScreen.CHILD_HOME }, notice = notice, busy = busy) {
                     val result = taskResult
                     if (result != null) {
-                        SummaryCard("Your score", result.scorePercent.toString() + "%", if (result.passed) "Great work — you passed!" else "Keep practising. Correct answers can still earn screen time even when you do not pass.")
-                        SummaryCard("Screen time awarded", result.awardedMinutes.toString() + " minutes", "Rewards are calculated and recorded by Supabase.")
-                        SummaryCard("Daily reward cap", result.dailyUsedMinutes.toString() + " / " + result.dailyCapMinutes + " minutes", "The child-wide daily cap is enforced server-side.")
+                        SummaryCard("Your score", result.scorePercent.toString() + "%", if (result.passed) "Amazing work — you passed!" else "Keep practising. Every correct answer can earn reward minutes, even when you do not pass.")
+                        SummaryCard("Reward earned", result.awardedMinutes.toString() + " minutes", if (result.rewardToBank) "Added to your Reward Bank." else "Sent to the destination selected by your parent.")
+                        SummaryCard("Daily reward cap", result.dailyUsedMinutes.toString() + " / " + result.dailyCapMinutes + " minutes", "The server enforces this cap so answers cannot create unlimited rewards.")
                     }
+                    RewardBankPanel(
+                        balanceMinutes = rewardBankMinutes,
+                        approvedApps = allowedApps.filter { it.enabled },
+                        selectedPackage = rewardAppSelection,
+                        onSelectPackage = { rewardAppSelection = it },
+                        minutesText = rewardMinutesToRedeem,
+                        onMinutesTextChange = { rewardMinutesToRedeem = it.filter(Char::isDigit).take(4) },
+                        busy = busy,
+                        onRedeem = {
+                            execute {
+                                val childNow = childProfile ?: throw IllegalStateException("The child profile is not linked.")
+                                val minutes = rewardMinutesToRedeem.toIntOrNull()
+                                    ?: throw IllegalArgumentException("Enter how many reward minutes to use.")
+                                val selectedApp = allowedApps.firstOrNull { it.enabled && it.packageName == rewardAppSelection }
+                                    ?: throw IllegalArgumentException("Choose an app approved by your parent.")
+                                val launchIntent = context.packageManager.getLaunchIntentForPackage(selectedApp.packageName)
+                                    ?: throw IllegalStateException("This app is not installed on this phone. Ask your parent to refresh approved apps.")
+                                val redemption = repository.redeemChildRewardBank(selectedApp.packageName, minutes)
+                                rewardBankMinutes = redemption.balanceMinutes
+                                earnedToday = repository.refreshChildDeviceRestrictions(childNow)
+                                allowedApps = repository.loadAllowedApps(childNow.id)
+                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(launchIntent)
+                                notice = "Reward used: ${redemption.redeemedMinutes} minutes for ${redemption.targetAppName}."
+                            }
+                        }
+                    )
                     Button(
                         onClick = {
                             val task = activeTask
-                            if (result?.passed == true && task != null) {
+                            if (result?.passed == true && task != null && !task.rewardToBank) {
                                 execute {
                                     val refreshedChild = childProfile
                                     if (refreshedChild != null) {
-                                        try { earnedToday = repository.refreshChildDeviceRestrictions(refreshedChild) }
-                                        catch (_: Exception) { /* keep the result screen usable offline */ }
+                                        try {
+                                            earnedToday = repository.refreshChildDeviceRestrictions(refreshedChild)
+                                            rewardBankMinutes = repository.loadChildRewardBankMinutes(refreshedChild.id)
+                                        } catch (_: Exception) { /* keep result available and show the last confirmed balance */ }
                                     }
                                     val targetPackage = task.rewardPackageName
                                     if (!targetPackage.isNullOrBlank()) {
@@ -4343,14 +4438,79 @@ private fun EduLockApp(repository: EduLockRepository) {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         AppUiText(
-                            if (result?.passed == true && activeTask?.rewardPackageName != null)
-                                "Unlocked! Back to " + (allowedApps.firstOrNull { it.packageName == activeTask?.rewardPackageName }?.displayName ?: activeTask?.rewardPackageName)
-                            else "Back to my tasks"
+                            if (result?.passed == true && activeTask?.rewardPackageName != null && activeTask?.rewardToBank == false)
+                                "Continue to " + (allowedApps.firstOrNull { it.packageName == activeTask?.rewardPackageName }?.displayName ?: activeTask?.rewardPackageName)
+                            else "Back to my learning space"
                         )
                     }
                 }
             }
         }
+        }
+    }
+}
+
+@Composable
+private fun RewardBankPanel(
+    balanceMinutes: Int,
+    approvedApps: List<AllowedApp>,
+    selectedPackage: String,
+    onSelectPackage: (String) -> Unit,
+    minutesText: String,
+    onMinutesTextChange: (String) -> Unit,
+    busy: Boolean,
+    onRedeem: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF6D9))
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    Modifier.size(52.dp).background(Color(0xFFFFE6A0), RoundedCornerShape(18.dp)),
+                    contentAlignment = Alignment.Center
+                ) { AppUiText("🪙", fontSize = 29.sp) }
+                Column(Modifier.weight(1f)) {
+                    AppUiText("My Reward Bank", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color(0xFF72500A))
+                    AppUiText("Spend earned minutes on an app your parent approved.", color = Color(0xFF72500A))
+                }
+            }
+            AppUiText(balanceMinutes.toString() + " minutes available", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = Color(0xFF72500A))
+            if (balanceMinutes <= 0) {
+                AppUiText("Complete a learning task and answer correctly to earn minutes. Your balance stays here until you spend it.", color = Color(0xFF72500A))
+            } else if (approvedApps.isEmpty()) {
+                AppUiText("Your parent has not enabled any apps for reward time yet. Ask them to approve an app in App access.", color = Color(0xFF72500A))
+            } else {
+                AppUiText("Choose where to use your reward", fontWeight = FontWeight.Bold, color = Color(0xFF72500A))
+                approvedApps.forEach { app ->
+                    OutlinedButton(
+                        onClick = { onSelectPackage(app.packageName) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !busy
+                    ) {
+                        AppUiText((if (selectedPackage == app.packageName) "✓  " else "") + app.displayName)
+                    }
+                }
+                Field(
+                    minutesText,
+                    onMinutesTextChange,
+                    "Minutes to spend (1–${balanceMinutes.coerceAtMost(1440)})",
+                    keyboardType = KeyboardType.Number
+                )
+                Button(
+                    onClick = onRedeem,
+                    enabled = !busy &&
+                        approvedApps.any { it.packageName == selectedPackage } &&
+                        (minutesText.toIntOrNull() ?: 0) in 1..balanceMinutes.coerceAtMost(1440),
+                    modifier = Modifier.fillMaxWidth()
+                ) { AppUiText("🪙 Use reward & open app") }
+                AppUiText("The reward is deducted only after the server confirms the selected app is parent-approved.", color = Color(0xFF72500A), style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }
