@@ -371,9 +371,9 @@ private fun EduLockApp(repository: EduLockRepository) {
         val isDelete = action == "delete"
         AlertDialog(
             onDismissRequest = { pendingChildAction = null },
-            title = { Text(if (isDelete) "Delete child profile?" else "Deactivate device link?") },
+            title = { AppUiText(if (isDelete) "Delete child profile?" else "Deactivate device link?") },
             text = {
-                Text(
+                AppUiText(
                     if (isDelete)
                         "Permanently delete ${targetChild.displayName}'s profile and its linked EduLock records. This cannot be undone."
                     else
@@ -397,10 +397,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                         childInstalledApps = emptyList()
                         allowedApps = emptyList()
                     }
-                }) { Text(if (isDelete) "Delete permanently" else "Deactivate link") }
+                }) { AppUiText(if (isDelete) "Delete permanently" else "Deactivate link") }
             },
             dismissButton = {
-                TextButton(onClick = { pendingChildAction = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingChildAction = null }) { AppUiText("Cancel") }
             }
         )
     }
@@ -746,7 +746,7 @@ private fun EduLockApp(repository: EduLockRepository) {
             }
             AlertDialog(
                 onDismissRequest = { countryPickerOpen = false },
-                title = { Text("Choose a country") },
+                title = { AppUiText("Choose a country") },
                 text = {
                     Column(
                         modifier = Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState()),
@@ -780,12 +780,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(name + if (countryPickerTarget == "curriculum") " ($code)" else "", modifier = Modifier.fillMaxWidth())
+                                AppUiText(name + if (countryPickerTarget == "curriculum") " ($code)" else "", modifier = Modifier.fillMaxWidth())
                             }
                         }
                     }
                 },
-                confirmButton = { TextButton(onClick = { countryPickerOpen = false }) { Text("Close") } }
+                confirmButton = { TextButton(onClick = { countryPickerOpen = false }) { AppUiText("Close") } }
             )
         }
         if (languagePickerOpen) {
@@ -800,7 +800,7 @@ private fun EduLockApp(repository: EduLockRepository) {
             }
             AlertDialog(
                 onDismissRequest = { languagePickerOpen = false },
-                title = { Text("Choose a learning language") },
+                title = { AppUiText("Choose a learning language") },
                 text = {
                     Column(
                         modifier = Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState()),
@@ -835,23 +835,23 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("$name ($code)", modifier = Modifier.fillMaxWidth())
+                                AppUiText("$name ($code)", modifier = Modifier.fillMaxWidth())
                             }
                         }
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { languagePickerOpen = false }) { Text("Close") }
+                    TextButton(onClick = { languagePickerOpen = false }) { AppUiText("Close") }
                 }
             )
         }
         if (studyTrackPickerOpen) {
             AlertDialog(
                 onDismissRequest = { studyTrackPickerOpen = false },
-                title = { Text("Choose a religious-education curriculum") },
+                title = { AppUiText("Choose a religious-education curriculum") },
                 text = {
                     Column(Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState())) {
-                        Text("Optional. Choose the learning track you want EduLock to use; it does not infer a family's religion from its country.")
+                        AppUiText("Optional. Choose the learning track you want EduLock to use; it does not infer a family's religion from its country.")
                         listOf(
                             "none" to "No religious-education track",
                             "islamic" to "Islam",
@@ -869,36 +869,36 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     repository.updateParentLearningSettings(familyId, parentCountryCode, parentLearningLanguageCode, parentStudyTrack, parentDisplayLanguageCode)
                                     notice = "Learning track saved. You can select its subject templates from Learning Templates."
                                 }
-                            }, modifier = Modifier.fillMaxWidth()) { Text((if (parentStudyTrack == code) "✓ " else "") + label, modifier = Modifier.fillMaxWidth()) }
+                            }, modifier = Modifier.fillMaxWidth()) { AppUiText((if (parentStudyTrack == code) "✓ " else "") + label, modifier = Modifier.fillMaxWidth()) }
                         }
                     }
                 },
-                confirmButton = { TextButton(onClick = { studyTrackPickerOpen = false }) { Text("Close") } }
+                confirmButton = { TextButton(onClick = { studyTrackPickerOpen = false }) { AppUiText("Close") } }
             )
         }
         if (familySettingsOpen) {
             AlertDialog(
                 onDismissRequest = { familySettingsOpen = false },
-                title = { Text("Family learning settings") },
+                title = { AppUiText("Family learning settings") },
                 text = {
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("These preferences determine the curriculum country, lesson language, optional religious-education templates and interface language.")
+                        AppUiText("These preferences determine the curriculum country, lesson language, optional religious-education templates and interface language.")
                         OutlinedButton(onClick = { familySettingsOpen = false; countryPickerTarget = "parent"; countrySearch = ""; countryPickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("🌍 Country: " + displayCountryName(parentCountryCode))
+                            AppUiText("🌍 Country: " + displayCountryName(parentCountryCode))
                         }
                         OutlinedButton(onClick = { familySettingsOpen = false; languagePickerTarget = "parent-learning"; languageSearch = ""; languagePickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("📚 Lesson language: " + languageLabel(parentLearningLanguageCode))
+                            AppUiText("📚 Lesson language: " + languageLabel(parentLearningLanguageCode))
                         }
                         OutlinedButton(onClick = { familySettingsOpen = false; studyTrackPickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("🕊 Religious education: " + studyTrackLabel(parentStudyTrack))
+                            AppUiText("🕊 Religious education: " + studyTrackLabel(parentStudyTrack))
                         }
                         OutlinedButton(onClick = { familySettingsOpen = false; languagePickerTarget = "display"; languageSearch = ""; languagePickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("🌐 App display language: " + languageLabel(parentDisplayLanguageCode))
+                            AppUiText("🌐 App display language: " + languageLabel(parentDisplayLanguageCode))
                         }
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { familySettingsOpen = false }) { Text("Done") }
+                    TextButton(onClick = { familySettingsOpen = false }) { AppUiText("Done") }
                 }
             )
         }
@@ -911,58 +911,58 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEEF0FF))) {
                         Column(Modifier.fillMaxWidth().padding(22.dp), verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(Modifier.size(84.dp).background(Brush.linearGradient(listOf(Color(0xFF6E60F5), Color(0xFF12B8AC))), RoundedCornerShape(28.dp)), contentAlignment = Alignment.Center) {
-                                Text("🎓", fontSize = 42.sp)
+                                AppUiText("🎓", fontSize = 42.sp)
                             }
-                            Text("Learn. Explore. Grow.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = Color(0xFF29245F))
-                            Text("A safer learning world for curious kids — managed by parents.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF566080))
+                            AppUiText("Learn. Explore. Grow.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = Color(0xFF29245F))
+                            AppUiText("A safer learning world for curious kids — managed by parents.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF566080))
                         }
                     }
-                    Text("Choose how you want to use EduLock.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Parents manage learning and screen time. Children join through a secure one-time pairing code.")
+                    AppUiText("Choose how you want to use EduLock.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    AppUiText("Parents manage learning and screen time. Children join through a secure one-time pairing code.")
                     Button(
                         onClick = { chooseParentDevice() },
                         enabled = !busy,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("This is the parent's phone") }
+                    ) { AppUiText("This is the parent's phone") }
                     OutlinedButton(
                         onClick = { chooseChildDevice() },
                         enabled = !busy,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("This is the child's phone — pair with code") }
+                    ) { AppUiText("This is the child's phone — pair with code") }
                 }
                 AppScreen.AUTH -> ScreenFrame(if (isRegistering) "Create your parent account" else "Welcome back", notice = notice, busy = busy) {
                     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F0FF))) {
                         Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Box(Modifier.size(68.dp).background(Brush.linearGradient(listOf(Color(0xFF5B4CE8), Color(0xFF00A99D))), RoundedCornerShape(24.dp)), contentAlignment = Alignment.Center) {
-                                Text("🎓", fontSize = 34.sp)
+                                AppUiText("🎓", fontSize = 34.sp)
                             }
-                            Text(if (isRegistering) "Build their bright future" else "Good to see you again", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color(0xFF29245F))
-                            Text("Learn first. Play with purpose.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF626987))
+                            AppUiText(if (isRegistering) "Build their bright future" else "Good to see you again", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color(0xFF29245F))
+                            AppUiText("Learn first. Play with purpose.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF626987))
                         }
                     }
-                    Text(if (isRegistering) "Create a parent account to manage learning, games and screen time." else "Sign in to continue managing your family.", style = MaterialTheme.typography.bodyMedium)
+                    AppUiText(if (isRegistering) "Create a parent account to manage learning, games and screen time." else "Sign in to continue managing your family.", style = MaterialTheme.typography.bodyMedium)
                     if (isRegistering) {
                         Field(displayName, { displayName = it }, "Parent name")
                         OutlinedButton(onClick = { countryPickerTarget = "parent"; countrySearch = ""; countryPickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("🌍 Curriculum country: " + displayCountryName(parentCountryCode))
+                            AppUiText("🌍 Curriculum country: " + displayCountryName(parentCountryCode))
                         }
                         OutlinedButton(onClick = { languagePickerTarget = "parent-learning"; languageSearch = ""; languagePickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("📚 Preferred lesson language: " + languageLabel(parentLearningLanguageCode))
+                            AppUiText("📚 Preferred lesson language: " + languageLabel(parentLearningLanguageCode))
                         }
                         OutlinedButton(onClick = { studyTrackPickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("🕊 Religious-education preference: " + studyTrackLabel(parentStudyTrack))
+                            AppUiText("🕊 Religious-education preference: " + studyTrackLabel(parentStudyTrack))
                         }
                         OutlinedButton(onClick = { languagePickerTarget = "display"; languageSearch = ""; languagePickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("🌐 App display language: " + languageLabel(parentDisplayLanguageCode))
+                            AppUiText("🌐 App display language: " + languageLabel(parentDisplayLanguageCode))
                         }
-                        Text("You can change these choices later in Family learning settings. Country is chosen by you, never inferred from location.")
+                        AppUiText("You can change these choices later in Family learning settings. Country is chosen by you, never inferred from location.")
                     }
                     Field(email, { email = it }, "Parent email", keyboardType = KeyboardType.Email)
                     Field(password, { password = it }, "Password (minimum 8 characters)", password = true)
                     if (isRegistering) {
                         Field(confirmPassword, { confirmPassword = it }, "Confirm password", password = true)
                         if (confirmPassword.isNotEmpty() && confirmPassword != password) {
-                            Text("Passwords do not match yet.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                            AppUiText("Passwords do not match yet.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
                         }
                     }
                     Button(
@@ -984,7 +984,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         },
                         enabled = !busy && isRegistering,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Create parent account") }
+                    ) { AppUiText("Create parent account") }
                     Button(
                         onClick = {
                             execute {
@@ -994,21 +994,21 @@ private fun EduLockApp(repository: EduLockRepository) {
                         },
                         enabled = !busy && !isRegistering,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Sign in as parent") }
+                    ) { AppUiText("Sign in as parent") }
                     TextButton(onClick = {
                         isRegistering = !isRegistering
                         confirmPassword = ""
                         notice = null
                     }) {
-                        Text(if (isRegistering) "Already have an account? Sign in" else "New to EduLock? Create an account")
+                        AppUiText(if (isRegistering) "Already have an account? Sign in" else "New to EduLock? Create an account")
                     }
                     OutlinedButton(
                         onClick = { chooseChildDevice() },
                         enabled = !busy,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Set up a child's device with pairing code") }
+                    ) { AppUiText("Set up a child's device with pairing code") }
                     if (!repository.isConfigured) {
-                        Text("Configuration needed: set the public Supabase URL and anon/publishable key in the GitHub Actions secrets before building. Never add a service-role key to the Android app.")
+                        AppUiText("Configuration needed: set the public Supabase URL and anon/publishable key in the GitHub Actions secrets before building. Never add a service-role key to the Android app.")
                     }
                 }
 
@@ -1019,11 +1019,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                 }, notice = notice, busy = busy) {
                     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF5FF)), shape = MaterialTheme.shapes.extraLarge) {
                         Column(modifier = Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("🎨", fontSize = 42.sp)
-                            Text("One tiny step to start!", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF173B67))
-                            Text("We sent a verification code to", color = Color(0xFF42566D))
-                            Text(email, fontWeight = FontWeight.SemiBold, color = Color(0xFF087E8B))
-                            Text("Check your inbox and spam folder, then type the code below.", color = Color(0xFF42566D))
+                            AppUiText("🎨", fontSize = 42.sp)
+                            AppUiText("One tiny step to start!", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF173B67))
+                            AppUiText("We sent a verification code to", color = Color(0xFF42566D))
+                            AppUiText(email, fontWeight = FontWeight.SemiBold, color = Color(0xFF087E8B))
+                            AppUiText("Check your inbox and spam folder, then type the code below.", color = Color(0xFF42566D))
                         }
                     }
                     Spacer(Modifier.height(12.dp))
@@ -1034,7 +1034,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             resolveSignedIn(verified, pairingCode)
                             if (screen == AppScreen.PARENT_HOME || screen == AppScreen.CHILD_HOME) notice = "🎉 Email verified! Welcome to EduLock."
                         }
-                    }, enabled = !busy && emailOtp.length in 6..8, modifier = Modifier.fillMaxWidth()) { Text("✓  Verify & continue") }
+                    }, enabled = !busy && emailOtp.length in 6..8, modifier = Modifier.fillMaxWidth()) { AppUiText("✓  Verify & continue") }
                     OutlinedButton(onClick = {
                         execute {
                             repository.resendSignupOtp(email)
@@ -1043,9 +1043,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                             notice = "A new code was requested. Check your inbox and spam folder."
                         }
                     }, enabled = !busy && resendSeconds == 0, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (resendSeconds > 0) "Resend code in " + resendSeconds + "s" else "↻  Send a new code")
+                        AppUiText(if (resendSeconds > 0) "Resend code in " + resendSeconds + "s" else "↻  Send a new code")
                     }
-                    Text(if (resendSeconds > 0) "You can request another code in " + resendSeconds + " seconds." else "Still no email? Check Inbox, Spam and Promotions, then request one fresh code. Email providers may enforce a longer cooldown.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    AppUiText(if (resendSeconds > 0) "You can request another code in " + resendSeconds + " seconds." else "Still no email? Check Inbox, Spam and Promotions, then request one fresh code. Email providers may enforce a longer cooldown.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 AppScreen.PAIR_CHILD -> ScreenFrame("Pair this child's device", onBack = {
                     repository.signOut()
@@ -1055,8 +1055,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                     deviceMode = "unknown"
                     screen = AppScreen.DEVICE_SETUP
                 }, notice = notice, busy = busy) {
-                    Text("Enter the six-digit, one-time code generated by the parent. No child email address or password is needed.")
-                    Text("The code expires after 10 minutes and can be used once. Keep this device's app data intact after pairing; anonymous child sessions cannot be recovered if app data is cleared.")
+                    AppUiText("Enter the six-digit, one-time code generated by the parent. No child email address or password is needed.")
+                    AppUiText("The code expires after 10 minutes and can be used once. Keep this device's app data intact after pairing; anonymous child sessions cannot be recovered if app data is cleared.")
                     Field(pairingCode, { pairingCode = it.filter(Char::isDigit).take(6) }, "6-digit parent pairing code", keyboardType = KeyboardType.Number)
                     Button(onClick = {
                         execute {
@@ -1065,7 +1065,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             finishChildLogin(childSession, pairingCode)
                         }
                     }, enabled = !busy && pairingCode.filter(Char::isDigit).length == 6, modifier = Modifier.fillMaxWidth()) {
-                        Text("Pair securely with parent")
+                        AppUiText("Pair securely with parent")
                     }
                     OutlinedButton(onClick = {
                         execute {
@@ -1073,7 +1073,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 ?: throw IllegalStateException("Enter the pairing code to set up this device.")
                             resolveSignedIn(current)
                         }
-                    }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Continue with an already linked device") }
+                    }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Continue with an already linked device") }
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF4D8)),
@@ -1083,12 +1083,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("One-time setup for the parent", fontWeight = FontWeight.Bold, color = Color(0xFF704B00))
-                            Text(
+                            AppUiText("One-time setup for the parent", fontWeight = FontWeight.Bold, color = Color(0xFF704B00))
+                            AppUiText(
                                 "If pairing says anonymous sign-ins are disabled, enable this setting in the parent-managed Supabase project: Dashboard → Authentication → Sign In / Providers → Anonymous. Save the setting, then retry pairing. Reinstalling the app will not enable this project setting.",
                                 color = Color(0xFF704B00)
                             )
-                            Text(
+                            AppUiText(
                                 "Never put a Supabase service-role key in the Android app. The child session is linked only after the parent-generated one-time code is claimed.",
                                 color = Color(0xFF704B00),
                                 style = MaterialTheme.typography.bodySmall
@@ -1098,21 +1098,21 @@ private fun EduLockApp(repository: EduLockRepository) {
                 }
 
                 AppScreen.PARENT_HOME -> ScreenFrame("Parent dashboard", notice = notice, busy = busy) {
-                    Text("Your family is protected by your signed-in parent account.")
+                    AppUiText("Your family is protected by your signed-in parent account.")
                     SummaryCard("Children", children.size.toString() + " profile(s)", "Add children and link their own devices.")
                     SummaryCard("Learning", subjects.size.toString() + " subject(s)", "Create questions in Urdu, Sindhi, English or another language.")
-                    Button(onClick = { screen = AppScreen.CHILDREN; execute { children = repository.loadChildren(familyId) } }, modifier = Modifier.fillMaxWidth()) { Text("Manage child profiles") }
-                    Button(onClick = { screen = AppScreen.SUBJECTS; execute { subjects = repository.loadSubjects(familyId, parentCountryCode) } }, modifier = Modifier.fillMaxWidth()) { Text("Subjects & questions") }
-                    OutlinedButton(onClick = { selectedSubject = null; templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES }, modifier = Modifier.fillMaxWidth()) { Text("🧪 Learning templates for all subjects") }
-                    OutlinedButton(onClick = { selected3DModel = "solar-system"; screen = AppScreen.LEARNING_3D_LAB }, modifier = Modifier.fillMaxWidth()) { Text("🌌 3D Learning Lab • all models") }
-                    OutlinedButton(onClick = { screen = AppScreen.DRAWING_STUDIO }, modifier = Modifier.fillMaxWidth()) { Text("🎨 Drawing & Colour Studio") }
-                    OutlinedButton(onClick = { familySettingsOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("⚙ Family settings • country, religion & app language") }
-                    Button(onClick = { selectedChild = null; selectedSubject = null; screen = AppScreen.ASSIGN_TASK }, modifier = Modifier.fillMaxWidth()) { Text("Assign learning task & reward") }
-                    OutlinedButton(onClick = { screen = AppScreen.REPORTS; execute { attempts = repository.loadAttempts(); conceptProgress = repository.loadConceptProgress() } }, modifier = Modifier.fillMaxWidth()) { Text("🏆  Learning progress reports") }
+                    Button(onClick = { screen = AppScreen.CHILDREN; execute { children = repository.loadChildren(familyId) } }, modifier = Modifier.fillMaxWidth()) { AppUiText("Manage child profiles") }
+                    Button(onClick = { screen = AppScreen.SUBJECTS; execute { subjects = repository.loadSubjects(familyId, parentCountryCode) } }, modifier = Modifier.fillMaxWidth()) { AppUiText("Subjects & questions") }
+                    OutlinedButton(onClick = { selectedSubject = null; templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES }, modifier = Modifier.fillMaxWidth()) { AppUiText("🧪 Learning templates for all subjects") }
+                    OutlinedButton(onClick = { selected3DModel = "solar-system"; screen = AppScreen.LEARNING_3D_LAB }, modifier = Modifier.fillMaxWidth()) { AppUiText("🌌 3D Learning Lab • all models") }
+                    OutlinedButton(onClick = { screen = AppScreen.DRAWING_STUDIO }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎨 Drawing & Colour Studio") }
+                    OutlinedButton(onClick = { familySettingsOpen = true }, modifier = Modifier.fillMaxWidth()) { AppUiText("⚙ Family settings • country, religion & app language") }
+                    Button(onClick = { selectedChild = null; selectedSubject = null; screen = AppScreen.ASSIGN_TASK }, modifier = Modifier.fillMaxWidth()) { AppUiText("Assign learning task & reward") }
+                    OutlinedButton(onClick = { screen = AppScreen.REPORTS; execute { attempts = repository.loadAttempts(); conceptProgress = repository.loadConceptProgress() } }, modifier = Modifier.fillMaxWidth()) { AppUiText("🏆  Learning progress reports") }
                     OutlinedButton(onClick = {
                         screen = AppScreen.CHILDREN
                         execute { children = repository.loadChildren(familyId) }
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Allowed apps & screen-time settings") }
+                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("Allowed apps & screen-time settings") }
                     OutlinedButton(onClick = {
                         screen = AppScreen.CHILD_LOCATIONS
                         execute {
@@ -1120,18 +1120,18 @@ private fun EduLockApp(repository: EduLockRepository) {
                             children = latestChildren
                             childLocationRows = latestChildren.map { repository.loadChildLocationSnapshot(it.id) }
                         }
-                    }, modifier = Modifier.fillMaxWidth()) { Text("📍 Family location & offline alerts") }
+                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("📍 Family location & offline alerts") }
                     if (Build.VERSION.SDK_INT >= 33 &&
                         context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                         OutlinedButton(
                             onClick = { notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Enable offline-device notifications") }
+                        ) { AppUiText("Enable offline-device notifications") }
                     }
                     OutlinedButton(onClick = {
                         refreshProtectionStatus()
                         screen = AppScreen.PROTECTION_STATUS
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Device protection & setup status") }
+                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("Device protection & setup status") }
                     OutlinedButton(onClick = {
                         repository.signOut()
                         session = null
@@ -1139,7 +1139,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         screen = AppScreen.AUTH
                         isRegistering = false
                         notice = "Signed out."
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
+                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("Sign out") }
                 }
 
                 AppScreen.CHILDREN -> ScreenFrame("Child profiles", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
@@ -1148,8 +1148,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                         childCountryCode = "PK"; childSchoolGrade = "1"; childAgeYears = "8"
                         childAvatarIcon = "🦊"; childDailyGameLimit = "20"
                         screen = AppScreen.ADD_CHILD
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Add child profile") }
-                    if (children.isEmpty()) Text("No child profiles yet. Add a child to create the protected parent-child link.")
+                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("Add child profile") }
+                    if (children.isEmpty()) AppUiText("No child profiles yet. Add a child to create the protected parent-child link.")
                     children.forEach { child ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -1158,15 +1158,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     Box(Modifier.size(48.dp).background(Color(0xFFE8E7FF), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-                                        Text(child.avatarIcon, fontSize = 28.sp)
+                                        AppUiText(child.avatarIcon, fontSize = 28.sp)
                                     }
                                     Column {
-                                        Text(child.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                        Text("🎮 Educational games: ${child.dailyGameLimitMinutes} min/day", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        AppUiText(child.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                        AppUiText("🎮 Educational games: ${child.dailyGameLimitMinutes} min/day", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
-                                Text("Language: " + child.preferredLanguage + " • Daily cap: " + child.dailyCapMinutes + " minutes")
-                                Text(
+                                AppUiText("Language: " + child.preferredLanguage + " • Daily cap: " + child.dailyCapMinutes + " minutes")
+                                AppUiText(
                                     displayCountryName(child.countryCode) + " • " +
                                         (if (child.schoolGrade == 0) "Kindergarten" else "Grade ${child.schoolGrade}") +
                                         " • Age " + child.ageYears,
@@ -1192,7 +1192,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     },
                                     enabled = !busy,
                                     modifier = Modifier.fillMaxWidth()
-                                ) { Text("Save educational game limit") }
+                                ) { AppUiText("Save educational game limit") }
                                 OutlinedButton(
                                     onClick = {
                                         selectedChild = child
@@ -1207,8 +1207,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     },
                                     enabled = !busy,
                                     modifier = Modifier.fillMaxWidth()
-                                ) { Text("📚  Country syllabus & question bank") }
-                                Text("Device link: generate a one-time code on the child's first setup.")
+                                ) { AppUiText("📚  Country syllabus & question bank") }
+                                AppUiText("Device link: generate a one-time code on the child's first setup.")
                                 OutlinedButton(onClick = {
                                     selectedChild = child
                                     lastPairingCode = ""
@@ -1218,51 +1218,51 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         pairingCodeExpiry = generated.second
                                         pairingChildName = child.displayName
                                     }
-                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Generate pairing code") }
+                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Generate pairing code") }
                                 OutlinedButton(onClick = {
                                     selectedChild = child
                                     screen = AppScreen.ALLOWED_APPS
                                     execute { allowedApps = repository.loadAllowedApps(child.id) }
-                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("🎮  App access & daily limits") }
+                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("🎮  App access & daily limits") }
                                 OutlinedButton(
                                     onClick = { pendingChildAction = child to "unlink" },
                                     enabled = !busy,
                                     modifier = Modifier.fillMaxWidth()
-                                ) { Text("Deactivate device link") }
+                                ) { AppUiText("Deactivate device link") }
                                 OutlinedButton(
                                     onClick = { pendingChildAction = child to "delete" },
                                     enabled = !busy,
                                     modifier = Modifier.fillMaxWidth()
-                                ) { Text("Delete child profile") }
+                                ) { AppUiText("Delete child profile") }
                                 OutlinedButton(onClick = {
                                     appUsageChild = child
                                     screen = AppScreen.APP_USAGE_REPORT
                                     execute { appUsageReports = repository.loadAppUsageReports(child.id) }
-                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("📊  App usage report") }
+                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("📊  App usage report") }
                             }
                         }
                     }
                     if (lastPairingCode.isNotBlank()) {
                         Card(border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)) {
                             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("One-time pairing code for " + pairingChildName, fontWeight = FontWeight.SemiBold)
-                                Text(lastPairingCode, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                                Text("Valid for " + (pairingCodeExpiry / 60) + " minutes. Share privately with the child; only its hash is stored.")
-                                OutlinedButton(onClick = { lastPairingCode = "" }, modifier = Modifier.fillMaxWidth()) { Text("Hide code") }
+                                AppUiText("One-time pairing code for " + pairingChildName, fontWeight = FontWeight.SemiBold)
+                                AppUiText(lastPairingCode, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                                AppUiText("Valid for " + (pairingCodeExpiry / 60) + " minutes. Share privately with the child; only its hash is stored.")
+                                OutlinedButton(onClick = { lastPairingCode = "" }, modifier = Modifier.fillMaxWidth()) { AppUiText("Hide code") }
                             }
                         }
                     }
                 }
 
                 AppScreen.ADD_CHILD -> ScreenFrame("Create your child's learning profile", onBack = { screen = AppScreen.CHILDREN }, notice = notice, busy = busy) {
-                    Text("Personalize lessons to the child's country, grade and age. You can update these later from the curriculum screen.")
+                    AppUiText("Personalize lessons to the child's country, grade and age. You can update these later from the curriculum screen.")
                     Field(childName, { childName = it }, "Child's name")
-                    Text("Choose a profile icon", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    AppUiText("Choose a profile icon", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     listOf("🦊","🐼","🐯","🐸","🐰","🦄","🐻","🐨","🐵","🐧","🦋","🐢").chunked(6).forEach { rowIcons ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             rowIcons.forEach { avatar ->
                                 OutlinedButton(onClick = { childAvatarIcon = avatar }, modifier = Modifier.weight(1f)) {
-                                    Text((if (childAvatarIcon == avatar) "✓ " else "") + avatar, fontSize = 18.sp)
+                                    AppUiText((if (childAvatarIcon == avatar) "✓ " else "") + avatar, fontSize = 18.sp)
                                 }
                             }
                         }
@@ -1272,12 +1272,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                         countrySearch = ""
                         countryPickerOpen = true
                     }, modifier = Modifier.fillMaxWidth()) {
-                        Text("🌍  Country: ${displayCountryName(childCountryCode)}")
+                        AppUiText("🌍  Country: ${displayCountryName(childCountryCode)}")
                     }
                     Field(childSchoolGrade, { childSchoolGrade = it.filter(Char::isDigit).take(2) }, "School grade (0 = Kindergarten, 1–13)", keyboardType = KeyboardType.Number)
                     Field(childAgeYears, { childAgeYears = it.filter(Char::isDigit).take(2) }, "Child age (3–19 years)", keyboardType = KeyboardType.Number)
                     Field(childLanguage, { childLanguage = it.trim().take(16) }, "Preferred learning language (en, ur, sd...)")
-                    Text("The question bank filters by country, grade, age and language. When a reviewed local-language set isn't available, EduLock clearly labels the starter-bank fallback.")
+                    AppUiText("The question bank filters by country, grade, age and language. When a reviewed local-language set isn't available, EduLock clearly labels the starter-bank fallback.")
                     Field(childDailyCap, { childDailyCap = it.filter(Char::isDigit).take(4) }, "Maximum reward minutes per day (0–1440)", keyboardType = KeyboardType.Number)
                     Field(childDailyGameLimit, { childDailyGameLimit = it.filter(Char::isDigit).take(4) }, "Educational games per day in minutes (0 disables; max 1440)", keyboardType = KeyboardType.Number)
                     Button(onClick = {
@@ -1296,7 +1296,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             screen = AppScreen.CHILDREN
                             notice = "Learning profile saved. The avatar and daily educational-game allowance are ready."
                         }
-                    }, enabled = !busy && childName.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Save learning profile") }
+                    }, enabled = !busy && childName.isNotBlank(), modifier = Modifier.fillMaxWidth()) { AppUiText("Save learning profile") }
                 }
 
                 AppScreen.CURRICULUM_LIBRARY -> ScreenFrame(
@@ -1307,7 +1307,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 ) {
                     val child = selectedChild
                     if (child == null) {
-                        Text("Choose a child profile first.")
+                        AppUiText("Choose a child profile first.")
                     } else {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -1315,14 +1315,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                             colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF0FF))
                         ) {
                             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                Text(child.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                                Text(
+                                AppUiText(child.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                AppUiText(
                                     displayCountryName(curriculumCountryCode) + " • " +
                                         (curriculumGradeLevel.toIntOrNull()?.let { if (it == 0) "Kindergarten" else "Grade $it" } ?: "Choose grade") +
                                         " • Age " + curriculumAgeYears + " • " + curriculumLanguageCode.uppercase(),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                Text("Choose the child's learning context and import ready-made questions. The answer key stays server-side; you do not need to write questions yourself.")
+                                AppUiText("Choose the child's learning context and import ready-made questions. The answer key stays server-side; you do not need to write questions yourself.")
                             }
                         }
 
@@ -1333,7 +1333,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 countryPickerOpen = true
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("🌍  Country: ${displayCountryName(curriculumCountryCode)}") }
+                        ) { AppUiText("🌍  Country: ${displayCountryName(curriculumCountryCode)}") }
 
                         Field(
                             curriculumGradeLevel,
@@ -1348,23 +1348,23 @@ private fun EduLockApp(repository: EduLockRepository) {
                             keyboardType = KeyboardType.Number
                         )
 
-                        Text("Learning language", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        AppUiText("Learning language", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         OutlinedButton(
                             onClick = { languageSearch = ""; languagePickerOpen = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
+                            AppUiText(
                                 "🌐  " + displayLanguageName(curriculumLanguageCode) +
                                     " (" + curriculumLanguageCode.uppercase() + ")  •  Change"
                             )
                         }
-                        Text(
+                        AppUiText(
                             "All standard ISO language codes are searchable. The question bank reports when it uses an English or international starter fallback.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
-                        Text("Subject", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        AppUiText("Subject", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         buildList {
                             add(Triple("math", "Mathematics", "Numbers, arithmetic, fractions and problem solving"))
                             add(Triple("english", "English", "Vocabulary, reading and grammar"))
@@ -1408,8 +1408,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 )
                             ) {
                                 Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text((if (curriculumSubjectCode == code) "✓  " else "") + name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                                    Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                    AppUiText((if (curriculumSubjectCode == code) "✓  " else "") + name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                                    AppUiText(detail, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                         }
@@ -1439,7 +1439,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             },
                             enabled = !busy,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Save learning profile") }
+                        ) { AppUiText("Save learning profile") }
 
                         Button(
                             onClick = {
@@ -1464,7 +1464,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             },
                             enabled = !busy,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("✨  Find age-matched questions") }
+                        ) { AppUiText("✨  Find age-matched questions") }
 
                         curriculumSearchResult?.let { result ->
                             Card(
@@ -1473,12 +1473,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF8F4))
                             ) {
                                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                    Text(
+                                    AppUiText(
                                         if (result.questions.isEmpty()) "No questions found" else "${result.questions.size} questions for this learning profile",
                                         fontWeight = FontWeight.Bold,
                                         style = MaterialTheme.typography.titleMedium
                                     )
-                                    Text(result.message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    AppUiText(result.message, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     if (result.questions.isNotEmpty()) {
                                         OutlinedButton(
                                             onClick = {
@@ -1487,7 +1487,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             },
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Text(if (curriculumSelectedIds.size == result.questions.size) "Clear selection" else "Select all questions")
+                                            AppUiText(if (curriculumSelectedIds.size == result.questions.size) "Clear selection" else "Select all questions")
                                         }
                                     }
                                 }
@@ -1509,19 +1509,19 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     )
                                 ) {
                                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Text(
+                                        AppUiText(
                                             (if (chosen) "✓ SELECTED  " else "TAP TO SELECT  ") + item.topic,
                                             color = MaterialTheme.colorScheme.primary,
                                             fontWeight = FontWeight.Bold
                                         )
-                                        Text(item.prompt, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                        if (item.options.isNotEmpty()) Text("Choices: " + item.options.joinToString("   •   "))
-                                        Text(
+                                        AppUiText(item.prompt, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                        if (item.options.isNotEmpty()) AppUiText("Choices: " + item.options.joinToString("   •   "))
+                                        AppUiText(
                                             "Grade ${item.gradeLevel} • Age ${item.ageMin}–${item.ageMax} • ${item.languageCode.uppercase()} • " + item.curriculumName,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             style = MaterialTheme.typography.bodySmall
                                         )
-                                        Text(item.sourceNote, style = MaterialTheme.typography.bodySmall, color = Color(0xFF88601B))
+                                        AppUiText(item.sourceNote, style = MaterialTheme.typography.bodySmall, color = Color(0xFF88601B))
                                     }
                                 }
                             }
@@ -1548,14 +1548,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 },
                                 enabled = !busy && curriculumSelectedIds.isNotEmpty() && curriculumSelectedIds.size <= 50,
                                 modifier = Modifier.fillMaxWidth()
-                            ) { Text("Add selected questions to Subjects") }
+                            ) { AppUiText("Add selected questions to Subjects") }
                         }
                     }
                 }
 
                 AppScreen.SUBJECTS -> ScreenFrame("Subjects & questions", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
-                    Button(onClick = { subjectTitle = ""; subjectLanguage = "en"; screen = AppScreen.ADD_SUBJECT }, modifier = Modifier.fillMaxWidth()) { Text("Create subject") }
-                    if (subjects.isEmpty()) Text("Create a subject first, for example Mathematics (en), رياضي (ur) or a Sindhi subject.")
+                    Button(onClick = { subjectTitle = ""; subjectLanguage = "en"; screen = AppScreen.ADD_SUBJECT }, modifier = Modifier.fillMaxWidth()) { AppUiText("Create subject") }
+                    if (subjects.isEmpty()) AppUiText("Create a subject first, for example Mathematics (en), رياضي (ur) or a Sindhi subject.")
                     subjects.forEach { subject ->
                         Card(
                             modifier = Modifier.fillMaxWidth().clickable {
@@ -1570,9 +1570,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text(subject.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                Text("Language: " + subject.languageCode)
-                                Text("Tap to manage questions")
+                                AppUiText(subject.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                AppUiText("Language: " + subject.languageCode)
+                                AppUiText("Tap to manage questions")
                             }
                         }
                     }
@@ -1584,7 +1584,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     notice = notice,
                     busy = busy
                 ) {
-                    Text(
+                    AppUiText(
                         "Ready-to-use question templates for core school subjects. Practical science activities include worked solutions, steps and safety notes.",
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -1592,7 +1592,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         onClick = { selected3DModel = "solar-system"; screen = AppScreen.LEARNING_3D_LAB },
                         enabled = !busy,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("🌌 Preview all interactive 3D learning models") }
+                    ) { AppUiText("🌌 Preview all interactive 3D learning models") }
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf("Mathematics", "Physics", "Chemistry", "Biology", "General Science", "English", "Urdu", "Sindhi", "Hindi", "Social Studies", "Computer Skills", "Astronomy", "Geography", "Health & Safety", "Art & Design", "Drawing & Colour", "Religious Education")
                             .chunked(2).forEach { categories ->
@@ -1602,7 +1602,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             onClick = { templateCategory = category },
                                             enabled = !busy,
                                             modifier = Modifier.weight(1f)
-                                        ) { Text(if (templateCategory == category) "✓ $category" else category) }
+                                        ) { AppUiText(if (templateCategory == category) "✓ $category" else category) }
                                     }
                                 }
                             }
@@ -1613,9 +1613,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 (parentStudyTrack != "none" && template.conceptKey.startsWith("faith:" + parentStudyTrack + ":")))
                     }
                     if (templateCategory == "Religious Education" && parentStudyTrack == "none") {
-                        Text("Choose an optional religious-education track in Family settings to see matching question templates.")
+                        AppUiText("Choose an optional religious-education track in Family settings to see matching question templates.")
                     } else if (filteredTemplates.isEmpty()) {
-                        Text("No templates are available for this category yet. Parents can create their own questions.")
+                        AppUiText("No templates are available for this category yet. Parents can create their own questions.")
                     }
                     filteredTemplates.forEach { template ->
                         Card(
@@ -1628,37 +1628,37 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(template.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Text(
+                                AppUiText(template.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                AppUiText(
                                     template.subjectTitle + " • " + readableQuestionType(template.questionType),
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 if (template.materials.isNotEmpty()) {
-                                    Text("Materials", fontWeight = FontWeight.Bold)
-                                    Text(template.materials.joinToString(" • "))
+                                    AppUiText("Materials", fontWeight = FontWeight.Bold)
+                                    AppUiText(template.materials.joinToString(" • "))
                                 }
                                 if (template.steps.isNotEmpty()) {
-                                    Text("Activity steps", fontWeight = FontWeight.Bold)
+                                    AppUiText("Activity steps", fontWeight = FontWeight.Bold)
                                     template.steps.forEachIndexed { index, step ->
-                                        Text("${index + 1}. $step")
+                                        AppUiText("${index + 1}. $step")
                                     }
                                 }
-                                Text("Question preview", fontWeight = FontWeight.Bold)
+                                AppUiText("Question preview", fontWeight = FontWeight.Bold)
                                 if (template.conceptKey == "solar-system-planet-id") SolarSystemModelPreview()
                                 else if (template.conceptKey.startsWith("3d:")) {
                                     val model = template.conceptKey.removePrefix("3d:").substringBefore(":")
                                     if (model == "solar-system") SolarSystemModelPreview() else Learning3DPreview(model)
                                 }
-                                Text(template.prompt)
+                                AppUiText(template.prompt)
                                 if (template.options.isNotEmpty()) {
-                                    Text("Answer choices: " + template.options.joinToString(" • "))
+                                    AppUiText("Answer choices: " + template.options.joinToString(" • "))
                                 }
-                                Text("Parent's worked solution", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                Text(template.solution)
+                                AppUiText("Parent's worked solution", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                AppUiText(template.solution)
                                 if (template.safety.isNotBlank()) {
-                                    Text("Safety", fontWeight = FontWeight.Bold, color = Color(0xFF8B4C00))
-                                    Text(template.safety, color = Color(0xFF774300))
+                                    AppUiText("Safety", fontWeight = FontWeight.Bold, color = Color(0xFF8B4C00))
+                                    AppUiText(template.safety, color = Color(0xFF774300))
                                 }
                                 Button(
                                     onClick = {
@@ -1705,11 +1705,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     },
                                     enabled = !busy,
                                     modifier = Modifier.fillMaxWidth()
-                                ) { Text("Use template · create question") }
+                                ) { AppUiText("Use template · create question") }
                             }
                         }
                     }
-                    Text(
+                    AppUiText(
                         "Experiments use ordinary classroom materials only. Results vary with materials, amounts, temperature and technique. Follow the safety notes and use adult supervision where stated; never mix these activities with cleaning products.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1726,24 +1726,24 @@ private fun EduLockApp(repository: EduLockRepository) {
                             screen = AppScreen.SUBJECTS
                             notice = "Subject saved."
                         }
-                    }, enabled = !busy && subjectTitle.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Save subject") }
+                    }, enabled = !busy && subjectTitle.isNotBlank(), modifier = Modifier.fillMaxWidth()) { AppUiText("Save subject") }
                 }
 
                 AppScreen.QUESTIONS -> ScreenFrame(selectedSubject?.title ?: "Questions", onBack = { screen = AppScreen.SUBJECTS }, notice = notice, busy = busy) {
                     val subject = selectedSubject
                     if (subject != null) {
-                        Text("Create a question in " + subject.languageCode + " and give related questions the same concept tag. The tag lets Concept Bridge report understanding separately from language.")
+                        AppUiText("Create a question in " + subject.languageCode + " and give related questions the same concept tag. The tag lets Concept Bridge report understanding separately from language.")
                         OutlinedButton(
                             onClick = { templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("✨ Browse ready-made templates") }
+                        ) { AppUiText("✨ Browse ready-made templates") }
                         Button(onClick = {
                             questionPrompt = ""; questionOptions = ""; questionAnswer = ""; questionType = "multiple_choice"
                             questionLanguage = subject.languageCode
                             questionConceptKey = ""
                             questionSolution = ""
                             screen = AppScreen.ADD_QUESTION
-                        }, modifier = Modifier.fillMaxWidth()) { Text("Add question") }
+                        }, modifier = Modifier.fillMaxWidth()) { AppUiText("Add question") }
                         OutlinedButton(
                             onClick = {
                                 questionPrompt = ""
@@ -1758,20 +1758,20 @@ private fun EduLockApp(repository: EduLockRepository) {
                             },
                             enabled = !busy,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("✨ Create a custom interactive 3D question") }
-                        if (questions.isEmpty()) Text("No questions yet.")
+                        ) { AppUiText("✨ Create a custom interactive 3D question") }
+                        if (questions.isEmpty()) AppUiText("No questions yet.")
                         questions.forEachIndexed { index, question ->
                             CompositionLocalProvider(LocalLayoutDirection provides directionFor(question.languageCode)) {
                                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                        Text((index + 1).toString() + ". " + question.prompt, fontWeight = FontWeight.SemiBold)
-                                        Text("Type: " + readableQuestionType(question.questionType))
-                                        Text("Language: " + question.languageCode + " • Concept tag: " + question.conceptKey)
-                                        if (question.options.isNotEmpty()) Text("Options: " + question.options.joinToString(" • "))
-                                        Text("Translations: " + (questionTranslations[question.id]?.size ?: 0))
+                                        AppUiText((index + 1).toString() + ". " + question.prompt, fontWeight = FontWeight.SemiBold)
+                                        AppUiText("Type: " + readableQuestionType(question.questionType))
+                                        AppUiText("Language: " + question.languageCode + " • Concept tag: " + question.conceptKey)
+                                        if (question.options.isNotEmpty()) AppUiText("Options: " + question.options.joinToString(" • "))
+                                        AppUiText("Translations: " + (questionTranslations[question.id]?.size ?: 0))
                                         questionSolutions[question.id]?.let { solution ->
-                                            Text("Worked solution", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                            Text(solution)
+                                            AppUiText("Worked solution", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                            AppUiText(solution)
                                         }
                                         OutlinedButton(onClick = {
                                             selectedQuestionForTranslation = question
@@ -1784,7 +1784,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             translationOptions = ""
                                             translationAcceptedAnswers = ""
                                             screen = AppScreen.ADD_TRANSLATION
-                                        }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Add / edit translation") }
+                                        }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Add / edit translation") }
                                     }
                                 }
                             }
@@ -1794,9 +1794,9 @@ private fun EduLockApp(repository: EduLockRepository) {
 
                 AppScreen.ADD_QUESTION -> ScreenFrame("Add question", onBack = { screen = AppScreen.QUESTIONS }, notice = notice, busy = busy) {
                     val lang = questionLanguage
-                    Text("Question language: " + lang + ". Type in Urdu, Sindhi, English or another Unicode language.")
-                    Text("Optional interactive 3D model", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Choose a model to attach a touch-friendly learning visual to your question.")
+                    AppUiText("Question language: " + lang + ". Type in Urdu, Sindhi, English or another Unicode language.")
+                    AppUiText("Optional interactive 3D model", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    AppUiText("Choose a model to attach a touch-friendly learning visual to your question.")
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf(
                             "none" to "No model",
@@ -1813,7 +1813,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 group.forEach { (model, label) ->
                                     OutlinedButton(onClick = { question3DModel = model }, enabled = !busy, modifier = Modifier.weight(1f)) {
-                                        Text(if (question3DModel == model) "✓ $label" else label)
+                                        AppUiText(if (question3DModel == model) "✓ $label" else label)
                                     }
                                 }
                             }
@@ -1827,23 +1827,23 @@ private fun EduLockApp(repository: EduLockRepository) {
                         Field(questionPrompt, { questionPrompt = it }, "Question prompt")
                         Field(questionConceptKey, { questionConceptKey = it }, "Concept tag (reuse for same idea across questions)")
                         Field(questionLanguage, { questionLanguage = it }, "Question language code (en, ur, sd, etc.)")
-                        Text("Question type")
+                        AppUiText("Question type")
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            OutlinedButton(onClick = { questionType = "multiple_choice" }) { Text(if (questionType == "multiple_choice") "✓ MCQ" else "MCQ") }
-                            OutlinedButton(onClick = { questionType = "true_false" }) { Text(if (questionType == "true_false") "✓ True/False" else "True/False") }
+                            OutlinedButton(onClick = { questionType = "multiple_choice" }) { AppUiText(if (questionType == "multiple_choice") "✓ MCQ" else "MCQ") }
+                            OutlinedButton(onClick = { questionType = "true_false" }) { AppUiText(if (questionType == "true_false") "✓ True/False" else "True/False") }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            OutlinedButton(onClick = { questionType = "short_answer" }) { Text(if (questionType == "short_answer") "✓ Short" else "Short") }
-                            OutlinedButton(onClick = { questionType = "numeric" }) { Text(if (questionType == "numeric") "✓ Numeric" else "Numeric") }
+                            OutlinedButton(onClick = { questionType = "short_answer" }) { AppUiText(if (questionType == "short_answer") "✓ Short" else "Short") }
+                            OutlinedButton(onClick = { questionType = "numeric" }) { AppUiText(if (questionType == "numeric") "✓ Numeric" else "Numeric") }
                         }
                         if (questionType == "multiple_choice") {
                             Field(questionOptions, { questionOptions = it }, "Options (one per line)")
                         } else if (questionType == "true_false") {
-                            Text("Save the canonical answer as true or false. A translation can use localized labels and accepted answers.")
+                            AppUiText("Save the canonical answer as true or false. A translation can use localized labels and accepted answers.")
                         }
                         Field(questionAnswer, { questionAnswer = it }, "Canonical correct answer (private)")
                         Field(questionSolution, { questionSolution = it }, "Parent-only worked solution / experiment explanation")
-                        Text("Worked solutions are stored separately from child-visible questions.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        AppUiText("Worked solutions are stored separately from child-visible questions.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Button(onClick = {
                         execute {
@@ -1858,17 +1858,17 @@ private fun EduLockApp(repository: EduLockRepository) {
                             screen = AppScreen.QUESTIONS
                             notice = "Question and parent-only worked solution saved. The solution is not sent to the child."
                         }
-                    }, enabled = !busy && questionPrompt.isNotBlank() && questionAnswer.isNotBlank() && questionConceptKey.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Save question") }
+                    }, enabled = !busy && questionPrompt.isNotBlank() && questionAnswer.isNotBlank() && questionConceptKey.isNotBlank(), modifier = Modifier.fillMaxWidth()) { AppUiText("Save question") }
                 }
 
                 AppScreen.ADD_TRANSLATION -> ScreenFrame("Concept Bridge — translation", onBack = { screen = AppScreen.QUESTIONS }, notice = notice, busy = busy) {
                     val original = selectedQuestionForTranslation
                     if (original == null) {
-                        Text("Choose a question first.")
+                        AppUiText("Choose a question first.")
                     } else {
-                        Text("Original: " + original.prompt)
-                        Text("Concept tag: " + original.conceptKey + " • Original language: " + original.languageCode)
-                        Text("Save each translated question with its translated options and accepted correct answers. The child can switch between these language versions without changing the underlying question or concept.")
+                        AppUiText("Original: " + original.prompt)
+                        AppUiText("Concept tag: " + original.conceptKey + " • Original language: " + original.languageCode)
+                        AppUiText("Save each translated question with its translated options and accepted correct answers. The child can switch between these language versions without changing the underlying question or concept.")
                         Field(translationLanguage, { translationLanguage = it }, "Target language code (en, ur, sd, etc.)")
                         CompositionLocalProvider(LocalLayoutDirection provides directionFor(translationLanguage)) {
                             Field(translationPrompt, { translationPrompt = it }, "Translated question prompt")
@@ -1890,22 +1890,22 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 notice = "Translation saved. Concept Bridge now tracks answers in this language separately."
                             }
                         }, enabled = !busy && translationPrompt.isNotBlank() && translationAcceptedAnswers.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-                            Text("Save translation")
+                            AppUiText("Save translation")
                         }
                     }
                 }
 
                 AppScreen.ASSIGN_TASK -> ScreenFrame("Assign task & reward", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
-                    Text("Choose the child")
+                    AppUiText("Choose the child")
                     children.forEach { child ->
                         OutlinedButton(onClick = { selectedChild = child }, modifier = Modifier.fillMaxWidth()) {
-                            Text((if (selectedChild?.id == child.id) "✓ " else "") + child.displayName)
+                            AppUiText((if (selectedChild?.id == child.id) "✓ " else "") + child.displayName)
                         }
                     }
-                    Text("Choose a subject")
+                    AppUiText("Choose a subject")
                     subjects.forEach { subject ->
                         OutlinedButton(onClick = { selectedSubject = subject }, modifier = Modifier.fillMaxWidth()) {
-                            Text((if (selectedSubject?.id == subject.id) "✓ " else "") + subject.title + " (" + subject.languageCode + ")")
+                            AppUiText((if (selectedSubject?.id == subject.id) "✓ " else "") + subject.title + " (" + subject.languageCode + ")")
                         }
                     }
                     Field(taskTitle, { taskTitle = it }, "Task title")
@@ -1913,7 +1913,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Field(taskPassPercent, { taskPassPercent = it.filter(Char::isDigit).take(3) }, "Passing score percent (0–100)", keyboardType = KeyboardType.Number)
                     Field(taskRewardMinutes, { taskRewardMinutes = it.filter(Char::isDigit).take(4) }, "Reward minutes after passing", keyboardType = KeyboardType.Number)
                     Field(taskDailyCapMinutes, { taskDailyCapMinutes = it.filter(Char::isDigit).take(4) }, "Task daily reward cap (0–1440)", keyboardType = KeyboardType.Number)
-                    Text("The actual award is calculated by Supabase and capped by both the child and task daily limits.")
+                    AppUiText("The actual award is calculated by Supabase and capped by both the child and task daily limits.")
                     Button(onClick = {
                         execute {
                             val child = selectedChild ?: throw IllegalArgumentException("Select a child.")
@@ -1930,7 +1930,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             taskTitle = ""
                             notice = "Task assigned to " + child.displayName + ". Rewards are issued only after server-side grading."
                         }
-                    }, enabled = !busy && children.isNotEmpty() && subjects.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Assign task") }
+                    }, enabled = !busy && children.isNotEmpty() && subjects.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { AppUiText("Assign task") }
                 }
 
                 AppScreen.REPORTS -> ScreenFrame("Progress reports", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
@@ -1939,35 +1939,35 @@ private fun EduLockApp(repository: EduLockRepository) {
                     SummaryCard("Completed tasks", total.toString(), "Only submitted attempts appear here.")
                     SummaryCard("Average score", average.toString() + "%", "Calculated from the recorded task attempts.")
                     SummaryCard("Reward minutes", attempts.sumOf { it.awardedMinutes }.toString(), "Total awarded minutes for the listed attempts.")
-                    Text("Concept Bridge — concept understanding by language", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    Text("The same concept tag is grouped across translated question versions. Accuracy is shown separately for each language; a translated question remains the same underlying question.")
+                    AppUiText("Concept Bridge — concept understanding by language", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    AppUiText("The same concept tag is grouped across translated question versions. Accuracy is shown separately for each language; a translated question remains the same underlying question.")
                     OutlinedButton(onClick = {
                         execute {
                             attempts = repository.loadAttempts()
                             conceptProgress = repository.loadConceptProgress()
                         }
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Refresh report") }
-                    if (conceptProgress.isEmpty()) Text("No concept-level answers yet. Create a question with a concept tag, add a translation, and complete a task.")
+                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("Refresh report") }
+                    if (conceptProgress.isEmpty()) AppUiText("No concept-level answers yet. Create a question with a concept tag, add a translation, and complete a task.")
                     conceptProgress.forEach { item ->
                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text(item.conceptKey, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                Text("Language: " + languageLabel(item.languageCode))
-                                Text("Correct: " + item.correct + " / " + item.total + " • " + item.percent + "%")
+                                AppUiText(item.conceptKey, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                AppUiText("Language: " + languageLabel(item.languageCode))
+                                AppUiText("Correct: " + item.correct + " / " + item.total + " • " + item.percent + "%")
                                 LinearProgressIndicator(progress = { item.percent / 100f }, modifier = Modifier.fillMaxWidth())
                             }
                         }
                     }
-                    Text("Task history", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    if (attempts.isEmpty()) Text("No submitted task attempts yet.")
+                    AppUiText("Task history", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    if (attempts.isEmpty()) AppUiText("No submitted task attempts yet.")
                     attempts.forEach { attempt ->
                         val child = children.firstOrNull { it.id == attempt.childId }
                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text(child?.displayName ?: "Child profile", fontWeight = FontWeight.SemiBold)
-                                Text("Score: " + attempt.scorePercent + "% • " + if (attempt.passed) "Passed" else "Not passed")
-                                Text("Earned: " + attempt.awardedMinutes + " minutes")
-                                Text("Completed: " + attempt.completedAt.replace("T", " ").take(16))
+                                AppUiText(child?.displayName ?: "Child profile", fontWeight = FontWeight.SemiBold)
+                                AppUiText("Score: " + attempt.scorePercent + "% • " + if (attempt.passed) "Passed" else "Not passed")
+                                AppUiText("Earned: " + attempt.awardedMinutes + " minutes")
+                                AppUiText("Completed: " + attempt.completedAt.replace("T", " ").take(16))
                             }
                         }
                     }
@@ -1975,8 +1975,8 @@ private fun EduLockApp(repository: EduLockRepository) {
 
                 AppScreen.ALLOWED_APPS -> ScreenFrame("Allowed apps", onBack = { screen = AppScreen.CHILDREN }, notice = notice, busy = busy) {
                     val child = selectedChild
-                    Text("Child: " + (child?.displayName ?: "Not selected"))
-                    Text("User-facing apps from the child's phone. Apps start allowed. Disable an app or set a daily limit to restrict it; changes sync while EduLock is open on the child's phone.")
+                    AppUiText("Child: " + (child?.displayName ?: "Not selected"))
+                    AppUiText("User-facing apps from the child's phone. Apps start allowed. Disable an app or set a daily limit to restrict it; changes sync while EduLock is open on the child's phone.")
                     OutlinedButton(
                         onClick = {
                             execute {
@@ -1987,7 +1987,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         },
                         enabled = !busy && child != null,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("↻ Refresh apps from child's phone") }
+                    ) { AppUiText("↻ Refresh apps from child's phone") }
                     val cleanedAppCount = childInstalledApps.count { installed ->
                         !installed.packageName.startsWith("com.android.internal.") &&
                             !installed.packageName.startsWith("com.android.providers.") &&
@@ -2010,9 +2010,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF5FF))
                     ) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text("App access overview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("$cleanedAppCount apps detected • " + allowedApps.count { it.enabled } + " allowed • " + allowedApps.count { !it.enabled } + " blocked")
-                            Text("Everything starts allowed. Parent controls include enable/disable, daily minute caps and day-by-day weekly access windows in 24-hour time.")
+                            AppUiText("App access overview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            AppUiText("$cleanedAppCount apps detected • " + allowedApps.count { it.enabled } + " allowed • " + allowedApps.count { !it.enabled } + " blocked")
+                            AppUiText("Everything starts allowed. Parent controls include enable/disable, daily minute caps and day-by-day weekly access windows in 24-hour time.")
                         }
                     }
                     OutlinedTextField(
@@ -2020,15 +2020,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                         onValueChange = { appSearchQuery = it.take(120) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        label = { Text("Search apps") },
-                        placeholder = { Text("Find an app by name") }
+                        label = { AppUiText("Search apps") },
+                        placeholder = { AppUiText("Find an app by name") }
                     )
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("All", "Allowed", "Blocked").forEach { filter ->
                             if (appStatusFilter == filter) {
-                                Button(onClick = { appStatusFilter = filter }, modifier = Modifier.weight(1f)) { Text(filter) }
+                                Button(onClick = { appStatusFilter = filter }, modifier = Modifier.weight(1f)) { AppUiText(filter) }
                             } else {
-                                OutlinedButton(onClick = { appStatusFilter = filter }, modifier = Modifier.weight(1f)) { Text(filter) }
+                                OutlinedButton(onClick = { appStatusFilter = filter }, modifier = Modifier.weight(1f)) { AppUiText(filter) }
                             }
                         }
                     }
@@ -2059,7 +2059,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             }
                     }
                     if (childInstalledApps.isEmpty()) {
-                        Text("No apps received yet. Open EduLock on the paired child phone and keep it online. Its user-facing app list refreshes automatically every five minutes while EduLock is open.")
+                        AppUiText("No apps received yet. Open EduLock on the paired child phone and keep it online. Its user-facing app list refreshes automatically every five minutes while EduLock is open.")
                     }
                     filteredInstalledApps.forEach { installed ->
                         val existingRule = allowedApps.firstOrNull { it.packageName == installed.packageName }
@@ -2068,8 +2068,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                Text(installed.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
-                                Text(installed.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                AppUiText(installed.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
+                                AppUiText(installed.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 if (existingRule == null) {
                                     var limitText = installedAppLimitEdits[installed.packageName] ?: "1440"
                                     Field(limitText, { value ->
@@ -2089,9 +2089,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         },
                                         enabled = !busy,
                                         modifier = Modifier.fillMaxWidth()
-                                    ) { Text("Save app limit") }
+                                    ) { AppUiText("Save app limit") }
                                 } else {
-                                    Text(if (!existingRule.enabled) "Blocked by parent" else if (existingRule.dailyLimitMinutes >= 1440) "Allowed • no practical daily cap" else "Allowed • ${existingRule.dailyLimitMinutes} minutes/day")
+                                    AppUiText(if (!existingRule.enabled) "Blocked by parent" else if (existingRule.dailyLimitMinutes >= 1440) "Allowed • no practical daily cap" else "Allowed • ${existingRule.dailyLimitMinutes} minutes/day")
                                     Field(
                                         installedAppLimitEdits[installed.packageName] ?: existingRule.dailyLimitMinutes.toString(),
                                         { value -> installedAppLimitEdits = installedAppLimitEdits + (installed.packageName to value.filter(Char::isDigit).take(4)) },
@@ -2108,7 +2108,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             installedAppLimitEdits = installedAppLimitEdits - installed.packageName
                                             notice = "Daily limit saved. The child's phone applies it after syncing."
                                         }
-                                    }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Save limit") }
+                                    }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Save limit") }
                                     OutlinedButton(onClick = {
                                         execute {
                                             repository.updateAllowedAppEnabled(existingRule.id, !existingRule.enabled)
@@ -2116,7 +2116,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             notice = if (existingRule.enabled) "App disabled for child after the next sync." else "App enabled for child after the next sync."
                                         }
                                     }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                                        Text(if (existingRule.enabled) "Disable on child's phone" else "Enable on child's phone")
+                                        AppUiText(if (existingRule.enabled) "Disable on child's phone" else "Enable on child's phone")
                                     }
 
                                     OutlinedButton(
@@ -2131,11 +2131,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         },
                                         enabled = !busy,
                                         modifier = Modifier.fillMaxWidth()
-                                    ) { Text(if (existingRule.id in weeklyScheduleEditIds) "Hide weekly timetable" else "🗓 Set weekly timetable (24-hour clock)") }
+                                    ) { AppUiText(if (existingRule.id in weeklyScheduleEditIds) "Hide weekly timetable" else "🗓 Set weekly timetable (24-hour clock)") }
                                     if (existingRule.id in weeklyScheduleEditIds) {
                                         val schedule = weeklyScheduleEdits[existingRule.id]
                                             ?: AppWeeklySchedule.parse(existingRule.weeklyScheduleJson)
-                                        Text("Select allowed weekdays and start/end time. Disabled days block this app all day. Times use the child's phone local clock; overnight windows are supported.")
+                                        AppUiText("Select allowed weekdays and start/end time. Disabled days block this app all day. Times use the child's phone local clock; overnight windows are supported.")
                                         AppWeeklySchedule.DAY_KEYS.forEachIndexed { dayIndex, dayKey ->
                                             val dayWindow = schedule.days[dayKey] ?: AppDayWindow(enabled = false)
                                             Card(
@@ -2147,20 +2147,20 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                     OutlinedButton(
                                                         onClick = { changeWeeklyWindow(existingRule.id, dayKey) { it.copy(enabled = !it.enabled) } },
                                                         modifier = Modifier.fillMaxWidth()
-                                                    ) { Text((if (dayWindow.enabled) "✓ " else "○ ") + AppWeeklySchedule.DAY_LABELS[dayIndex] +
+                                                    ) { AppUiText((if (dayWindow.enabled) "✓ " else "○ ") + AppWeeklySchedule.DAY_LABELS[dayIndex] +
                                                         if (dayWindow.enabled) " • Allowed hours" else " • Blocked all day") }
                                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                         OutlinedTextField(
                                                             value = dayWindow.start,
                                                             onValueChange = { value -> changeWeeklyWindow(existingRule.id, dayKey) { it.copy(start = value.filter { c -> c.isDigit() || c == ':' }.take(5)) } },
                                                             modifier = Modifier.weight(1f), singleLine = true,
-                                                            label = { Text("Start (HH:mm)") }, placeholder = { Text("08:00") }
+                                                            label = { AppUiText("Start (HH:mm)") }, placeholder = { AppUiText("08:00") }
                                                         )
                                                         OutlinedTextField(
                                                             value = dayWindow.end,
                                                             onValueChange = { value -> changeWeeklyWindow(existingRule.id, dayKey) { it.copy(end = value.filter { c -> c.isDigit() || c == ':' }.take(5)) } },
                                                             modifier = Modifier.weight(1f), singleLine = true,
-                                                            label = { Text("End (HH:mm)") }, placeholder = { Text("20:00") }
+                                                            label = { AppUiText("End (HH:mm)") }, placeholder = { AppUiText("20:00") }
                                                         )
                                                     }
                                                 }
@@ -2179,13 +2179,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             },
                                             enabled = !busy,
                                             modifier = Modifier.fillMaxWidth()
-                                        ) { Text("Save weekly timetable") }
+                                        ) { AppUiText("Save weekly timetable") }
                                     }
                                 }
                             }
                         }
                     }
-                    if (childInstalledApps.isNotEmpty() && allowedApps.isEmpty()) Text("No saved app rules were returned. Apps remain allowed by default; check the database migration if you cannot save a limit.")
+                    if (childInstalledApps.isNotEmpty() && allowedApps.isEmpty()) AppUiText("No saved app rules were returned. Apps remain allowed by default; check the database migration if you cannot save a limit.")
                     allowedApps.filter { app ->
                         childInstalledApps.none { it.packageName == app.packageName } &&
                             (appSearchQuery.isBlank() || app.displayName.contains(appSearchQuery, ignoreCase = true) || app.packageName.contains(appSearchQuery, ignoreCase = true)) &&
@@ -2212,8 +2212,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }.forEach { app ->
                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text(app.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
-                                Text(app.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                AppUiText(app.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
+                                AppUiText(app.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Field(
                                     appLimitEdits[app.id] ?: app.dailyLimitMinutes.toString(),
                                     { newValue -> appLimitEdits = appLimitEdits + (app.id to newValue.filter(Char::isDigit).take(4)) },
@@ -2230,7 +2230,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         appLimitEdits = appLimitEdits - app.id
                                         notice = "Daily limit updated. Sync the child's device to apply the change."
                                     }
-                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Save daily limit") }
+                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Save daily limit") }
                                 OutlinedButton(
                                     onClick = {
                                         execute {
@@ -2242,33 +2242,33 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     },
                                     enabled = !busy,
                                     modifier = Modifier.fillMaxWidth()
-                                ) { Text(if (app.enabled) "Disable this app on child's device" else "Allow this app on child's device") }
+                                ) { AppUiText(if (app.enabled) "Disable this app on child's device" else "Allow this app on child's device") }
                                 OutlinedButton(onClick = {
                                     execute {
                                         repository.deleteAllowedApp(app.id)
                                         allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
                                     }
-                                }, modifier = Modifier.fillMaxWidth()) { Text("Remove app") }
+                                }, modifier = Modifier.fillMaxWidth()) { AppUiText("Remove app") }
                             }
                         }
                     }
-                    Text("To enforce these rules on the child's phone, the child must enable EduLock in Android Settings → Accessibility on that device. Android may allow a device owner/admin to enforce stronger controls; a normal app cannot guarantee that it cannot be uninstalled or have its data cleared.")
+                    AppUiText("To enforce these rules on the child's phone, the child must enable EduLock in Android Settings → Accessibility on that device. Android may allow a device owner/admin to enforce stronger controls; a normal app cannot guarantee that it cannot be uninstalled or have its data cleared.")
                 }
 
                 AppScreen.CHILD_HOME -> ScreenFrame("Your learning space", notice = notice, busy = busy) {
                     val child = childProfile
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Box(Modifier.size(58.dp).background(Brush.linearGradient(listOf(Color(0xFFEEE9FF), Color(0xFFDDF8F1))), RoundedCornerShape(20.dp)), contentAlignment = Alignment.Center) {
-                            Text(child?.avatarIcon ?: "🦊", fontSize = 32.sp)
+                            AppUiText(child?.avatarIcon ?: "🦊", fontSize = 32.sp)
                         }
                         Column {
-                            Text("Hello, " + (child?.displayName ?: "learner") + "!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-                            Text("Ready for today's adventure?", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            AppUiText("Hello, " + (child?.displayName ?: "learner") + "!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                            AppUiText("Ready for today's adventure?", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    Button(onClick = { openKidsGames() }, modifier = Modifier.fillMaxWidth()) { Text("🎮  Learning Games • daily time limit") }
-                    OutlinedButton(onClick = { screen = AppScreen.DRAWING_STUDIO }, modifier = Modifier.fillMaxWidth()) { Text("🎨 Draw & colour") }
-                    OutlinedButton(onClick = { openSolarQuiz() }, modifier = Modifier.fillMaxWidth()) { Text("🚀 Play the 3D Solar System planet quiz • timed") }
+                    Button(onClick = { openKidsGames() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎮  Learning Games • daily time limit") }
+                    OutlinedButton(onClick = { screen = AppScreen.DRAWING_STUDIO }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎨 Draw & colour") }
+                    OutlinedButton(onClick = { openSolarQuiz() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🚀 Play the 3D Solar System planet quiz • timed") }
                     SummaryCard("Learning rewards earned today", earnedToday.toString() + " minutes", "Successful tasks add reward minutes. Rewards are tracked separately from app access.")
                     SummaryCard(
                         "App access",
@@ -2287,11 +2287,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                         if (managedProtectionActive) "Android device-owner policies are blocking app-management actions, including uninstall and Clear data through Settings." else "Full protection is not active. Device-admin mode alone cannot reliably block Clear data. Stronger protection requires setting up this phone as a managed device before normal use."
                     )
                     if (isAccessibilityServiceEnabled(context)) {
-                        Text("Device restriction service: enabled on this device.")
+                        AppUiText("Device restriction service: enabled on this device.")
                     } else {
-                        Text("Automatic blocking needs your parent's permission and one-time activation in Android Accessibility settings on this device.")
+                        AppUiText("Automatic blocking needs your parent's permission and one-time activation in Android Accessibility settings on this device.")
                         Button(onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }, modifier = Modifier.fillMaxWidth()) {
-                            Text("Enable EduLock app restrictions")
+                            AppUiText("Enable EduLock app restrictions")
                         }
                         OutlinedButton(
                             onClick = {
@@ -2302,15 +2302,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 context.startActivity(appInfoIntent)
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Fix Android “Restricted setting”") }
-                        Text(
+                        ) { AppUiText("Fix Android “Restricted setting”") }
+                        AppUiText(
                             "If Android shows “Restricted setting”, open this app's App info, tap the ⋮ menu, choose “Allow restricted settings”, then return here and enable EduLock under Accessibility. This is an Android security step for apps installed outside an approved store; EduLock cannot bypass it."
                         )
                     }
                     if (isDeviceAdminActive(context)) {
-                        Text("🔒 Device administrator is enabled. It may add a deactivation step before ordinary uninstall, but it does not reliably prevent Clear data or factory reset.")
+                        AppUiText("🔒 Device administrator is enabled. It may add a deactivation step before ordinary uninstall, but it does not reliably prevent Clear data or factory reset.")
                     } else {
-                        Text("Optional: a parent can enable Android's visible device-administrator setting. This adds uninstall friction on supported devices; it cannot guarantee protection against Clear data or factory reset.")
+                        AppUiText("Optional: a parent can enable Android's visible device-administrator setting. This adds uninstall friction on supported devices; it cannot guarantee protection against Clear data or factory reset.")
                         OutlinedButton(onClick = {
                             val component = ComponentName(context, EduLockDeviceAdminReceiver::class.java)
                             val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
@@ -2322,30 +2322,30 @@ private fun EduLockApp(repository: EduLockRepository) {
                             }
                             context.startActivity(intent)
                         }, modifier = Modifier.fillMaxWidth()) {
-                            Text("🔒 Enable device administrator")
+                            AppUiText("🔒 Enable device administrator")
                         }
                     }
                     OutlinedButton(onClick = {
                         refreshProtectionStatus()
                         screen = AppScreen.PROTECTION_STATUS
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Protection status & setup") }
+                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("Protection status & setup") }
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF5FF))
                     ) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("📍 Family location sharing", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text(
+                            AppUiText("📍 Family location sharing", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            AppUiText(
                                 if (childLocationSharing) "Location sharing is enabled on this child's device. Android shows an ongoing notification while the service is active."
                                 else "Location sharing is off. With permission, EduLock can report this device's location to the paired parent."
                             )
                             if (childLocationSharing) {
                                 OutlinedButton(onClick = { disableChildLocationSharing() }, modifier = Modifier.fillMaxWidth()) {
-                                    Text("Pause location sharing")
+                                    AppUiText("Pause location sharing")
                                 }
                             } else {
                                 Button(onClick = { requestChildLocationSharing() }, modifier = Modifier.fillMaxWidth()) {
-                                    Text("Enable location sharing")
+                                    AppUiText("Enable location sharing")
                                 }
                             }
                             if (Build.VERSION.SDK_INT >= 33 &&
@@ -2353,9 +2353,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 OutlinedButton(
                                     onClick = { notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
                                     modifier = Modifier.fillMaxWidth()
-                                ) { Text("Enable location status notification") }
+                                ) { AppUiText("Enable location status notification") }
                             }
-                            Text("Only the latest location is retained on the server. If offline, the previous server location stays visible and new fixes queue locally until connection returns.")
+                            AppUiText("Only the latest location is retained on the server. If offline, the previous server location stays visible and new fixes queue locally until connection returns.")
                         }
                     }
                     Button(onClick = {
@@ -2366,14 +2366,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                             repository.syncAppUsage(linked.id)
                             screen = AppScreen.CHILD_HOME
                         }
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Sync tasks and screen-time settings") }
-                    Text("Assigned tasks")
-                    if (tasks.isEmpty()) Text("No active tasks yet. Ask your parent to assign a task.")
+                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("Sync tasks and screen-time settings") }
+                    AppUiText("Assigned tasks")
+                    if (tasks.isEmpty()) AppUiText("No active tasks yet. Ask your parent to assign a task.")
                     tasks.forEach { task ->
                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(task.title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
-                                Text(task.questionCount.toString() + " questions • pass " + task.passPercent + "% • reward " + task.rewardMinutes + " min")
+                                AppUiText(task.title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
+                                AppUiText(task.questionCount.toString() + " questions • pass " + task.passPercent + "% • reward " + task.rewardMinutes + " min")
                                 Button(onClick = {
                                     execute {
                                         val subjectId = task.subjectId ?: throw IllegalStateException("This task has no subject.")
@@ -2394,11 +2394,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         answers = emptyMap()
                                         screen = AppScreen.PLAY_TASK
                                     }
-                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Start task") }
+                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Start task") }
                             }
                         }
                     }
-                    Text("This device is paired with your parent. Keep EduLock installed and its app data intact so this device can reconnect securely.")
+                    AppUiText("This device is paired with your parent. Keep EduLock installed and its app data intact so this device can reconnect securely.")
                 }
 
                 AppScreen.PROTECTION_STATUS -> ScreenFrame(
@@ -2407,7 +2407,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     notice = notice,
                     busy = busy
                 ) {
-                    Text(
+                    AppUiText(
                         "EduLock only reports protections that Android says are enabled on this phone. " +
                             "For restrictions to protect a child, complete setup on the child's device."
                     )
@@ -2427,7 +2427,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 )
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Enable app blocking in Accessibility") }
+                        ) { AppUiText("Enable app blocking in Accessibility") }
                     }
                     SummaryCard(
                         "Device administrator",
@@ -2451,7 +2451,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 context.startActivity(intent)
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Enable visible device administrator") }
+                        ) { AppUiText("Enable visible device administrator") }
                     }
                     SummaryCard(
                         "Managed-device enforcement",
@@ -2462,7 +2462,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             "Strong uninstall/app-control restrictions require EduLock to be provisioned as the Android device owner. A normal app cannot grant itself this status."
                     )
                     if (!protectionManagedEnabled) {
-                        Text(
+                        AppUiText(
                             "To use device-owner protection, a parent or device administrator must provision the phone as a fully managed device. This often has to be done during initial setup and may require a factory reset. Do not rely on Accessibility or ordinary device-admin mode to prevent clearing app data.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -2477,8 +2477,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 "Status refreshed. EduLock can apply stronger controls only if Android has already provisioned it as device owner."
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Refresh status and apply supported device-owner rules") }
-                    Text(
+                    ) { AppUiText("Refresh status and apply supported device-owner rules") }
+                    AppUiText(
                         "Safety note: EduLock displays its blocker only over restricted apps. It does not cover Android Settings or secretly intercept system controls. If a child clears app data, an anonymous pairing session may be lost and the device may need to be paired again.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -2490,7 +2490,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     notice = notice,
                     busy = busy
                 ) {
-                    Text(
+                    AppUiText(
                         "Latest reported location for each paired child. A missing check-in means the device is not reporting; it cannot prove the phone is switched off.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -2504,8 +2504,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                         },
                         enabled = !busy,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("↻ Refresh locations") }
-                    if (children.isEmpty()) Text("No child profiles are linked yet.")
+                    ) { AppUiText("↻ Refresh locations") }
+                    if (children.isEmpty()) AppUiText("No child profiles are linked yet.")
                     children.forEach { child ->
                         val snapshot = childLocationRows.firstOrNull { it.childId == child.id }
                         val lastSeenMillis = snapshot?.lastSeenAt?.let { raw ->
@@ -2524,14 +2524,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
                             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(child.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                                Text(statusText, color = if (minutesSinceSeen != null && minutesSinceSeen >= 15 && snapshot?.sharingEnabled == true) Color(0xFFB45309) else MaterialTheme.colorScheme.onSurfaceVariant)
-                                if (snapshot?.batteryPercent != null) Text("Child-device battery: ${snapshot.batteryPercent}%")
+                                AppUiText(child.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                AppUiText(statusText, color = if (minutesSinceSeen != null && minutesSinceSeen >= 15 && snapshot?.sharingEnabled == true) Color(0xFFB45309) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (snapshot?.batteryPercent != null) AppUiText("Child-device battery: ${snapshot.batteryPercent}%")
                                 if (snapshot?.latitude != null && snapshot.longitude != null) {
-                                    Text("Last saved location: ${snapshot.latitude}, ${snapshot.longitude}", fontWeight = FontWeight.SemiBold)
+                                    AppUiText("Last saved location: ${snapshot.latitude}, ${snapshot.longitude}", fontWeight = FontWeight.SemiBold)
                                     ChildLocationMap(snapshot.latitude, snapshot.longitude)
-                                    if (snapshot.accuracyMeters != null) Text("Reported accuracy: about ${snapshot.accuracyMeters.toInt()} m")
-                                    Text(
+                                    if (snapshot.accuracyMeters != null) AppUiText("Reported accuracy: about ${snapshot.accuracyMeters.toInt()} m")
+                                    AppUiText(
                                         "Location fix time: " + (snapshot.recordedAt?.replace("T", " ")?.take(19) ?: "not available"),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -2548,15 +2548,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 notice = "No map app or browser is available on this phone."
                                             }
                                         }
-                                    }, modifier = Modifier.fillMaxWidth()) { Text("Open last location in map") }
+                                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("Open last location in map") }
                                 } else {
-                                    Text("No location has reached the server yet. Keep location sharing enabled on the child's phone and make sure it has an internet connection.")
+                                    AppUiText("No location has reached the server yet. Keep location sharing enabled on the child's phone and make sure it has an internet connection.")
                                 }
-                                Text("The server retains the last successful point when the child device goes offline.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                AppUiText("The server retains the last successful point when the child device goes offline.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
-                    Text(
+                    AppUiText(
                         "Offline alerts need notification permission on this parent phone and an active internet connection. Android schedules checks periodically, so an alert may be delayed; it cannot tell whether a device is truly powered off.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -2565,39 +2565,39 @@ private fun EduLockApp(repository: EduLockRepository) {
 
                 AppScreen.APP_USAGE_REPORT -> ScreenFrame("App usage report", onBack = { screen = AppScreen.CHILDREN }, notice = notice, busy = busy) {
                     val child = appUsageChild
-                    Text("Daily app usage for " + (child?.displayName ?: "this child"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("Shows package-level foreground time recorded by EduLock. Reports sync when the child opens EduLock or taps Sync; this is not a live remote screen view.")
+                    AppUiText("Daily app usage for " + (child?.displayName ?: "this child"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    AppUiText("Shows package-level foreground time recorded by EduLock. Reports sync when the child opens EduLock or taps Sync; this is not a live remote screen view.")
                     OutlinedButton(onClick = {
                         execute {
                             val selected = child ?: throw IllegalStateException("Select a child profile first.")
                             appUsageReports = repository.loadAppUsageReports(selected.id)
                         }
-                    }, enabled = !busy && child != null, modifier = Modifier.fillMaxWidth()) { Text("↻  Refresh report") }
+                    }, enabled = !busy && child != null, modifier = Modifier.fillMaxWidth()) { AppUiText("↻  Refresh report") }
                     val totalSeconds = appUsageReports.sumOf { it.usedSeconds }
                     SummaryCard("Recorded use (reported days)", (totalSeconds / 3600).toString() + " h " + ((totalSeconds % 3600) / 60).toString() + " min", "Totals reflect the last seven days of reported, approved-app use.")
                     if (appUsageReports.isEmpty()) {
                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF5FF))) {
-                            Text("No usage reports yet. On the child device, open EduLock and tap “Sync tasks and screen-time settings”. Make sure the parent-approved Accessibility service is enabled.", modifier = Modifier.padding(18.dp), color = Color(0xFF244568))
+                            AppUiText("No usage reports yet. On the child device, open EduLock and tap “Sync tasks and screen-time settings”. Make sure the parent-approved Accessibility service is enabled.", modifier = Modifier.padding(18.dp), color = Color(0xFF244568))
                         }
                     } else {
                         appUsageReports.groupBy { it.usageDate }.forEach { (day, dailyRows) ->
-                            Text(day, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            AppUiText(day, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             dailyRows.forEach { row ->
                                 Card(modifier = Modifier.fillMaxWidth(), border = BorderStroke(1.dp, Color(0xFFE1E6F4)), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
                                     Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Box(modifier = Modifier.size(48.dp).background(Color(0xFFFFE9B5), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) { Text("📱", fontSize = 23.sp) }
+                                        Box(modifier = Modifier.size(48.dp).background(Color(0xFFFFE9B5), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) { AppUiText("📱", fontSize = 23.sp) }
                                         Spacer(Modifier.width(12.dp))
                                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text(row.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                            Text(row.packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            Text((row.usedSeconds / 3600).toString() + " h " + ((row.usedSeconds % 3600) / 60).toString() + " min", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
+                                            AppUiText(row.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                            AppUiText(row.packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            AppUiText((row.usedSeconds / 3600).toString() + " h " + ((row.usedSeconds % 3600) / 60).toString() + " min", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                    Text("Privacy: EduLock records app package names and total foreground time for approved apps only. It does not collect screen contents, keystrokes, messages, or browser history.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    AppUiText("Privacy: EduLock records app package names and total foreground time for approved apps only. It does not collect screen contents, keystrokes, messages, or browser history.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
                 AppScreen.PLAY_TASK -> ScreenFrame(activeTask?.title ?: "Task", onBack = { screen = AppScreen.CHILD_HOME }, notice = notice, busy = busy) {
@@ -2612,29 +2612,29 @@ private fun EduLockApp(repository: EduLockRepository) {
                         val questionOptions = translated?.options?.takeIf { it.isNotEmpty() } ?: question.options
                         val languageOptions = (listOf(question.languageCode) + questionTranslations[question.id].orEmpty().map { it.languageCode })
                             .distinctBy { it.lowercase() }.sortedWith(compareBy<String> { if (it.equals(selectedLanguage, true)) 0 else 1 }.thenBy { it })
-                        Text("Question " + (questionIndex + 1) + " of " + questions.size, style = MaterialTheme.typography.titleMedium)
+                        AppUiText("Question " + (questionIndex + 1) + " of " + questions.size, style = MaterialTheme.typography.titleMedium)
                         LinearProgressIndicator(progress = { (questionIndex + 1).toFloat() / questions.size.toFloat() }, modifier = Modifier.fillMaxWidth())
-                        Text("Concept: " + question.conceptKey, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        AppUiText("Concept: " + question.conceptKey, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         if (question.conceptKey == "solar-system-planet-id") SolarSystemModelPreview()
                         else if (question.conceptKey.startsWith("3d:")) {
                             val model = question.conceptKey.removePrefix("3d:").substringBefore(":")
                             if (model == "solar-system") SolarSystemModelPreview() else Learning3DPreview(model)
                         }
-                        Text("Try this same concept in another language:", style = MaterialTheme.typography.bodyMedium)
+                        AppUiText("Try this same concept in another language:", style = MaterialTheme.typography.bodyMedium)
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             languageOptions.forEach { lang ->
                                 if (lang.equals(selectedLanguage, ignoreCase = true)) {
-                                    Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) { Text("✓ " + languageLabel(lang)) }
+                                    Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) { AppUiText("✓ " + languageLabel(lang)) }
                                 } else {
                                     OutlinedButton(onClick = {
                                         answerLanguages = answerLanguages + (question.id to lang)
                                         answers = answers - question.id
-                                    }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(languageLabel(lang)) }
+                                    }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText(languageLabel(lang)) }
                                 }
                             }
                         }
                         CompositionLocalProvider(LocalLayoutDirection provides directionFor(selectedLanguage)) {
-                            Text(promptForLanguage, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                            AppUiText(promptForLanguage, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                             if (question.questionType == "multiple_choice") {
                                 questionOptions.forEach { option ->
                                     Row(
@@ -2642,7 +2642,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         RadioButton(selected = answers[question.id] == option, onClick = { answers = answers + (question.id to option) })
-                                        Text(option)
+                                        AppUiText(option)
                                     }
                                 }
                             } else if (question.questionType == "true_false") {
@@ -2653,7 +2653,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             RadioButton(selected = answers[question.id] == option, onClick = { answers = answers + (question.id to option) })
-                                            Text(option)
+                                            AppUiText(option)
                                         }
                                     }
                                 } else {
@@ -2663,7 +2663,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             RadioButton(selected = answers[question.id] == value, onClick = { answers = answers + (question.id to value) })
-                                            Text(if (value == "true") "True / صحيح" else "False / غلط")
+                                            AppUiText(if (value == "true") "True / صحيح" else "False / غلط")
                                         }
                                     }
                                 }
@@ -2673,11 +2673,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             OutlinedButton(onClick = { questionIndex = (questionIndex - 1).coerceAtLeast(0) }, enabled = !busy && questionIndex > 0, modifier = Modifier.weight(1f)) {
-                                Text("Previous")
+                                AppUiText("Previous")
                             }
                             if (questionIndex < questions.lastIndex) {
                                 Button(onClick = { questionIndex = (questionIndex + 1).coerceAtMost(questions.lastIndex) }, enabled = !busy, modifier = Modifier.weight(1f)) {
-                                    Text("Next")
+                                    AppUiText("Next")
                                 }
                             } else {
                                 Button(onClick = {
@@ -2693,11 +2693,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         }
                                         screen = AppScreen.TASK_RESULT
                                     }
-                                }, enabled = !busy && answers[question.id].isNullOrBlank().not(), modifier = Modifier.weight(1f)) { Text("Submit") }
+                                }, enabled = !busy && answers[question.id].isNullOrBlank().not(), modifier = Modifier.weight(1f)) { AppUiText("Submit") }
                             }
                         }
                     } else {
-                        Text("No question is available. Return to your task list and sync again.")
+                        AppUiText("No question is available. Return to your task list and sync again.")
                     }
                 }
 
@@ -2760,9 +2760,9 @@ private fun EduLockApp(repository: EduLockRepository) {
 
                 AppScreen.SOLAR_SYSTEM_QUIZ -> ScreenFrame("3D Solar System Quiz", onBack = { screen = solarQuizReturnScreen }, notice = notice, busy = busy) {
                     if (solarQuizReturnScreen == AppScreen.CHILD_HOME) {
-                        Text("Your educational game time left today: " + (kidsGameSecondsRemaining / 60) + " min " + (kidsGameSecondsRemaining % 60) + " sec.")
+                        AppUiText("Your educational game time left today: " + (kidsGameSecondsRemaining / 60) + " min " + (kidsGameSecondsRemaining % 60) + " sec.")
                     }
-                    Text("Explore the moving solar system. Tap the planet described by the clue, then type its name. Your practice score stays on this device.")
+                    AppUiText("Explore the moving solar system. Tap the planet described by the clue, then type its name. Your practice score stays on this device.")
                     SolarSystemQuizContent()
                 }
 
@@ -2773,7 +2773,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         SummaryCard("Screen time awarded", result.awardedMinutes.toString() + " minutes", "Rewards are calculated and recorded by Supabase.")
                         SummaryCard("Daily reward cap", result.dailyUsedMinutes.toString() + " / " + result.dailyCapMinutes + " minutes", "The child-wide daily cap is enforced server-side.")
                     }
-                    Button(onClick = { screen = AppScreen.CHILD_HOME }, modifier = Modifier.fillMaxWidth()) { Text("Back to my tasks") }
+                    Button(onClick = { screen = AppScreen.CHILD_HOME }, modifier = Modifier.fillMaxWidth()) { AppUiText("Back to my tasks") }
                 }
             }
         }
@@ -2847,7 +2847,7 @@ private fun ScreenFrame(
     ) {
         if (onBack != null) {
             TextButton(onClick = onBack) {
-                Text("← Back to safety", fontWeight = FontWeight.SemiBold)
+                AppUiText("← Back to safety", fontWeight = FontWeight.SemiBold)
             }
         }
         Card(
@@ -2866,11 +2866,11 @@ private fun ScreenFrame(
                     modifier = Modifier.size(58.dp)
                         .background(Color(0xFFFFD978), RoundedCornerShape(20.dp)),
                     contentAlignment = Alignment.Center
-                ) { Text(screenEmoji(title), fontSize = 29.sp) }
+                ) { AppUiText(screenEmoji(title), fontSize = 29.sp) }
                 Spacer(Modifier.width(14.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(title, fontSize = 26.sp, lineHeight = 30.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                    Text(screenTagline(title), fontSize = 13.sp, lineHeight = 18.sp, color = Color(0xFFE2E7FF))
+                    AppUiText(title, fontSize = 26.sp, lineHeight = 30.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                    AppUiText(screenTagline(title), fontSize = 13.sp, lineHeight = 18.sp, color = Color(0xFFE2E7FF))
                 }
             }
         }
@@ -2887,7 +2887,7 @@ private fun ScreenFrame(
                 shape = MaterialTheme.shapes.medium,
                 colors = CardDefaults.cardColors(containerColor = if (isError) Color(0xFFFFE8EC) else Color(0xFFE0F7EF))
             ) {
-                Text(
+                AppUiText(
                     notice, modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium,
                     color = if (isError) Color(0xFF9F263B) else Color(0xFF176A58)
                 )
@@ -2940,7 +2940,7 @@ private fun Field(
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
-        label = { Text(label) },
+        label = { AppUiText(label) },
         modifier = Modifier.fillMaxWidth(),
         singleLine = !label.contains("prompt", true) && !label.contains("options", true),
         visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
@@ -2962,12 +2962,12 @@ private fun SummaryCard(title: String, value: String, explanation: String) {
             Box(
                 modifier = Modifier.size(48.dp).background(Color(0xFFDCDFFF), RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
-            ) { Text(summaryEmoji(title), fontSize = 23.sp) }
+            ) { AppUiText(summaryEmoji(title), fontSize = 23.sp) }
             Spacer(Modifier.width(13.dp))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
-                Text(explanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                AppUiText(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                AppUiText(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                AppUiText(explanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
