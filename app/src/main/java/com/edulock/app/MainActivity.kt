@@ -75,10 +75,11 @@ import android.webkit.WebViewClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
 import java.util.Locale
 
 private enum class AppScreen {
-    DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ,
+    DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ, KIDS_GAMES,
     SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
     REPORTS, ALLOWED_APPS, PROTECTION_STATUS, CHILD_LOCATIONS, APP_USAGE_REPORT, PLAY_TASK, TASK_RESULT
 }
@@ -97,6 +98,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var isRegistering by remember { mutableStateOf(true) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
     var emailOtp by remember { mutableStateOf("") }
     var resendSeconds by remember { mutableStateOf(0) }
     var displayName by remember { mutableStateOf("") }
@@ -136,6 +138,10 @@ private fun EduLockApp(repository: EduLockRepository) {
     var childCountryCode by remember { mutableStateOf("PK") }
     var childSchoolGrade by remember { mutableStateOf("1") }
     var childAgeYears by remember { mutableStateOf("8") }
+    var childAvatarIcon by remember { mutableStateOf("🦊") }
+    var childDailyGameLimit by remember { mutableStateOf("20") }
+    var childGameLimitEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var kidsGameSecondsRemaining by remember { mutableStateOf(0) }
     var countryPickerOpen by remember { mutableStateOf(false) }
     var languagePickerOpen by remember { mutableStateOf(false) }
     var languageSearch by remember { mutableStateOf("") }
@@ -606,6 +612,7 @@ private fun EduLockApp(repository: EduLockRepository) {
             AppScreen.ADD_QUESTION, AppScreen.ADD_TRANSLATION -> AppScreen.QUESTIONS
             AppScreen.PLAY_TASK, AppScreen.TASK_RESULT -> AppScreen.CHILD_HOME
             AppScreen.SOLAR_SYSTEM_QUIZ -> solarQuizReturnScreen
+            AppScreen.KIDS_GAMES -> AppScreen.CHILD_HOME
         }
         notice = null
     }
