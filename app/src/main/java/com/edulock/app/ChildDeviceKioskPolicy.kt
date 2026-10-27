@@ -130,7 +130,10 @@ object ChildDeviceKioskPolicy {
         val manager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         if (!manager.isDeviceOwnerApp(context.packageName)) return
         val prefs = context.getSharedPreferences(LOCK_PREFS, Context.MODE_PRIVATE)
-        val enabled = requested && prefs.getBoolean(KEY_KIDS_MODE, false) &&
+        // Keep the activity's enforcement mode aligned with the latest synced rule.
+        // The calling activity passes the server-confirmed Kids Mode state; stale local
+        // values must not prevent entry into kiosk after a child signs in or syncs rules.
+        val enabled = requested &&
             prefs.getBoolean(KEY_POLICY_APPLIED, false) && manager.isLockTaskPermitted(context.packageName)
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         try {
