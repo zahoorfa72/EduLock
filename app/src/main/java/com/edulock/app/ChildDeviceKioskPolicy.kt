@@ -107,8 +107,15 @@ object ChildDeviceKioskPolicy {
             } else {
                 context.packageName in actualAllowlist
             }
+            val featuresMatch = Build.VERSION.SDK_INT < Build.VERSION_CODES.P ||
+                manager.getLockTaskFeatures(admin) == if (kidsModeEnabled) {
+                    DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
+                } else {
+                    DevicePolicyManager.LOCK_TASK_FEATURE_NONE
+                }
             val confirmed = manager.isDeviceOwnerApp(context.packageName) &&
                 allowlistMatches &&
+                featuresMatch &&
                 manager.isUninstallBlocked(admin, context.packageName) == kidsModeEnabled &&
                 restrictionsMatch
             prefs.edit()
