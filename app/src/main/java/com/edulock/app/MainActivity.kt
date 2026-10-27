@@ -1339,7 +1339,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             DashboardIconTile(
-                                icon = "🌌", title = "3D Learning Lab", subtitle = "Explore interactive models in every subject",
+                                icon = "🌌", title = "4D Learning Lab", subtitle = "Explore interactive models in every subject",
                                 modifier = Modifier.weight(1f), accent = Color(0xFF7759D7),
                                 onClick = { selected3DModel = "solar-system"; screen = AppScreen.LEARNING_3D_LAB }
                             )
@@ -1834,7 +1834,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         onClick = { selected3DModel = "solar-system"; screen = AppScreen.LEARNING_3D_LAB },
                         enabled = !busy,
                         modifier = Modifier.fillMaxWidth()
-                    ) { AppUiText("🌌 Preview all interactive 3D learning models") }
+                    ) { AppUiText("🌌 Preview all interactive 4D learning models") }
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         learningTemplateCategories(parentCountryCode)
                             .chunked(2).forEach { categories ->
@@ -1903,8 +1903,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 }
                                 AppUiText("Question preview", fontWeight = FontWeight.Bold)
                                 if (template.conceptKey == "solar-system-planet-id") SolarSystemModelPreview()
-                                else if (template.conceptKey.startsWith("3d:")) {
-                                    val model = template.conceptKey.removePrefix("3d:").substringBefore(":")
+                                else if ((template.conceptKey.startsWith("4d:") || template.conceptKey.startsWith("3d:"))) {
+                                    val model = template.conceptKey.removePrefix("4d:").removePrefix("3d:").substringBefore(":")
                                     if (model == "solar-system") SolarSystemModelPreview() else Learning3DPreview(model)
                                 }
                                 AppUiText(template.prompt)
@@ -1932,14 +1932,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
                                             questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
                                             questionPrompt = template.prompt
-                                            question3DModel = if (template.conceptKey.startsWith("3d:"))
-                                                template.conceptKey.removePrefix("3d:").substringBefore(":") else "none"
+                                            question3DModel = if ((template.conceptKey.startsWith("4d:") || template.conceptKey.startsWith("3d:")))
+                                                template.conceptKey.removePrefix("4d:").removePrefix("3d:").substringBefore(":") else "none"
                                             questionType = template.questionType
                                             questionOptions = template.options.joinToString("\n")
                                             questionAnswer = template.answer
                                             questionLanguage = template.languageCode
-                                            questionConceptKey = if (template.conceptKey.startsWith("3d:"))
-                                                template.conceptKey.removePrefix("3d:").substringAfter(":").substringAfter(":")
+                                            questionConceptKey = if ((template.conceptKey.startsWith("4d:") || template.conceptKey.startsWith("3d:")))
+                                                template.conceptKey.removePrefix("4d:").removePrefix("3d:").substringAfter(":").substringAfter(":")
                                             else template.conceptKey
                                             questionSolution = buildString {
                                                 append(template.solution)
@@ -2015,7 +2015,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             },
                             enabled = !busy,
                             modifier = Modifier.fillMaxWidth()
-                        ) { AppUiText("✨ Create a custom interactive 3D question") }
+                        ) { AppUiText("✨ Create a custom interactive 4D question") }
                         if (questions.isEmpty()) AppUiText("No questions yet.")
                         questions.forEachIndexed { index, question ->
                             CompositionLocalProvider(LocalLayoutDirection provides directionFor(question.languageCode)) {
@@ -2052,14 +2052,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.ADD_QUESTION -> ScreenFrame("Add question", onBack = { screen = AppScreen.QUESTIONS }, notice = notice, busy = busy) {
                     val lang = questionLanguage
                     AppUiText("Question language: " + lang + ". Type in Urdu, Sindhi, English or another Unicode language.")
-                    AppUiText("Optional interactive 3D model", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    AppUiText("Optional interactive 4D model", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     AppUiText("Choose a model to attach a touch-friendly learning visual to your question.")
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf(
                             "none" to "No model",
                             "atom" to "⚛ Atom",
                             "molecule" to "🧪 Molecule",
-                            "geometry" to "📐 3D shapes",
+                            "geometry" to "📐 4D exploded shapes",
                             "cell" to "🧬 Cell",
                             "force" to "🏀 Forces",
                             "water-cycle" to "🌧 Water cycle",
@@ -2106,7 +2106,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         execute {
                             val subject = selectedSubject ?: throw IllegalStateException("Choose a subject first.")
                             val options = questionOptions.lines().map { it.trim() }.filter { it.isNotEmpty() }
-                            val savedConceptKey = if (question3DModel == "none") questionConceptKey else "3d:$question3DModel:$questionConceptKey"
+                            val savedConceptKey = if (question3DModel == "none") questionConceptKey else "4d:$question3DModel:$questionConceptKey"
                             repository.addQuestion(subject.id, questionPrompt, questionType, options, questionAnswer, questionLanguage, savedConceptKey, questionSolution)
                             questions = repository.loadQuestions(subject.id)
                             questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
@@ -2550,8 +2550,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                     Button(onClick = { openKidsGames() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎮  Learning Games • daily time limit") }
                     OutlinedButton(onClick = { openKidsDrawingStudio() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎨 Draw & colour • daily time limit") }
-                    OutlinedButton(onClick = { openKids3DLab() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🪐 Explore 3D learning models • timed") }
-                    OutlinedButton(onClick = { openSolarQuiz() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🚀 Play the 3D Solar System planet quiz • timed") }
+                    OutlinedButton(onClick = { openKids3DLab() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🪐 Explore 4D learning models • timed") }
+                    OutlinedButton(onClick = { openSolarQuiz() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🚀 Play the 4D Solar System explorer • timed") }
                     SummaryCard("Learning rewards earned today", earnedToday.toString() + " minutes", "Successful tasks add reward minutes. Rewards are tracked separately from app access.")
                     SummaryCard(
                         "App access",
@@ -2899,8 +2899,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                         LinearProgressIndicator(progress = { (questionIndex + 1).toFloat() / questions.size.toFloat() }, modifier = Modifier.fillMaxWidth())
                         AppUiText("Concept: " + question.conceptKey, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         if (question.conceptKey == "solar-system-planet-id") SolarSystemModelPreview()
-                        else if (question.conceptKey.startsWith("3d:")) {
-                            val model = question.conceptKey.removePrefix("3d:").substringBefore(":")
+                        else if ((question.conceptKey.startsWith("4d:") || question.conceptKey.startsWith("3d:"))) {
+                            val model = question.conceptKey.removePrefix("4d:").removePrefix("3d:").substringBefore(":")
                             if (model == "solar-system") SolarSystemModelPreview() else Learning3DPreview(model)
                         }
                         AppUiText("Try this same concept in another language:", style = MaterialTheme.typography.bodyMedium)
@@ -2984,11 +2984,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                 }
 
-                AppScreen.LEARNING_3D_LAB -> ScreenFrame("3D Learning Lab", onBack = { screen = if (solarQuizReturnScreen == AppScreen.CHILD_HOME) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
+                AppScreen.LEARNING_3D_LAB -> ScreenFrame("4D Learning Lab", onBack = { screen = if (solarQuizReturnScreen == AppScreen.CHILD_HOME) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
                     if (solarQuizReturnScreen == AppScreen.CHILD_HOME) {
                         AppUiText("Your educational game time left today: " + (kidsGameSecondsRemaining / 60) + " min " + (kidsGameSecondsRemaining % 60) + " sec.")
                     }
-                    Learning3DLabScreen(
+                    Learning4DLabScreen(
                         selectedModel = selected3DModel,
                         onSelectModel = { selected3DModel = it },
                         onStartSolarQuiz = {
@@ -3027,7 +3027,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 questionConceptKey = "3d:" + option.id + ":learning-lab"
                                 questionLanguage = "en"
                                 screen = AppScreen.ADD_QUESTION
-                                notice = "A draft question is ready with the selected 3D model. Review its answer and save it for your learners."
+                                notice = "A draft question is ready with the selected interactive 4D model. Review its answer and save it for your learners."
                             }
                         }
                     )
@@ -3047,7 +3047,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     )
                 }
 
-                AppScreen.SOLAR_SYSTEM_QUIZ -> ScreenFrame("3D Solar System Quiz", onBack = { screen = solarQuizReturnScreen }, notice = notice, busy = busy) {
+                AppScreen.SOLAR_SYSTEM_QUIZ -> ScreenFrame("4D Solar System Explorer", onBack = { screen = solarQuizReturnScreen }, notice = notice, busy = busy) {
                     if (solarQuizReturnScreen == AppScreen.CHILD_HOME) {
                         AppUiText("Your educational game time left today: " + (kidsGameSecondsRemaining / 60) + " min " + (kidsGameSecondsRemaining % 60) + " sec.")
                     }
