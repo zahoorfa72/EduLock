@@ -62,7 +62,8 @@ object ChildDeviceKioskPolicy {
                 // Permit status/system info, while leaving notifications, recents and global
                 // actions disabled by omission.
                 val features = if (kidsModeEnabled) {
-                    DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
+                    DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO or
+                        DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS
                 } else {
                     DevicePolicyManager.LOCK_TASK_FEATURE_NONE
                 }
@@ -155,6 +156,15 @@ object ChildDeviceKioskPolicy {
     val KIDS_MODE_SYSTEM_PACKAGES: Set<String> = setOf(
         "com.android.systemui",
         "com.android.permissioncontroller",
+        "com.android.emergency",
+        "com.google.android.apps.safetyhub",
+        "com.google.android.apps.emergencyassist",
+        "com.google.android.cellbroadcastservice",
+        "com.android.cellbroadcastservice",
+        "com.samsung.android.safetyassurance",
+        "com.samsung.android.app.safetyassurance",
+        "com.miui.emergency",
+        "com.oplus.sos",
         "com.google.android.permissioncontroller",
         "com.android.packageinstaller",
         "com.google.android.packageinstaller",
