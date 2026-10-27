@@ -298,6 +298,13 @@ private fun EduLockApp(repository: EduLockRepository) {
     var pairingChildName by remember { mutableStateOf("") }
     var pairingCodeExpiry by remember { mutableStateOf(0) }
     var earnedToday by remember { mutableStateOf(0) }
+    var rewardBankMinutes by remember { mutableStateOf(0) }
+    var rewardAppSelection by remember {
+        mutableStateOf(context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
+            .getString("pending_reward_package", "") ?: "")
+    }
+    var rewardMinutesToRedeem by remember { mutableStateOf("10") }
+    var childRewardCapEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var childStreakDays by remember { mutableStateOf(0) }
     var activeTask by remember { mutableStateOf<TaskRow?>(null) }
     var questionIndex by remember { mutableStateOf(0) }
@@ -379,6 +386,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var taskRewardMinutes by remember { mutableStateOf("3") }
     var taskDailyCapMinutes by remember { mutableStateOf("60") }
     var taskTimeLimitSeconds by remember { mutableStateOf("0") }
+    var taskRewardToBank by remember { mutableStateOf(true) }
     var taskRewardPackageName by remember { mutableStateOf("") }
     var taskRewardGroupId by remember { mutableStateOf("") }
     var selectedTaskSubjectIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -1782,7 +1790,28 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         AppUiText("🎮 Educational games: ${child.dailyGameLimitMinutes} min/day", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
-                                AppUiText("Language: " + child.preferredLanguage + " • Daily cap: " + child.dailyCapMinutes + " minutes")
+                                AppUiText("Language: " + child.preferredLanguage + " • Daily reward cap: " + child.dailyCapMinutes + " minutes")
+                                Field(
+                                    childRewardCapEdits[child.id] ?: child.dailyCapMinutes.toString(),
+                                    { value -> childRewardCapEdits = childRewardCapEdits + (child.id to value.filter(Char::isDigit).take(4)) },
+                                    "Daily reward-minutes cap (0–1440)",
+                                    keyboardType = KeyboardType.Number
+                                )
+                                OutlinedButton(
+                                    onClick = {
+                                        execute {
+                                            val cap = (childRewardCapEdits[child.id] ?: child.dailyCapMinutes.toString()).toIntOrNull()
+                                                ?: throw IllegalArgumentException("Enter a daily reward cap from 0 to 1440.")
+                                            require(cap in 0..1440) { "Daily reward cap must be between 0 and 1440 minutes." }
+                                            repository.updateChildRewardCap(child.id, cap)
+                                            children = repository.loadChildren(familyId)
+                                            childRewardCapEdits = childRewardCapEdits - child.id
+                                            notice = "Daily reward cap saved and verified for ${child.displayName}."
+                                        }
+                                    },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { AppUiText("Save daily reward cap") }
                                 AppUiText(
                                     displayCountryName(child.countryCode) + " • " +
                                         (if (child.schoolGrade == 0) "Kindergarten" else "Grade ${child.schoolGrade}") +
@@ -2933,6 +2962,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             selectedTaskSubjectIds = emptySet()
                             taskRewardPackageName = ""
                             taskRewardGroupId = ""
+                            taskRewardToBank = true
                             execute {
                                 subjects = repository.loadSubjects(familyId, child.countryCode)
                                 allowedApps = repository.loadAllowedApps(child.id)
@@ -2988,23 +3018,47 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Field(taskDailyCapMinutes, { taskDailyCapMinutes = it.filter(Char::isDigit).take(4) }, "Task daily reward cap (0–1440)", keyboardType = KeyboardType.Number)
                     Field(taskTimeLimitSeconds, { taskTimeLimitSeconds = it.filter(Char::isDigit).take(4) }, "Task countdown seconds (0 = no timer; 10–3600)", keyboardType = KeyboardType.Number)
                     AppUiText("When a timer is set, answers submit automatically at zero. Use 0 to keep the task untimed.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    AppUiText("Where should correct-answer reward time apply?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    OutlinedButton(onClick = { taskRewardPackageName = ""; taskRewardGroupId = "" }, modifier = Modifier.fillMaxWidth()) {
-                        AppUiText((if (taskRewardPackageName.isBlank() && taskRewardGroupId.isBlank()) "✓ " else "") + "General mobile screen time")
+                    AppUiText("Reward destination", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    OutlinedButton(
+                        onClick = {
+                            taskRewardToBank = !taskRewardToBank
+                            if (taskRewardToBank) {
+                                taskRewardPackageName = ""
+                                taskRewardGroupId = ""
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        AppUiText(
+                            if (taskRewardToBank) "✓ Reward Bank • child chooses an approved app"
+                            else "Use a fixed app or group destination"
+                        )
                     }
-                    val rewardAppsForChild = allowedApps.filter { it.childId == selectedChild?.id && it.enabled }
-                    rewardAppsForChild.forEach { app ->
-                        OutlinedButton(onClick = { taskRewardPackageName = app.packageName; taskRewardGroupId = "" }, modifier = Modifier.fillMaxWidth()) {
-                            AppUiText((if (taskRewardPackageName == app.packageName && taskRewardGroupId.isBlank()) "✓ " else "") + app.displayName + " only")
+                    AppUiText(
+                        if (taskRewardToBank)
+                            "Each correct answer adds minutes to the child's Reward Bank. The child can spend them only on apps you have enabled in App access."
+                        else
+                            "Choose exactly where this task's reward will be sent. The child cannot redirect fixed-destination rewards.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (!taskRewardToBank) {
+                        OutlinedButton(onClick = { taskRewardPackageName = ""; taskRewardGroupId = "" }, modifier = Modifier.fillMaxWidth()) {
+                            AppUiText((if (taskRewardPackageName.isBlank() && taskRewardGroupId.isBlank()) "✓ " else "") + "General mobile screen time")
                         }
-                    }
-                    val rewardGroupsForChild = appGroups.filter { it.childId == selectedChild?.id && it.packageNames.isNotEmpty() }
-                    rewardGroupsForChild.forEach { group ->
-                        OutlinedButton(onClick = { taskRewardPackageName = ""; taskRewardGroupId = group.id }, modifier = Modifier.fillMaxWidth()) {
-                            AppUiText((if (taskRewardGroupId == group.id) "✓ " else "") + "Group: " + group.name + " • " + group.packageNames.size + " apps")
+                        val rewardAppsForChild = allowedApps.filter { it.childId == selectedChild?.id && it.enabled }
+                        rewardAppsForChild.forEach { app ->
+                            OutlinedButton(onClick = { taskRewardToBank = false; taskRewardPackageName = app.packageName; taskRewardGroupId = "" }, modifier = Modifier.fillMaxWidth()) {
+                                AppUiText((if (taskRewardPackageName == app.packageName && taskRewardGroupId.isBlank()) "✓ " else "") + app.displayName + " only")
+                            }
                         }
+                        val rewardGroupsForChild = appGroups.filter { it.childId == selectedChild?.id && it.packageNames.isNotEmpty() }
+                        rewardGroupsForChild.forEach { group ->
+                            OutlinedButton(onClick = { taskRewardToBank = false; taskRewardPackageName = ""; taskRewardGroupId = group.id }, modifier = Modifier.fillMaxWidth()) {
+                                AppUiText((if (taskRewardGroupId == group.id) "✓ " else "") + "Group: " + group.name + " • " + group.packageNames.size + " apps")
+                            }
+                        }
+                        if (rewardGroupsForChild.isEmpty()) AppUiText("Create an app group in App access & daily limits to award time to a whole group.")
                     }
-                    if (rewardGroupsForChild.isEmpty()) AppUiText("Create an app group in App access & daily limits to award time to a whole group.")
                     OutlinedButton(onClick = {
                         val child = selectedChild
                         if (child == null) notice = "Select a child first."
@@ -3025,15 +3079,18 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 taskRewardMinutes.toIntOrNull() ?: -1,
                                 taskDailyCapMinutes.toIntOrNull() ?: -1,
                                 taskRewardPackageName.takeIf { it.isNotBlank() },
-                                taskRewardGroupId.takeIf { it.isNotBlank() }
+                                taskRewardGroupId.takeIf { it.isNotBlank() },
+                                taskTimeLimitSeconds.toIntOrNull()?.takeIf { it in 10..3600 },
+                                taskRewardToBank
                             )
                             tasks = emptyList()
                             screen = AppScreen.PARENT_HOME
                             taskTitle = ""
                             taskRewardPackageName = ""
                             taskRewardGroupId = ""
+                            taskRewardToBank = true
                             selectedTaskSubjectIds = emptySet()
-                            notice = "Task assigned to " + child.displayName + ". Correct answers earn capped screen time based on your reward destination."
+                            notice = "Task assigned to " + child.displayName + ". Each correct answer earns the configured minutes, within task and daily caps."
                         }
                     }, enabled = !busy && selectedChild != null && selectedTaskSubjects.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { AppUiText("Assign task") }
                 }
