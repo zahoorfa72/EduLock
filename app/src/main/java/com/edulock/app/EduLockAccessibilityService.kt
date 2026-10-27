@@ -111,7 +111,11 @@ class EduLockAccessibilityService : AccessibilityService() {
         val prefs = lockPrefs()
         val kidsModeEnabled = prefs.getBoolean(KEY_KIDS_MODE_ENABLED, false)
         if (!prefs.getBoolean(KEY_CHILD_ACTIVE, false) || packageName == applicationContext.packageName ||
-            packageName in essentialPackages(kidsModeEnabled) || isInternalSystemPackage(packageName)) {
+            // In managed kiosk mode the Lock Task controller is authoritative. The Accessibility
+            // overlay must not blanket-exempt the normal launcher when Kids Mode is on.
+            (!kidsModeEnabled && packageName in essentialPackages(false)) ||
+            (kidsModeEnabled && packageName in essentialPackages(true)) ||
+            isInternalSystemPackage(packageName)) {
             hideBlocker()
             return
         }
