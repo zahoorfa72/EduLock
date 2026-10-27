@@ -41,6 +41,7 @@ val LearningModelOptions = listOf(
     LearningModelOption("solar-system", "🪐", "Solar System", "Astronomy", "Can you identify a planet from its colour, size and orbit?", "Rotate, zoom and spread the orbital model; tap a planet to reveal facts."),
     LearningModelOption("atom", "⚛️", "Atom Explorer", "Chemistry", "Which negatively charged particle is shown around the nucleus?", "Rotate, zoom and separate the atomic components; tap each part for its role."),
     LearningModelOption("molecule", "🧪", "Molecule Lab", "Chemistry", "Which two elements form a water molecule?", "Tap the oxygen, hydrogen atoms and bonds to inspect the water model."),
+    LearningModelOption("chemistry-lab", "🧫", "Chemistry Reaction Lab", "Chemistry", "What visible result can appear when simulated reactants combine?", "Choose two virtual chemicals, tap Mix, and watch the liquids change, particles collide and a product form. Simulation only; do not mix real chemicals."),
     LearningModelOption("geometry", "📐", "4D Geometry Studio", "Mathematics", "How many faces, edges and vertices does a cube have?", "Rotate 360°, zoom and explode the cube to inspect individual faces and inner structure."),
     LearningModelOption("cell", "🧬", "Cell Explorer", "Biology", "Which cell structure holds most genetic material?", "Inspect the cell membrane, nucleus and illustrative organelles."),
     LearningModelOption("force", "🏀", "Forces & Motion", "Physics", "How can an unbalanced force change motion?", "Explore the ball, slope and directional force arrows."),
@@ -87,9 +88,27 @@ fun Learning4DLabScreen(
     selectedModel: String,
     onSelectModel: (String) -> Unit,
     onStartSolarQuiz: () -> Unit,
-    onCreateQuestion: (LearningModelOption) -> Unit
+    onCreateQuestion: (LearningModelOption) -> Unit,
+    religiousStudyTrack: String = "none",
+    gradeLevel: Int = 3,
+    ageYears: Int = 9
 ) {
-    val selected = LearningModelOptions.firstOrNull { it.id == selectedModel } ?: LearningModelOptions.first()
+    val allowedFaithModel = when (religiousStudyTrack.lowercase()) {
+        "islamic" -> "faith-islamic"
+        "hindu" -> "faith-hindu"
+        "christian" -> "faith-christian"
+        "sikh" -> "faith-sikh"
+        "buddhist" -> "faith-buddhist"
+        "jewish" -> "faith-jewish"
+        "jain" -> "faith-jain"
+        "other" -> "faith-world"
+        else -> null
+    }
+    // Hide every faith model unless the parent explicitly enabled that child's matching track.
+    val visibleModelOptions = LearningModelOptions.filter { option ->
+        !option.id.startsWith("faith-") || option.id == allowedFaithModel
+    }
+    val selected = visibleModelOptions.firstOrNull { it.id == selectedModel } ?: visibleModelOptions.first()
     val context = LocalContext.current
     val chosenAnswersState = remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     val questionBankSubject = if (selected.subject == "Earth Science") "General Science" else selected.subject
@@ -99,14 +118,9 @@ fun Learning4DLabScreen(
         "Hindi" -> "hi"
         else -> "en"
     }
-    val subjectQuestionBank = FourDQuestionBanks.all.filter {
-        it.subjectTitle.equals(questionBankSubject, ignoreCase = true)
-    }
-    val bankQuestions = subjectQuestionBank
-        .filter { it.languageCode.equals(requestedQuestionLanguage, ignoreCase = true) }
-        .ifEmpty { subjectQuestionBank.filter { it.languageCode.equals("en", ignoreCase = true) } }
-        .distinctBy { it.conceptKey }
-        .take(10)
+    val bankQuestions = FourDQuestionBanks.forLearningContext(
+        questionBankSubject, requestedQuestionLanguage, gradeLevel, ageYears
+    ).distinctBy { it.conceptKey }.take(10)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -119,7 +133,7 @@ fun Learning4DLabScreen(
             }
         }
 
-        LearningModelOptions.chunked(2).forEach { group ->
+        visibleModelOptions.chunked(2).forEach { group ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 group.forEach { item ->
                     OutlinedButton(
