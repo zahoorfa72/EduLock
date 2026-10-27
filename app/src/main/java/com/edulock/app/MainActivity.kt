@@ -3906,7 +3906,35 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         CompositionLocalProvider(LocalLayoutDirection provides directionFor(selectedLanguage)) {
                             AppUiText(promptForLanguage, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                            if (question.questionType == "multiple_choice") {
+                            if (question.questionType == "matching") {
+                                val leftItems = question.options.filter { it.startsWith("L|") }.map { it.substringAfter("L|") }
+                                val rightItems = question.options.filter { it.startsWith("R|") }.map { it.substringAfter("R|") }
+                                val selectedPairs = answers[question.id].orEmpty().split(";").filter { it.contains("=") }
+                                    .associate { it.substringBefore("=") to it.substringAfter("=") }
+                                if (leftItems.isEmpty() || rightItems.isEmpty()) {
+                                    AppUiText("This matching question is missing its choices. Ask your parent to resave it.")
+                                } else {
+                                    leftItems.forEach { left ->
+                                        val selectedRight = selectedPairs[left]
+                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            AppUiText(left, fontWeight = FontWeight.SemiBold)
+                                            rightItems.forEach { right ->
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        val updated = selectedPairs.toMutableMap()
+                                                        updated[left] = right
+                                                        val serialized = leftItems.filter { updated.containsKey(it) }
+                                                            .joinToString(";") { key -> "$key=${updated[key]}" }
+                                                        answers = answers + (question.id to serialized)
+                                                    },
+                                                    enabled = !busy,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) { AppUiText((if (selectedRight == right) "✓ " else "") + right) }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else if (question.questionType == "multiple_choice") {
                                 questionOptions.forEach { option ->
                                     Row(
                                         modifier = Modifier.fillMaxWidth().clickable { answers = answers + (question.id to option) }.padding(vertical = 6.dp),
