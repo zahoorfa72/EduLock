@@ -10,6 +10,7 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.graphics.Color
 import android.content.Intent
+import android.content.Context
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
