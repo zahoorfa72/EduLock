@@ -727,13 +727,25 @@ private fun EduLockApp(repository: EduLockRepository) {
                         countryOptions.forEach { (code, name) ->
                             TextButton(
                                 onClick = {
-                                    if (countryPickerTarget == "child") childCountryCode = code
-                                    else {
-                                        curriculumCountryCode = code
-                                        curriculumSubjectCode = "math"
-                                        curriculumLanguageCode = "en"
-                                        curriculumSearchResult = null
-                                        curriculumSelectedIds = emptySet()
+                                    when (countryPickerTarget) {
+                                        "child" -> childCountryCode = code
+                                        "parent" -> {
+                                            parentCountryCode = code
+                                            if (familyId.isNotBlank() && session?.accountRole == "parent") {
+                                                execute {
+                                                    repository.updateParentLearningSettings(familyId, parentCountryCode, parentLearningLanguageCode, parentStudyTrack, parentDisplayLanguageCode)
+                                                    subjects = repository.loadSubjects(familyId, parentCountryCode)
+                                                    notice = "Country saved. The question bank now prioritizes this country's curriculum."
+                                                }
+                                            }
+                                        }
+                                        else -> {
+                                            curriculumCountryCode = code
+                                            curriculumSubjectCode = "math"
+                                            curriculumLanguageCode = "en"
+                                            curriculumSearchResult = null
+                                            curriculumSelectedIds = emptySet()
+                                        }
                                     }
                                     countryPickerOpen = false
                                 },
@@ -769,9 +781,27 @@ private fun EduLockApp(repository: EduLockRepository) {
                         languageOptions.forEach { (code, name) ->
                             TextButton(
                                 onClick = {
-                                    curriculumLanguageCode = code.lowercase(Locale.ROOT)
-                                    curriculumSearchResult = null
-                                    curriculumSelectedIds = emptySet()
+                                    when (languagePickerTarget) {
+                                        "parent-learning" -> {
+                                            parentLearningLanguageCode = code.lowercase(Locale.ROOT)
+                                            if (familyId.isNotBlank() && session?.accountRole == "parent") execute {
+                                                repository.updateParentLearningSettings(familyId, parentCountryCode, parentLearningLanguageCode, parentStudyTrack, parentDisplayLanguageCode)
+                                                notice = "Preferred lesson language saved."
+                                            }
+                                        }
+                                        "display" -> {
+                                            parentDisplayLanguageCode = code.lowercase(Locale.ROOT)
+                                            if (familyId.isNotBlank() && session?.accountRole == "parent") execute {
+                                                repository.updateParentLearningSettings(familyId, parentCountryCode, parentLearningLanguageCode, parentStudyTrack, parentDisplayLanguageCode)
+                                                notice = "App display-language preference saved."
+                                            }
+                                        }
+                                        else -> {
+                                            curriculumLanguageCode = code.lowercase(Locale.ROOT)
+                                            curriculumSearchResult = null
+                                            curriculumSelectedIds = emptySet()
+                                        }
+                                    }
                                     languagePickerOpen = false
                                 },
                                 modifier = Modifier.fillMaxWidth()
