@@ -29,10 +29,10 @@ data class LearningModelOption(
 )
 
 val LearningModelOptions = listOf(
-    LearningModelOption("solar-system", "🪐", "Solar System", "Astronomy", "Can you identify a planet from its colour, size and orbit?", "Tap planets in the animated orbital model to reveal planet facts."),
-    LearningModelOption("atom", "⚛️", "Atom Explorer", "Chemistry", "Which negatively charged particle is shown around the nucleus?", "Touch the nucleus and electron markers to learn their roles."),
+    LearningModelOption("solar-system", "🪐", "Solar System", "Astronomy", "Can you identify a planet from its colour, size and orbit?", "Rotate, zoom and spread the orbital model; tap a planet to reveal facts."),
+    LearningModelOption("atom", "⚛️", "Atom Explorer", "Chemistry", "Which negatively charged particle is shown around the nucleus?", "Rotate, zoom and separate the atomic components; tap each part for its role."),
     LearningModelOption("molecule", "🧪", "Molecule Lab", "Chemistry", "Which two elements form a water molecule?", "Tap the oxygen, hydrogen atoms and bonds to inspect the water model."),
-    LearningModelOption("geometry", "📐", "3D Shape Studio", "Mathematics", "How many faces, edges and vertices does a cube have?", "Rotate the cube and touch individual faces."),
+    LearningModelOption("geometry", "📐", "4D Geometry Studio", "Mathematics", "How many faces, edges and vertices does a cube have?", "Rotate 360°, zoom and explode the cube to inspect individual faces and inner structure."),
     LearningModelOption("cell", "🧬", "Cell Explorer", "Biology", "Which cell structure holds most genetic material?", "Inspect the cell membrane, nucleus and illustrative organelles."),
     LearningModelOption("force", "🏀", "Forces & Motion", "Physics", "How can an unbalanced force change motion?", "Explore the ball, slope and directional force arrows."),
     LearningModelOption("water-cycle", "🌧️", "Water Cycle", "Earth Science", "What process turns surface water into vapour?", "Touch the Sun, cloud, droplets and water collection."),
@@ -44,7 +44,7 @@ val LearningModelOptions = listOf(
 )
 
 @Composable
-fun Learning3DLabScreen(
+fun Learning4DLabScreen(
     selectedModel: String,
     onSelectModel: (String) -> Unit,
     onStartSolarQuiz: () -> Unit,
@@ -59,7 +59,7 @@ fun Learning3DLabScreen(
         ) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 AppUiText("✨ 4D Learning Lab • Touch. Explore. Discover.", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color(0xFF29245F))
-                AppUiText("Explore animated, time-based 3D models (a 4D-style learning experience). Tap visible objects to reveal names and facts; drag to rotate. A phone screen cannot display a true four-spatial-dimension object, so the fourth dimension is shown through motion and changing states.", color = Color(0xFF566080))
+                AppUiText("Explore interactive 4D-style models with motion, 360° rotation, zoom and exploded views. Tap visible objects to reveal names and facts; drag to rotate. A phone screen cannot display a true four-spatial-dimension object, so the fourth dimension is shown through motion and changing states.", color = Color(0xFF566080))
             }
         }
 
