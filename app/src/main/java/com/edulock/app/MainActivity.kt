@@ -1160,6 +1160,29 @@ private fun EduLockApp(repository: EduLockRepository) {
         notice = null
     }
 
+    LaunchedEffect(screen, childProfile?.id) {
+        val linked = childProfile
+        if (linked != null && session?.accountRole == "child" &&
+            (screen == AppScreen.CHILD_HOME || screen == AppScreen.TASK_RESULT)) {
+            try {
+                rewardBankMinutes = repository.loadChildRewardBankMinutes(linked.id)
+                val approved = allowedApps.filter { it.enabled }
+                if (approved.none { it.packageName == rewardAppSelection }) {
+                    val pendingTarget = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
+                        .getString("pending_reward_package", null)
+                    rewardAppSelection = approved.firstOrNull { it.packageName == pendingTarget }?.packageName
+                        ?: approved.firstOrNull()?.packageName.orEmpty()
+                }
+                val requested = rewardMinutesToRedeem.toIntOrNull() ?: 0
+                if (rewardBankMinutes > 0 && (requested < 1 || requested > rewardBankMinutes)) {
+                    rewardMinutesToRedeem = minOf(rewardBankMinutes, 10).toString()
+                }
+            } catch (_: Exception) {
+                // Keep the last confirmed balance visible when offline or before migration 0034 is applied.
+            }
+        }
+    }
+
     val eduLockColors = lightColorScheme(
         primary = Color(0xFF5147E8),
         onPrimary = Color.White,
