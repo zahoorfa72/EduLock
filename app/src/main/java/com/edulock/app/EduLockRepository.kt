@@ -510,7 +510,8 @@ class EduLockRepository(context: Context) {
                 .put("age_years", ageYears)
                 .put("avatar_icon", safeAvatar)
                 .put("daily_game_limit_minutes", dailyGameLimitMinutes)
-                .put("study_track", normalizedStudyTrack))
+                .put("study_track", normalizedStudyTrack)
+                .put("kids_mode_enabled", true))
         return rows.optJSONObject(0)?.toChildProfile() ?: throw IOException("Could not create this child profile")
     }
 
