@@ -366,6 +366,23 @@ private fun EduLockApp(repository: EduLockRepository) {
         notice = null
     }
 
+    fun openKidsDrawingStudio() {
+        val learner = childProfile
+        if (learner == null) {
+            screen = AppScreen.DRAWING_STUDIO
+            notice = null
+            return
+        }
+        kidsGameSecondsRemaining = remainingKidsGameSeconds(learner)
+        if (kidsGameSecondsRemaining <= 0) {
+            screen = AppScreen.KIDS_GAMES
+            notice = "Today's educational game time is finished. Ask your parent to change the daily allowance."
+        } else {
+            screen = AppScreen.DRAWING_STUDIO
+            notice = null
+        }
+    }
+
     fun openSolarQuiz() {
         val learner = childProfile
         if (learner == null) {
@@ -587,10 +604,12 @@ private fun EduLockApp(repository: EduLockRepository) {
     LaunchedEffect(screen, childProfile?.id) {
         val learner = childProfile
         val isChildSolarGame = screen == AppScreen.SOLAR_SYSTEM_QUIZ && solarQuizReturnScreen == AppScreen.CHILD_HOME
-        if ((screen == AppScreen.KIDS_GAMES || isChildSolarGame) && learner != null) {
+        val isChildDrawingGame = screen == AppScreen.DRAWING_STUDIO && learner != null
+        if ((screen == AppScreen.KIDS_GAMES || isChildSolarGame || isChildDrawingGame) && learner != null) {
             val prefs = context.getSharedPreferences("edulock_kids_games", Context.MODE_PRIVATE)
             while ((screen == AppScreen.KIDS_GAMES ||
-                    (screen == AppScreen.SOLAR_SYSTEM_QUIZ && solarQuizReturnScreen == AppScreen.CHILD_HOME)) &&
+                    (screen == AppScreen.SOLAR_SYSTEM_QUIZ && solarQuizReturnScreen == AppScreen.CHILD_HOME) ||
+                    (screen == AppScreen.DRAWING_STUDIO && childProfile?.id == learner.id)) &&
                 childProfile?.id == learner.id) {
                 delay(1000)
                 val day = LocalDate.now().toString()
@@ -2492,7 +2511,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                     }
                     Button(onClick = { openKidsGames() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎮  Learning Games • daily time limit") }
-                    OutlinedButton(onClick = { screen = AppScreen.DRAWING_STUDIO }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎨 Draw & colour") }
+                    OutlinedButton(onClick = { openKidsDrawingStudio() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎨 Draw & colour • daily time limit") }
                     OutlinedButton(onClick = { openSolarQuiz() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🚀 Play the 3D Solar System planet quiz • timed") }
                     SummaryCard("Learning rewards earned today", earnedToday.toString() + " minutes", "Successful tasks add reward minutes. Rewards are tracked separately from app access.")
                     SummaryCard(
