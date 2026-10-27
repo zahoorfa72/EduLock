@@ -116,12 +116,17 @@ class EduLockAccessibilityService : AccessibilityService() {
             ?.toIntOrNull()
             ?.coerceIn(1, 1440)
         val appUsed = prefs.getLong(APP_USED_PREFIX + packageName, 0L)
-        val blockedForAppTime = appLimitMinutes != null && appUsed >= appLimitMinutes * MILLIS_PER_MINUTE
-        // Earned minutes are the child's total daily screen-time budget. Counted usage
-        // is shared across all monitored apps, so switching apps cannot bypass the reward.
+        val appEarnedMinutes = prefs.getStringSet(KEY_APP_EARNED_MINUTES, emptySet()).orEmpty()
+            .firstOrNull { it.startsWith("$packageName=") }
+            ?.substringAfter("=")?.toIntOrNull()?.coerceIn(0, 1440) ?: 0
+        val effectiveAppLimit = appLimitMinutes?.plus(appEarnedMinutes)
+        val blockedForAppTime = effectiveAppLimit != null && appUsed >= effectiveAppLimit * MILLIS_PER_MINUTE
+        // General rewards grant a shared mobile-time budget. App-targeted rewards add
+        // bonus minutes only to that package, even after the general budget is spent.
         val earnedMinutes = prefs.getInt(KEY_EARNED_MINUTES, 0).coerceIn(0, 1440)
         val totalUsed = prefs.getLong(KEY_USED_MS, 0L).coerceAtLeast(0L)
-        val blockedForEarnedTime = totalUsed >= earnedMinutes * MILLIS_PER_MINUTE
+        val blockedForEarnedTime = earnedMinutes > 0 &&
+            totalUsed >= earnedMinutes * MILLIS_PER_MINUTE && appEarnedMinutes == 0
         val blockedForSchedule = !isWithinWeeklySchedule(packageName)
         if (explicitlyBlocked || blockedForAppTime || blockedForEarnedTime || blockedForSchedule) {
             val message = when {
@@ -232,6 +237,7 @@ class EduLockAccessibilityService : AccessibilityService() {
 
     private fun resetDailyUsage(prefs: android.content.SharedPreferences, today: String) {
         val editor = prefs.edit().putString(KEY_DAY, today).putLong(KEY_USED_MS, 0L)
+            .putInt(KEY_EARNED_MINUTES, 0).putStringSet(KEY_APP_EARNED_MINUTES, emptySet())
         prefs.all.keys.filter { it.startsWith(APP_USED_PREFIX) }.forEach { editor.remove(it) }
         editor.apply()
     }
@@ -269,6 +275,7 @@ class EduLockAccessibilityService : AccessibilityService() {
         const val KEY_USED_MS = "used_millis_today"
         const val KEY_DAY = "budget_day"
         const val KEY_APP_DAILY_LIMITS = "app_daily_limits"
+        const val KEY_APP_EARNED_MINUTES = "app_earned_minutes"
         const val KEY_APP_WEEKLY_SCHEDULES = "app_weekly_schedules"
         const val APP_USED_PREFIX = "app_used_millis_"
         const val MILLIS_PER_MINUTE = 60_000L
