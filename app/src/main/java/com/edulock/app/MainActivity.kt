@@ -2100,11 +2100,16 @@ private fun EduLockApp(repository: EduLockRepository) {
                             (parentStudyTrack != "none" && religionTrack == parentStudyTrack)
                     }
                     if (assignableSubjects.isEmpty()) {
-                        AppUiText("No matching subjects yet. Open Learning templates, choose this country's available subjects and your selected religious-education track, then add the templates to a subject.")
+                        AppUiText("No matching subjects yet. Open the country-specific learning templates, add a subject, then return here to assign its task.")
                         OutlinedButton(
-                            onClick = { templateCategory = "Religious Education"; screen = AppScreen.LEARNING_TEMPLATES },
+                            onClick = {
+                                templateCategory = if (parentStudyTrack == "none") "Mathematics" else "Religious Education"
+                                screen = AppScreen.LEARNING_TEMPLATES
+                            },
                             modifier = Modifier.fillMaxWidth()
-                        ) { AppUiText("🕊️ Open country and religion learning templates") }
+                        ) {
+                            AppUiText(if (parentStudyTrack == "none") "🗂️ Open country curriculum templates" else "🕊️ Open matching religious-study templates")
+                        }
                     }
                     assignableSubjects.forEach { subject ->
                         OutlinedButton(onClick = { selectedSubject = subject }, modifier = Modifier.fillMaxWidth()) {
