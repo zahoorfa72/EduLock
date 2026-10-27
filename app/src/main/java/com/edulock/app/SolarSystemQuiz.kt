@@ -254,8 +254,69 @@ private fun learning3DHtml(modelType: String): String {
             shape = """<div class="cell"><b class="membrane"></b><b class="cell-nucleus"></b><i class="organelle o1"></i><i class="organelle o2"></i><i class="organelle o3"></i><i class="organelle o4"></i></div>"""
         }
         "force" -> {
-            title = "Forces and motion"; description = "A moving ball and arrows illustrate motion and force."
-            shape = """<div class="ramp"></div><div class="ball"></div><div class="arrow arrow1">➜</div><div class="arrow arrow2">⬆</div>"""
+            title = "Forces & motion • 3D ramp"
+            description = "A shaded ball rolls on a raised, solid ramp. Drag to rotate around the scene and pinch to zoom."
+            shape = """<div class="force-floor"></div><div class="ramp"><i class="ramp-side"></i></div><div class="ball"></div><div class="arrow arrow1">➜</div><div class="arrow arrow2">⬆</div>"""
+        }
+        "friction", "rough-surface" -> {
+            title = if (model == "friction") "Friction • textured track" else "Rough surface • surface contact"
+            description = "A 3D block moves across a layered track. The roughness and motion trails change as the scene animates."
+            shape = """<div class="friction-scene"><i class="track track-back"></i><i class="track track-top"></i><i class="friction-block"></i><i class="motion-trail trail-a"></i><i class="motion-trail trail-b"></i><i class="friction-particle fp-a"></i><i class="friction-particle fp-b"></i><i class="friction-particle fp-c"></i></div>"""
+        }
+        "force-meter" -> {
+            title = "Force meter • spring scale"
+            description = "Watch a mass pull down a spring; the scale represents measured force."
+            shape = """<div class="force-meter"><i class="meter-case"></i><i class="meter-scale"></i><i class="meter-spring"></i><i class="meter-hook"></i><i class="meter-mass"></i></div>"""
+        }
+        "motion-cart" -> {
+            title = "Motion cart • acceleration"
+            description = "A 3D cart travels along a raised track while the force arrow indicates its direction."
+            shape = """<div class="cart-scene"><i class="cart-track"></i><i class="cart-body"></i><i class="cart-wheel wheel-a"></i><i class="cart-wheel wheel-b"></i><i class="cart-push-arrow">➜</i></div>"""
+        }
+        "energy-ball" -> {
+            title = "Stored energy • height"
+            description = "A shaded ball rises between platforms. Its height represents gravitational potential energy."
+            shape = """<div class="energy-scene"><i class="energy-platform platform-low"></i><i class="energy-platform platform-high"></i><i class="energy-ball"></i><i class="energy-arrow">↑</i></div>"""
+        }
+        "broken-circuit" -> {
+            title = "Open circuit • broken connection"
+            description = "A 3D circuit shows a visible gap. The lamp remains dim until the conducting path is complete."
+            shape = """<div class="circuit broken"><i class="wire top"></i><i class="wire right"></i><i class="wire bottom"></i><i class="wire left"></i><i class="wire gap-left"></i><b class="battery"></b><b class="lamp"></b><i class="spark-gap"></i></div>"""
+        }
+        "inertia" -> {
+            title = "Inertia • objects with different masses"
+            description = "Two 3D objects respond differently to a push; more mass means greater resistance to a change in motion."
+            shape = """<div class="inertia-scene"><i class="inertia-track"></i><i class="mass-object mass-light"></i><i class="mass-object mass-heavy"></i><i class="mass-arrow">➜</i></div>"""
+        }
+        "chemistry-lab" -> {
+            title = "Interactive chemistry reaction lab"
+            description = "Choose a virtual reaction, then mix the simulated liquids. Watch a product form through colour change and gas bubbles. This is a visual simulation, not an instruction to mix real chemicals."
+            shape = """<div class="chemistry-lab" id="chemistry-lab"><i class="lab-platform"></i><div class="beaker beaker-a"><i class="beaker-rim"></i><i class="liquid liquid-a"></i><i class="beaker-glass"></i><span class="beaker-label label-a">A</span></div><div class="mix-symbol">+</div><div class="beaker beaker-b"><i class="beaker-rim"></i><i class="liquid liquid-b"></i><i class="beaker-glass"></i><span class="beaker-label label-b">B</span></div><div class="mix-arrow">➜</div><div class="beaker beaker-result"><i class="beaker-rim"></i><i class="liquid liquid-result"></i><i class="beaker-glass"></i><i class="gas-bubble bubble-a"></i><i class="gas-bubble bubble-b"></i><i class="gas-bubble bubble-c"></i><span class="beaker-label label-result">Product</span></div><i class="reaction-glow"></i></div>"""
+        }
+        "acid-base" -> {
+            title = "Acid and base • indicator colour"
+            description = "Virtual indicator drops enter a beaker and the solution changes colour to show acidity."
+            shape = """<div class="acid-scene"><i class="lab-platform"></i><div class="beaker"><i class="beaker-rim"></i><i class="liquid indicator-liquid"></i><i class="beaker-glass"></i></div><i class="indicator-drop drop-a"></i><i class="indicator-drop drop-b"></i><i class="indicator-glow"></i></div>"""
+        }
+        "gas-mixture" -> {
+            title = "Gas mixture • particles in 3D space"
+            description = "Different gas particles move through a transparent 3D chamber to illustrate a mixture."
+            shape = """<div class="gas-chamber"><i class="chamber-edge"></i><i class="gas-particle gas-a"></i><i class="gas-particle gas-b"></i><i class="gas-particle gas-c"></i><i class="gas-particle gas-d"></i><i class="gas-particle gas-e"></i><i class="gas-particle gas-f"></i></div>"""
+        }
+        "periodic-table" -> {
+            title = "Periodic table • element blocks"
+            description = "Glowing element tiles rise in depth, representing the organised pattern of chemical elements."
+            shape = """<div class="element-table"><i class="element-tile e-tile-a">H</i><i class="element-tile e-tile-b">C</i><i class="element-tile e-tile-c">N</i><i class="element-tile e-tile-d">O</i><i class="element-tile e-tile-e">Na</i><i class="element-tile e-tile-f">Cl</i><i class="element-tile e-tile-g">Fe</i><i class="element-tile e-tile-h">He</i></div>"""
+        }
+        "nucleus", "proton" -> {
+            title = if (model == "proton") "Positive proton • nucleus model" else "Atomic nucleus • protons and neutrons"
+            description = "Inspect the clustered particles at the centre of an atom in a rotating 3D model."
+            shape = """<div class="nucleus-model"><i class="nucleus-particle np-a"></i><i class="nucleus-particle np-b"></i><i class="nucleus-particle np-c"></i><i class="nucleus-particle np-d"></i><i class="nucleus-orbit"></i><i class="charge-dot"></i></div>"""
+        }
+        "molecule-vibration" -> {
+            title = "Molecule vibration • bonds in motion"
+            description = "Three shaded atoms move around flexible bonds to illustrate molecular motion."
+            shape = """<div class="vibrating-molecule"><i class="vib-bond vb-a"></i><i class="vib-bond vb-b"></i><i class="vib-atom atom-a"></i><i class="vib-atom atom-b"></i><i class="vib-atom atom-c"></i></div>"""
         }
         "water-cycle" -> {
             title = "Water-cycle explorer"; description = "Water evaporates, cools and returns as precipitation."
@@ -285,11 +346,26 @@ private fun learning3DHtml(modelType: String): String {
             title = "Learning book explorer"; description = "Open the layers of a learning book and inspect pages, cover and spine."
             shape = """<div class="book"><i class="book-cover"></i><i class="page-left"></i><i class="page-right"></i><i class="spine"></i><i class="bookmark"></i><b class="book-title">EXPLORE</b></div>"""
         }
+        "cube-volume", "cube-scale", "box-volume" -> {
+            title = when (model) { "cube-volume" -> "Cube volume • edge layers"; "cube-scale" -> "Cube scale • changing dimensions"; else -> "Box volume • length × width × height" }
+            description = "A raised 3D solid rotates as its dimensions are inspected."
+            shape = """<div class="cuboid volume-solid"><i class="cuboid-face cfront"></i><i class="cuboid-face cback"></i><i class="cuboid-face cright"></i><i class="cuboid-face cleft"></i><i class="cuboid-face ctop"></i><i class="cuboid-face cbottom"></i><i class="volume-edge"></i></div>"""
+        }
         else -> {
-            title = "4D learning model"; description = "Drag, zoom and explore the exploded model; touch each component to learn what it does."
-            shape = """<div class="cube"><i class="face front"></i><i class="face back"></i><i class="face right"></i><i class="face left"></i><i class="face top"></i><i class="face bottom"></i></div>"""
+            val prettyModel = model.split("-").joinToString(" ") { part -> part.replaceFirstChar { it.uppercase() } }
+            title = "${prettyModel} • 3D explorer"
+            description = "Rotate the depth-layered model, pinch to zoom and tap its parts. Animation shows the concept changing over time."
+            shape = """<div class="topic-model $model"><i class="topic-ground"></i><i class="topic-ring"></i><i class="topic-node node-a"></i><i class="topic-node node-b"></i><i class="topic-node node-c"></i><i class="topic-particle particle-a"></i><i class="topic-particle particle-b"></i><i class="topic-core"></i></div><div class="shape-label">${prettyModel.uppercase()}</div>"""
         }
     }
+    val chemistryControls = if (model == "chemistry-lab") """
+<div class="controls reaction-controls">
+<button id="mix-indicator">🧪 Mix indicator</button>
+<button id="mix-gas">🫧 Simulate gas reaction</button>
+<button id="reset-beakers">↺ Reset lab</button>
+</div>
+<div class="reaction-note">Virtual chemicals only • No real chemicals are mixed.</div>
+""" else ""
     return """
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <style>
@@ -327,6 +403,7 @@ private fun learning3DHtml(modelType: String): String {
 <button id="turn360">⟳ 360°</button>
 <button id="reset-view">Reset</button>
 </div>
+${chemistryControls}
 <div id="detail" class="detail"><strong>4D Explorer ready</strong><br>Tap an object, or use Explode parts to inspect its components.</div></div>
 <script>(function(){
 const stage=document.getElementById('stage'),detail=document.getElementById('detail');
@@ -409,7 +486,33 @@ stage.addEventListener('pointerup',endPointer);stage.addEventListener('pointerca
 stage.querySelectorAll('[data-part],.component,[tabindex="0"]').forEach(el=>el.addEventListener('click',()=>playCue('tap')));
 document.getElementById('explode').addEventListener('click',function(){const state=stage.classList.toggle('exploded');this.setAttribute('aria-pressed',String(state));this.textContent=state?'🧩 Reassemble parts':'🧩 Explode parts';playCue('tap');detail.innerHTML=state?'<strong>Exploded view</strong><br>Components are separated for inspection. Tap each component for its name and explanation.':'<strong>Assembled view</strong><br>Components are back in their normal positions.';});
 document.getElementById('turn360').addEventListener('click',()=>{angle+=360;applyView(true);playCue('tap');detail.innerHTML='<strong>360° view</strong><br>Rotate vertically by dragging up/down, or drag sideways to inspect every side.'});
-document.getElementById('reset-view').addEventListener('click',()=>{angle=0;pitch=0;zoom=1;stage.classList.remove('exploded');playCue('tap');document.getElementById('explode').setAttribute('aria-pressed','false');document.getElementById('explode').textContent='🧩 Explode parts';stage.style.perspectiveOrigin='50% 50%';applyView(true);detail.innerHTML='<strong>4D Explorer ready</strong><br>Tap a component to learn about it, then try zoom and exploded view.'});
+document.getElementById('reset-view').addEventListener('click',()=>{angle=0;pitch=0;zoom=1;stage.classList.remove('exploded');playCue('tap');document.getElementById('explode').setAttribute('aria-pressed','false');document.getElementById('explode').textContent='🧩 Explode parts';stage.style.perspectiveOrigin='50% 50%';applyView(true);detail.innerHTML='<strong>3D Explorer ready</strong><br>Tap a component to learn about it, then try zoom and exploded view.'});
+const chemistryLab=document.getElementById('chemistry-lab');
+if(chemistryLab){
+  const note=document.querySelector('.reaction-note');
+  const labNote=(heading,message)=>{detail.innerHTML='<strong>'+heading+'</strong><br>'+message;playCue('tap');};
+  document.getElementById('mix-indicator').addEventListener('click',()=>{
+    chemistryLab.classList.remove('gas-reaction');chemistryLab.classList.add('indicator-reaction');
+    chemistryLab.querySelector('.label-a').textContent='Indicator';chemistryLab.querySelector('.label-b').textContent='Solution';
+    chemistryLab.querySelector('.liquid-result').style.background='linear-gradient(180deg,#ff88dc,#9d48f0 72%,#532ba0)';
+    labNote('Colour-change reaction','The simulated indicator changes colour in the solution. The result is a visual clue about the solution’s properties.');
+    if(note)note.textContent='Simulation only: indicator colour changes are illustrative, not a real test result.';
+  });
+  document.getElementById('mix-gas').addEventListener('click',()=>{
+    chemistryLab.classList.remove('indicator-reaction');chemistryLab.classList.add('gas-reaction');
+    chemistryLab.querySelector('.label-a').textContent='Reactant A';chemistryLab.querySelector('.label-b').textContent='Reactant B';
+    chemistryLab.querySelector('.liquid-result').style.background='linear-gradient(180deg,#c4f8ff,#30a9d2 72%,#175b95)';
+    labNote('Gas-producing reaction','Bubbles rise from the virtual mixture, representing a gas being produced by a simulated reaction.');
+    if(note)note.textContent='No real chemicals are mixed. The bubbles and colour change are computer-generated.';
+  });
+  document.getElementById('reset-beakers').addEventListener('click',()=>{
+    chemistryLab.classList.remove('indicator-reaction','gas-reaction');
+    chemistryLab.querySelector('.label-a').textContent='A';chemistryLab.querySelector('.label-b').textContent='B';
+    chemistryLab.querySelector('.liquid-result').style.background='';
+    labNote('Virtual chemistry lab reset','Choose a reaction to see the simulated result.');
+    if(note)note.textContent='Virtual chemicals only • No real chemicals are mixed.';
+  });
+}
 })();</script>
 </body></html>
 """.trimIndent()
