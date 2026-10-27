@@ -759,6 +759,22 @@ ParentLearningTemplate(
             options = listOf("A weekly day of rest", "A planet", "A colour-mixing technique"), answer = "A weekly day of rest",
             conceptKey = "faith:jewish:shabbat",
             solution = "Shabbat is the weekly Jewish day of rest and observance."
+        ),
+        ParentLearningTemplate(
+            title = "Jain studies: ahimsa", category = "Religious Education", subjectTitle = "Jain Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Which value is central in Jain teachings?",
+            options = listOf("Ahimsa (non-violence)", "Conquering a planet", "Mixing colours"), answer = "Ahimsa (non-violence)",
+            conceptKey = "faith:jain:ahimsa",
+            solution = "Ahimsa, or non-violence and non-harm, is a central principle of Jainism."
+        ),
+        ParentLearningTemplate(
+            title = "Jain studies: living beings", category = "Religious Education", subjectTitle = "Jain Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "What does Jain teaching encourage toward living beings?",
+            options = listOf("Care and non-harm", "Waste and harm", "Ignoring all living things"), answer = "Care and non-harm",
+            conceptKey = "faith:jain:care-for-life",
+            solution = "Jain traditions strongly emphasise non-violence and careful treatment of living beings."
         )
     )
 }
