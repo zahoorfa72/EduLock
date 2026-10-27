@@ -18,6 +18,15 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+data class ParentLearningSettings(
+    val familyId: String,
+    val displayName: String,
+    val countryCode: String = "PK",
+    val learningLanguageCode: String = "ur",
+    val studyTrack: String = "none",
+    val displayLanguageCode: String = "en"
+)
+
 data class ChildProfile(
     val id: String,
     val familyId: String,
@@ -382,18 +391,60 @@ class EduLockRepository(context: Context) {
             null
         }
     }
-    suspend fun ensureParentFamily(displayName: String): String {
+    suspend fun ensureParentFamily(
+        displayName: String,
+        countryCode: String = "PK",
+        learningLanguageCode: String = "ur",
+        studyTrack: String = "none",
+        displayLanguageCode: String = "en"
+    ): String {
         val session = requireSession("parent")
-        val profiles = restArray(
-            "family_profiles?select=id,display_name,owner_user_id&owner_user_id=eq.${session.userId}&limit=1"
-        )
+        val profiles = restArray("family_profiles?select=id,display_name,owner_user_id&owner_user_id=eq.${session.userId}&limit=1")
         if (profiles.length() > 0) return profiles.getJSONObject(0).getString("id")
-
+        val country = countryCode.trim().uppercase(Locale.ROOT).takeIf { it.matches(Regex("[A-Z]{2}")) } ?: "PK"
+        val learning = learningLanguageCode.trim().lowercase(Locale.ROOT).takeIf { it.matches(Regex("[a-z][a-z0-9-]{1,15}")) } ?: "en"
+        val display = displayLanguageCode.trim().lowercase(Locale.ROOT).takeIf { it.matches(Regex("[a-z][a-z0-9-]{1,15}")) } ?: "en"
+        val track = studyTrack.trim().lowercase(Locale.ROOT).takeIf { it in setOf("none", "islamic", "hindu", "christian", "sikh", "buddhist", "jewish", "other") } ?: "none"
         val profileName = displayName.trim().ifBlank { "My family" }.take(120)
         val rows = restArray("family_profiles?select=id", "POST",
-            JSONObject().put("owner_user_id", session.userId).put("display_name", profileName))
+            JSONObject().put("owner_user_id", session.userId).put("display_name", profileName)
+                .put("country_code", country).put("learning_language_code", learning)
+                .put("study_track", track).put("display_language_code", display))
         return rows.optJSONObject(0)?.optString("id")?.takeIf { it.isNotBlank() }
             ?: throw IOException("Could not create the parent profile")
+    }
+
+    suspend fun loadParentLearningSettings(familyId: String): ParentLearningSettings {
+        requireSession("parent")
+        val rows = restArray("family_profiles?select=id,display_name,country_code,learning_language_code,study_track,display_language_code&id=eq.$familyId&limit=1")
+        val row = rows.optJSONObject(0) ?: throw IOException("Parent settings could not be loaded.")
+        return ParentLearningSettings(
+            familyId = row.optString("id"),
+            displayName = row.optString("display_name", "My family"),
+            countryCode = row.optString("country_code", "PK").uppercase().takeIf { it.matches(Regex("[A-Z]{2}")) } ?: "PK",
+            learningLanguageCode = row.optString("learning_language_code", "en"),
+            studyTrack = row.optString("study_track", "none"),
+            displayLanguageCode = row.optString("display_language_code", "en")
+        )
+    }
+
+    suspend fun updateParentLearningSettings(
+        familyId: String, countryCode: String, learningLanguageCode: String,
+        studyTrack: String, displayLanguageCode: String
+    ) {
+        requireSession("parent")
+        val country = countryCode.trim().uppercase(Locale.ROOT)
+        require(country.matches(Regex("[A-Z]{2}"))) { "Choose a valid country." }
+        fun language(value: String): String {
+            val code = value.trim().lowercase(Locale.ROOT)
+            require(code.matches(Regex("[a-z][a-z0-9-]{1,15}"))) { "Choose a valid language." }
+            return code
+        }
+        val track = studyTrack.trim().lowercase(Locale.ROOT)
+        require(track in setOf("none", "islamic", "hindu", "christian", "sikh", "buddhist", "jewish", "other")) { "Choose a study track." }
+        restArray("family_profiles?id=eq.$familyId", "PATCH",
+            JSONObject().put("country_code", country).put("learning_language_code", language(learningLanguageCode))
+                .put("study_track", track).put("display_language_code", language(displayLanguageCode)))
     }
 
     suspend fun loadChildren(familyId: String): List<ChildProfile> {
