@@ -37,7 +37,8 @@ data class ChildProfile(
     val schoolGrade: Int = 1,
     val ageYears: Int = 8,
     val avatarIcon: String = "🦊",
-    val dailyGameLimitMinutes: Int = 20
+    val dailyGameLimitMinutes: Int = 20,
+    val studyTrack: String = "none"
 )
 
 data class SubjectRow(
@@ -449,14 +450,14 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadChildren(familyId: String): List<ChildProfile> {
         requireSession("parent")
-        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes&family_id=eq.$familyId&order=created_at.desc")
+        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes,study_track&family_id=eq.$familyId&order=created_at.desc")
         return (0 until rows.length()).mapNotNull { i -> rows.optJSONObject(i)?.toChildProfile() }
     }
 
     suspend fun addChild(
         familyId: String, name: String, languageCode: String, dailyCap: Int,
         countryCode: String = "PK", schoolGrade: Int = 1, ageYears: Int = 8,
-        avatarIcon: String = "🦊", dailyGameLimitMinutes: Int = 20
+        avatarIcon: String = "🦊", dailyGameLimitMinutes: Int = 20, studyTrack: String = "none"
     ): ChildProfile {
         requireSession("parent")
         require(name.trim().isNotEmpty()) { "Enter the child’s name" }
@@ -468,7 +469,11 @@ class EduLockRepository(context: Context) {
         require(ageYears in 3..19) { "Child age must be from 3 to 19 years." }
         require(dailyGameLimitMinutes in 0..1440) { "Daily educational game time must be from 0 to 1440 minutes." }
         val safeAvatar = avatarIcon.takeIf { it in CHILD_AVATAR_ICONS } ?: "🦊"
-        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes", "POST",
+        val normalizedStudyTrack = studyTrack.trim().lowercase(Locale.ROOT)
+        require(normalizedStudyTrack in setOf("none", "islamic", "hindu", "christian", "sikh", "buddhist", "jewish", "jain", "other")) {
+            "Choose a valid child religious-education option."
+        }
+        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes,study_track", "POST",
             JSONObject()
                 .put("family_id", familyId)
                 .put("display_name", name.trim().take(120))
@@ -478,8 +483,19 @@ class EduLockRepository(context: Context) {
                 .put("school_grade", schoolGrade)
                 .put("age_years", ageYears)
                 .put("avatar_icon", safeAvatar)
-                .put("daily_game_limit_minutes", dailyGameLimitMinutes))
+                .put("daily_game_limit_minutes", dailyGameLimitMinutes)
+                .put("study_track", normalizedStudyTrack))
         return rows.optJSONObject(0)?.toChildProfile() ?: throw IOException("Could not create this child profile")
+    }
+
+    suspend fun updateChildStudyTrack(childId: String, studyTrack: String) {
+        requireSession("parent")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        val normalized = studyTrack.trim().lowercase(Locale.ROOT)
+        require(normalized in setOf("none", "islamic", "hindu", "christian", "sikh", "buddhist", "jewish", "jain", "other")) {
+            "Choose a valid religious-education option."
+        }
+        restArray("children?id=eq.$childId", "PATCH", JSONObject().put("study_track", normalized))
     }
 
     suspend fun deactivateChildLink(childId: String) {
@@ -527,7 +543,7 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadCurrentChild(): ChildProfile? {
         val session = requireSession("child")
-        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes&child_user_id=eq.${session.userId}&limit=1")
+        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes,study_track&child_user_id=eq.${session.userId}&limit=1")
         return rows.optJSONObject(0)?.toChildProfile()
     }
 
@@ -577,6 +593,34 @@ class EduLockRepository(context: Context) {
                 .put("curriculum_subject_code", curriculumSubjectCode.take(40)))
         val row = rows.optJSONObject(0) ?: throw IOException("Could not create the subject")
         return SubjectRow(row.getString("id"), row.getString("family_id"), row.getString("title"), row.optString("language_code", "en"), row.optString("country_code", countryCode), row.optInt("grade_level", gradeLevel), row.optString("curriculum_name", curriculumName), row.optString("curriculum_subject_code", curriculumSubjectCode))
+    }
+
+    suspend fun updateSubject(
+        subjectId: String, title: String, languageCode: String, countryCode: String, gradeLevel: Int
+    ): SubjectRow {
+        requireSession("parent")
+        require(subjectId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid subject." }
+        val cleanTitle = title.trim().take(160)
+        require(cleanTitle.isNotBlank()) { "Enter a subject name." }
+        val language = languageCode.trim().lowercase(Locale.ROOT)
+        require(language.matches(Regex("[a-z][a-z0-9-]{1,15}"))) { "Use a valid language code such as en, ur or sd." }
+        val country = countryCode.trim().uppercase(Locale.ROOT)
+        require(country.matches(Regex("[A-Z]{2}"))) { "Choose a valid country." }
+        require(gradeLevel in 0..13) { "Grade must be from kindergarten to grade 13." }
+        val rows = restArray(
+            "subjects?id=eq.$subjectId&select=id,family_id,title,language_code,country_code,grade_level,curriculum_name,curriculum_subject_code",
+            "PATCH",
+            JSONObject().put("title", cleanTitle).put("language_code", language).put("country_code", country).put("grade_level", gradeLevel)
+        )
+        val row = rows.optJSONObject(0) ?: JSONObject()
+            .put("id", subjectId).put("title", cleanTitle).put("language_code", language)
+            .put("country_code", country).put("grade_level", gradeLevel)
+        return SubjectRow(
+            row.optString("id", subjectId), row.optString("family_id"), row.optString("title", cleanTitle),
+            row.optString("language_code", language), row.optString("country_code", country),
+            row.optInt("grade_level", gradeLevel), row.optString("curriculum_name", "Parent-created"),
+            row.optString("curriculum_subject_code", "")
+        )
     }
 
     suspend fun findOrCreateSubject(
@@ -1297,7 +1341,10 @@ class EduLockRepository(context: Context) {
         schoolGrade = optInt("school_grade", 1).coerceIn(0, 13),
         ageYears = optInt("age_years", 8).coerceIn(3, 19),
         avatarIcon = optString("avatar_icon", "🦊").takeIf { it in CHILD_AVATAR_ICONS } ?: "🦊",
-        dailyGameLimitMinutes = optInt("daily_game_limit_minutes", 20).coerceIn(0, 1440)
+        dailyGameLimitMinutes = optInt("daily_game_limit_minutes", 20).coerceIn(0, 1440),
+        studyTrack = optString("study_track", "none").lowercase(Locale.ROOT).takeIf {
+            it in setOf("none", "islamic", "hindu", "christian", "sikh", "buddhist", "jewish", "jain", "other")
+        } ?: "none"
     )
 
     private fun JSONObject.toTaskRow() = TaskRow(
