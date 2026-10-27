@@ -2764,7 +2764,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                             val subject = selectedSubject ?: throw IllegalStateException("Choose a subject first.")
                             val options = questionOptions.lines().map { it.trim() }.filter { it.isNotEmpty() }
                             val savedConceptKey = if (question3DModel == "none") questionConceptKey else "4d:$question3DModel:$questionConceptKey"
-                            repository.addQuestion(subject.id, questionPrompt, questionType, options, questionAnswer, questionLanguage, savedConceptKey, questionSolution)
+                            val canonicalAnswer = if (questionType == "matching") {
+                                options.mapNotNull { raw ->
+                                    val pair = raw.split("|", limit = 2)
+                                    if (pair.size == 2 && pair[0].isNotBlank() && pair[1].isNotBlank()) pair[0].trim() + "=" + pair[1].trim() else null
+                                }.joinToString(";")
+                            } else questionAnswer
+                            repository.addQuestion(subject.id, questionPrompt, questionType, options, canonicalAnswer, questionLanguage, savedConceptKey, questionSolution)
                             questions = repository.loadQuestions(subject.id)
                             questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
                             questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
@@ -2772,7 +2778,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             screen = AppScreen.QUESTIONS
                             notice = "Question and parent-only worked solution saved. The solution is not sent to the child."
                         }
-                    }, enabled = !busy && questionPrompt.isNotBlank() && questionAnswer.isNotBlank() && questionConceptKey.isNotBlank(), modifier = Modifier.fillMaxWidth()) { AppUiText("Save question") }
+                    }, enabled = !busy && questionPrompt.isNotBlank() && (questionAnswer.isNotBlank() || (questionType == "matching" && questionOptions.isNotBlank())) && questionConceptKey.isNotBlank(), modifier = Modifier.fillMaxWidth()) { AppUiText("Save question") }
                 }
 
                 AppScreen.ADD_TRANSLATION -> ScreenFrame("Concept Bridge — translation", onBack = { screen = AppScreen.QUESTIONS }, notice = notice, busy = busy) {
