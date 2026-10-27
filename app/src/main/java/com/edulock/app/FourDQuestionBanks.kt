@@ -9,75 +9,265 @@ object FourDQuestionBanks {
     private fun bank(category: String, subject: String, model: String, items: List<FourDQuestionSeed>,
         language: String = "en", country: String = "ZZ", conceptPrefix: String? = null
     ): List<ParentLearningTemplate> = items.mapIndexed { index, item ->
-        val questionModel = if (conceptPrefix == null) modelForQuestion(subject, item.prompt, model) else model
+        val questionModel = modelForQuestion(subject, item.prompt, model, index)
+        val track = conceptPrefix?.substringAfterLast(':')
+        val conceptKey = if (track != null && conceptPrefix.startsWith("4d:book:faith:")) {
+            "4d:$questionModel:faith:$track:${index + 1}"
+        } else {
+            "4d:$questionModel:${slug(subject)}-${index + 1}"
+        }
         ParentLearningTemplate(
             title = "$subject • 4D discovery ${index + 1}", category = category, subjectTitle = subject,
             languageCode = language, questionType = "multiple_choice", prompt = item.prompt, options = item.options,
-            answer = item.answer,
-            conceptKey = conceptPrefix?.let { "$it:${index + 1}" } ?: "4d:$questionModel:${slug(subject)}-${index + 1}",
-            solution = item.explanation,
-            countryCode = country
+            answer = item.answer, conceptKey = conceptKey, solution = item.explanation, countryCode = country
         )
     }
 
-    // Each starter question points to a model matching the concept it tests.
-    private fun modelForQuestion(subject: String, prompt: String, fallback: String): String {
+    // Use a different model/animation for each generated question, while prioritising
+    // the concept mentioned in its prompt. This keeps each preview tied to its question.
+    private fun modelForQuestion(subject: String, prompt: String, fallback: String, index: Int): String {
         val p = prompt.lowercase()
-        return when (subject.lowercase()) {
+        val n = subject.lowercase()
+        return when (n) {
             "mathematics" -> when {
                 "tesseract" in p || "four-dimensional" in p -> "tesseract"
                 "cylinder" in p -> "cylinder"
-                "triangular prism" in p || "prism" in p -> "prism"
-                "sphere" in p -> "sphere"
+                "prism" in p || "triangle" in p -> "prism"
+                "sphere" in p || "round like a ball" in p -> "sphere"
                 "cone" in p -> "cone"
-                "cuboid" in p || "box" in p -> "cuboid"
-                else -> "geometry"
+                "cuboid" in p || "rectangular box" in p -> "cuboid"
+                "volume" in p || "edge becomes twice" in p -> "cube-volume"
+                "box" in p || "space does it hold" in p -> "box-volume"
+                "add" in p || "subtract" in p || "number" in p || "count" in p -> "number-cubes"
+                "pattern" in p -> "pattern-blocks"
+                else -> listOf("geometry", "cube-volume", "cylinder", "prism", "sphere", "cube-scale", "cone", "cuboid", "box-volume", "tesseract")[index % 10]
             }
             "physics" -> when {
-                listOf("circuit", "wire", "lamp", "current", "switch").any { it in p } -> "circuit"
+                "broken wire" in p || "goes out" in p -> "broken-circuit"
+                "circuit" in p || "current" in p || "lamp" in p || "switch" in p || "wire" in p -> "circuit"
                 "magnet" in p || "poles" in p -> "magnet"
-                else -> "force"
+                "inertia" in p || "greatest inertia" in p -> "inertia"
+                "rough surface" in p -> "rough-surface"
+                "friction" in p -> "friction"
+                "unit measures force" in p || "unit measures" in p -> "force-meter"
+                "accelerates" in p || "acceleration" in p -> "motion-cart"
+                "energy store" in p || "lifted higher" in p -> "energy-ball"
+                "force" in p || "motion" in p -> "force"
+                else -> listOf("force", "friction", "force-meter", "motion-cart", "energy-ball", "circuit", "magnet", "broken-circuit", "inertia", "rough-surface")[index % 10]
             }
             "chemistry" -> when {
-                "evaporation" in p || "water vapour" in p -> "water-cycle"
-                "molecule" in p || "h₂o" in p || "chemical bond" in p -> "molecule"
-                else -> "atom"
+                "negative electric charge" in p || "negative charge" in p || "electron" in p -> "atom"
+                "protons and neutrons" in p || "nucleus" in p -> "nucleus"
+                "water molecule" in p || "h₂o" in p -> "molecule"
+                "atomic number" in p || "particle determines" in p || "proton" in p -> "proton"
+                "ph " in p || "ph" in p || "acidic" in p || "alkaline" in p -> "acid-base"
+                "mixture" in p || "air contains" in p || "gases" in p -> "gas-mixture"
+                "evaporation" in p || "water vapour" in p || "water vapor" in p -> "water-cycle"
+                "periodic table" in p || "chemical elements" in p -> "periodic-table"
+                "molecule" in p || "chemical bond" in p -> "molecule-vibration"
+                "reaction" in p || "new substance" in p || "substance forms" in p || "reactant" in p -> "chemistry-lab"
+                else -> listOf("atom", "nucleus", "molecule", "proton", "acid-base", "gas-mixture", "water-cycle", "periodic-table", "molecule-vibration", "chemistry-lab")[index % 10]
             }
             "biology" -> when {
-                "flower" in p || "pollinator" in p || "petals" in p -> "flower"
-                "ecosystem" in p -> "earth"
-                else -> "cell"
+                "membrane" in p -> "membrane"
+                "root" in p || "soil" in p -> "roots"
+                "photosynthesis" in p || "sunlight" in p -> "photosynthesis"
+                "mitochond" in p || "energy converter" in p -> "mitochondria"
+                "flower" in p || "pollinator" in p || "petal" in p -> "flower"
+                "dna" in p || "genetic" in p || "inherited" in p -> "dna"
+                "blood" in p || "circulatory" in p || "heart" in p -> "heart"
+                "ecosystem" in p -> "ecosystem"
+                "cell" in p || "living organisms" in p -> "cell"
+                else -> listOf("cell", "membrane", "roots", "photosynthesis", "mitochondria", "cell-growth", "flower", "dna", "heart", "ecosystem")[index % 10]
             }
             "general science" -> when {
-                listOf("vapour", "evaporation", "condensation", "precipitation", "cloud").any { it in p } -> "water-cycle"
-                "conductor" in p || "electrical" in p -> "circuit"
+                "evaporation" in p || "vapour" in p || "vapor" in p -> "water-cycle"
+                "condensation" in p || "cloud" in p -> "condensation"
+                "conductor" in p || "electrical" in p || "copper" in p -> "circuit"
+                "renewable" in p || "sunlight" in p -> "solar-energy"
+                "sun" in p || "weather" in p -> "solar-system"
+                "state of matter" in p || "fixed volume" in p -> "matter-states"
+                "shadow" in p || "blocks light" in p -> "shadow-lab"
+                "temperature" in p || "thermometer" in p -> "thermometer"
                 "gravity" in p || "force" in p -> "force"
-                "sun" in p || "shadow" in p -> "solar-system"
-                else -> "book"
+                "precipitation" in p || "returns water" in p -> "water-cycle"
+                else -> listOf("water-cycle", "condensation", "circuit", "solar-energy", "solar-system", "matter-states", "shadow-lab", "thermometer", "force", "precipitation")[index % 10]
             }
-            "astronomy" -> "solar-system"
-            "geography" -> when {
-                "volcano" in p -> "volcano"
-                listOf("river", "ocean", "water").any { it in p } -> "water-cycle"
-                else -> "earth"
-            }
-            "social studies" -> if (listOf("globe", "map", "compass").any { it in p }) "earth" else "book"
-            "computer skills" -> if (listOf("circuit", "battery", "switch", "energy").any { it in p }) "circuit" else "book"
-            "health & safety" -> if (listOf("germ", "lungs", "organ", "blood").any { it in p }) "cell" else "book"
-            "art & design" -> when {
-                "sphere" in p -> "sphere"
-                listOf("triangle", "shape", "symmetry").any { it in p } -> "geometry"
-                else -> "flower"
-            }
-            "drawing & colour" -> when {
-                "sphere" in p -> "sphere"
-                listOf("perspective", "overlapping", "shape", "contour", "horizon").any { it in p } -> "geometry"
-                else -> "flower"
-            }
+            "astronomy" -> listOf("planet-size", "rings", "day-night", "mars", "solar-system", "axial-tilt", "moon", "planet-light", "orbit", "mercury")[index % 10]
+            "geography" -> listOf("earth", "ocean", "map-scale", "climate", "contour-map", "compass", "equator", "plateau", "river", "island")[index % 10]
+            "social studies" -> listOf("compass", "community", "city-rules", "map", "public-space", "culture", "globe", "public-service", "history-sources", "flag")[index % 10]
+            "computer skills" -> listOf("power-source", "switch", "password-lock", "suspicious-link", "keyboard", "program-flow", "mouse", "software-update", "privacy-shield", "backup-drive")[index % 10]
+            "health & safety" -> listOf("handwashing", "food-pyramid", "firstaid-burn", "lungs", "sleep-cycle", "emergency-kit", "water", "eye-break", "medicine-safety", "exercise")[index % 10]
+            "art & design" -> listOf("primary-palette", "colour-mixing", "sphere", "perspective-grid", "triangle", "colour-wheel", "sketch", "texture", "symmetry", "palette")[index % 10]
+            "drawing & colour" -> listOf("sketch", "contour", "perspective", "pencil", "hatching", "negative-space", "horizon", "shading", "proportions", "overlap")[index % 10]
+            "english", "urdu", "sindhi", "hindi" -> listOf("story-book", "grammar", "word-puzzle", "sentence-builder", "punctuation", "reading-trail", "rhyme", "vocabulary", "dialogue", "dictionary")[index % 10]
+            "islamic studies", "hindu studies", "christian studies", "sikh studies", "buddhist studies", "jewish studies", "jain studies", "world religions & ethics" ->
+                listOf("faith-scroll", "faith-community", "faith-festival", "faith-story", "faith-kindness", "faith-symbol", "faith-practice", "faith-service", "faith-value", "faith-choice")[index % 10]
             else -> fallback
         }
     }
 
+    // Kindergarten–Class 2 gets concrete, short-reading questions. Class 3–5 uses
+    // the primary bank below. Parents can still create/edit questions for their own syllabus.
+    private fun earlyGradeSeeds(subjectTitle: String): List<FourDQuestionSeed> = when (subjectTitle.lowercase()) {
+        "mathematics" -> listOf(
+            q("🔷 Which shape is round like a ball?", "Sphere|Cube|Triangle", "Sphere", "A sphere is round all around and has no corners."),
+            q("🔺 How many sides has a triangle?", "3|2|4", "3", "A triangle has three straight sides."),
+            q("🍎 What is 2 + 1?", "2|3|4", "3", "Two objects plus one more make three."),
+            q("📦 Which solid has six square faces?", "Cube|Cone|Sphere", "Cube", "A cube has six square faces."),
+            q("🧊 Which solid has two flat circular ends?", "Cylinder|Sphere|Pyramid", "Cylinder", "A cylinder has two round flat ends."),
+            q("🍦 Which shape has a round base and one point?", "Cone|Cube|Sphere", "Cone", "A cone narrows from a circular base to one point."),
+            q("🔢 Which number comes after 8?", "7|9|10", "9", "Nine comes after eight when counting."),
+            q("🧱 Which object is shaped like a box?", "Cuboid|Sphere|Cone", "Cuboid", "A cuboid has rectangular faces like many boxes."),
+            q("🧩 Which shape has three corners?", "Triangle|Circle|Cylinder", "Triangle", "A triangle has three corners called vertices."),
+            q("🌀 What is the four-dimensional shape like a moving cube called?", "Tesseract|Circle|Cone", "Tesseract", "A tesseract is the four-dimensional analogue of a cube.")
+        )
+        "physics" -> listOf(
+            q("⚽ What can a push or pull change about a moving ball?", "Its speed or direction|Its colour automatically|Its name", "Its speed or direction", "A force can change speed or direction."),
+            q("🛝 What can make a sliding toy slow down?", "Friction|A shadow|Its colour", "Friction", "Friction acts against sliding between touching surfaces."),
+            q("🧰 Which tool can show how hard you pull?", "Force meter|Thermometer|Compass", "Force meter", "A force meter measures force."),
+            q("🚗 What helps a toy car speed up?", "A forward push|A quieter colour|A shorter name", "A forward push", "A force can make a toy car speed up."),
+            q("🏀 What happens to a ball when you lift it higher?", "It gains stored energy|It loses its shape|It becomes a magnet", "It gains stored energy", "A lifted ball has more gravitational potential energy."),
+            q("💡 What does a simple circuit need to light a bulb?", "A source and a closed path|A broken wire|Only a plastic spoon", "A source and a closed path", "A complete path and a battery let current flow."),
+            q("🧲 Which magnet ends attract?", "North and south|North and north|South and south", "North and south", "Opposite magnetic poles attract."),
+            q("🔌 What happens when a wire is disconnected from a bulb circuit?", "The bulb goes out|The bulb becomes a battery|The wire makes light", "The bulb goes out", "A broken path stops continuous current."),
+            q("🛒 Which is harder to start moving, a heavy cart or a light toy?", "A heavy cart|The light toy always|Both have no mass", "A heavy cart", "More mass means greater inertia."),
+            q("🧱 Why can a rough floor slow a toy car?", "It creates more friction|It turns off gravity|It removes the wheels", "It creates more friction", "Friction can slow objects moving across a surface.")
+        )
+        "chemistry" -> listOf(
+            q("⚛️ Which tiny particle has a negative charge?", "Electron|Proton|Neutron", "Electron", "An electron has a negative electric charge."),
+            q("🔴 Where are protons found in an atom?", "Nucleus|Outside the atom only|In the wire", "Nucleus", "The nucleus is at the centre of an atom."),
+            q("💧 Which two kinds of atoms make water?", "Hydrogen and oxygen|Gold and iron|Carbon and copper", "Hydrogen and oxygen", "A water molecule contains hydrogen and oxygen."),
+            q("➕ Which particle in the nucleus has a positive charge?", "Proton|Electron|Cloud", "Proton", "Protons are positively charged."),
+            q("🧪 What does an indicator help show in a liquid?", "Whether it is acidic or basic|Its birthday|Its sound", "Whether it is acidic or basic", "Some indicators change colour in acids and bases."),
+            q("🎈 Which gas is part of the air we breathe?", "Oxygen|Liquid iron|Wood", "Oxygen", "Air is a mixture of gases, including oxygen."),
+            q("☀️ What changes liquid water into water vapour?", "Evaporation|Freezing|Breaking", "Evaporation", "Heat can turn liquid water into water vapour."),
+            q("🧩 Where are chemical elements organised?", "Periodic table|Map of cities|Weather calendar", "Periodic table", "The periodic table organises chemical elements."),
+            q("⚪ What is a molecule made from?", "Atoms joined together|Only shadows|Separate planets", "Atoms joined together", "Molecules contain atoms held together by chemical bonds."),
+            q("🧪 In a virtual lab, what may show that a reaction happened?", "Bubbles or a colour change|The screen name changing|A shape disappearing from the menu", "Bubbles or a colour change", "Simulated reactions can show bubbles, colour changes or new material.")
+        )
+        "biology" -> listOf(
+            q("🧬 Which part of an animal cell holds most DNA?", "Nucleus|Cell membrane|Petal", "Nucleus", "The nucleus contains most genetic material in an animal cell."),
+            q("🚪 Which cell part controls what goes in and out?", "Cell membrane|Leaf|Bone", "Cell membrane", "The cell membrane controls movement into and out of the cell."),
+            q("🌱 Which plant part takes in water from soil?", "Roots|Petals|Fruit", "Roots", "Roots absorb water and minerals from soil."),
+            q("☀️ What do green plants use sunlight to help make?", "Sugars|Metal|Sand", "Sugars", "Photosynthesis helps plants make sugars using light energy."),
+            q("🔋 Which cell structures release useful energy from food?", "Mitochondria|Shoelaces|Petals only", "Mitochondria", "Mitochondria help release usable energy from food."),
+            q("🧫 What is the tiny basic unit of living things?", "Cell|Planet|Toy", "Cell", "Cells are the basic units of living organisms."),
+            q("🌸 Which flower part often attracts bees?", "Petals|Roots|Stem only", "Petals", "Petals often attract pollinators with colour and scent."),
+            q("🧬 What carries instructions passed from parents to offspring?", "DNA|Water|Starch only", "DNA", "DNA stores inherited genetic information."),
+            q("❤️ Which organ pumps blood around the body?", "Heart|Stomach|Ear", "Heart", "The heart pumps blood through blood vessels."),
+            q("🌳 What includes living things and the place they live?", "Ecosystem|One pebble only|A picture frame", "Ecosystem", "An ecosystem includes organisms and their environment.")
+        )
+        "general science" -> listOf(
+            q("💧 What is liquid water turning into vapour called?", "Evaporation|Freezing|Falling", "Evaporation", "Evaporation changes liquid water into vapour."),
+            q("☁️ What is vapour cooling into tiny water droplets called?", "Condensation|Melting|Breaking", "Condensation", "Condensation forms tiny liquid droplets."),
+            q("🔌 Which material is often used to carry electricity in wires?", "Copper|Rubber|Dry paper", "Copper", "Copper is a good electrical conductor."),
+            q("☀️ Which renewable energy comes from the Sun?", "Solar energy|Coal|Petrol", "Solar energy", "Solar energy comes from sunlight."),
+            q("🌦️ What gives Earth most of the energy that drives weather?", "The Sun|A shadow|A compass", "The Sun", "Solar heating drives much of Earth's weather."),
+            q("🧊 Which state of matter is ice?", "Solid|Liquid|Gas", "Solid", "Ice is water in its solid state."),
+            q("🌑 What forms when an object blocks light?", "A shadow|A rainbow every time|A sound", "A shadow", "A shadow forms where an object blocks light."),
+            q("🌡️ Which tool measures temperature?", "Thermometer|Ruler|Compass", "Thermometer", "A thermometer measures temperature."),
+            q("🍎 What force pulls a dropped apple toward Earth?", "Gravity|Evaporation|Reflection", "Gravity", "Gravity attracts objects toward Earth."),
+            q("🌧️ What is rain falling from clouds called?", "Precipitation|Evaporation|Melting", "Precipitation", "Rain is a type of precipitation.")
+        )
+        "astronomy" -> listOf(
+            q("🪐 Which planet is the largest in our Solar System?", "Jupiter|Earth|Mercury", "Jupiter", "Jupiter is the largest planet."),
+            q("💍 Which planet is famous for its bright rings?", "Saturn|Mars|Mercury", "Saturn", "Saturn has prominent rings."),
+            q("🌍 What makes day change into night on Earth?", "Earth spins|The Sun switches off|Clouds stop time", "Earth spins", "Earth's rotation creates day and night."),
+            q("🔴 Which planet is called the Red Planet?", "Mars|Venus|Neptune", "Mars", "Mars looks red because of iron-rich dust."),
+            q("☀️ What is at the centre of our Solar System?", "The Sun|The Moon|Earth", "The Sun", "Planets orbit the Sun."),
+            q("🌀 Which planet rotates with an unusually tilted axis?", "Uranus|Mercury|Mars", "Uranus", "Uranus has an extreme axial tilt."),
+            q("🌙 What is a natural object orbiting a planet called?", "A moon|A cloud|A mountain", "A moon", "A natural satellite orbits a planet."),
+            q("✨ Why do planets shine in our night sky?", "They reflect sunlight|They are all stars|They burn like fire", "They reflect sunlight", "Planets are mostly seen by reflected sunlight."),
+            q("🛰️ What keeps planets moving around the Sun?", "Gravity and forward motion|A rope|Ocean waves", "Gravity and forward motion", "Gravity bends a planet's path while its motion carries it forward."),
+            q("☀️ Which planet is closest to the Sun?", "Mercury|Venus|Earth", "Mercury", "Mercury is the innermost planet.")
+        )
+        "geography" -> listOf(
+            q("🌍 What does a globe show?", "Earth|Only the Moon|A computer", "Earth", "A globe is a model of Earth."),
+            q("🌊 Which is the largest ocean?", "Pacific Ocean|Indian Ocean|Arctic Ocean", "Pacific Ocean", "The Pacific is the largest ocean."),
+            q("🗺️ What helps us compare map distance with real distance?", "Map scale|A colour name|A clock", "Map scale", "A map scale relates map measurements to real distances."),
+            q("🌦️ What is the long-term pattern of weather called?", "Climate|One rainy minute|A single cloud", "Climate", "Climate describes weather patterns over long periods."),
+            q("⛰️ What do contour lines on a map connect?", "Places of equal height|People with equal ages|Roads only", "Places of equal height", "Contour lines join points at the same elevation."),
+            q("🧭 Which direction is opposite east?", "West|North|South", "West", "West is opposite east."),
+            q("🌐 What imaginary line circles Earth's middle?", "Equator|Prime Meridian|A river", "Equator", "The equator divides Earth into the north and south halves."),
+            q("🏞️ What is a high area of fairly flat land called?", "Plateau|Ocean|Valley only", "Plateau", "A plateau is an elevated area with a fairly level surface."),
+            q("🏞️ Where does a river begin?", "Its source|Its widest point only|A desert every time", "Its source", "The source is where a river begins."),
+            q("🏝️ What is land surrounded by water called?", "Island|Desert|Plateau", "Island", "An island is land surrounded by water.")
+        )
+        "social studies" -> listOf(
+            q("🧭 What does a compass rose show on a map?", "Directions|Food groups|The time", "Directions", "A compass rose shows directions."),
+            q("🏘️ What is a community?", "People who live or work together|One toy only|A planet", "People who live or work together", "Communities share places, activities or needs."),
+            q("📋 Why do communities have rules?", "To help people stay safe and cooperate|To stop every game|To make all people identical", "To help people stay safe and cooperate", "Rules support safety and fair cooperation."),
+            q("🗺️ What explains symbols on a map?", "The map legend|A pencil case|A clock", "The map legend", "A map legend explains symbols and colours."),
+            q("🧹 Which action helps a shared public place?", "Keep it clean|Break benches|Leave rubbish everywhere", "Keep it clean", "Caring for shared spaces is a community responsibility."),
+            q("🎉 What can culture include?", "Food, language and traditions|Only mountains|Only numbers", "Food, language and traditions", "Culture includes shared practices, knowledge and traditions."),
+            q("🌐 What does a globe represent?", "Earth's shape|A computer screen|Only one city", "Earth's shape", "A globe models Earth's overall shape."),
+            q("📚 What is a public library?", "A community service|A private password|A planet", "A community service", "Libraries provide books and learning resources to the public."),
+            q("📜 Why do we look at old photographs and stories?", "To learn about the past|To change yesterday|To measure rain", "To learn about the past", "Historical sources can help us understand past events."),
+            q("🏳️ What can a country's flag represent?", "A national symbol|A thermometer|A map scale", "A national symbol", "Flags often represent a country or community.")
+        )
+        "computer skills" -> listOf(
+            q("🔋 What supplies power to a simple circuit?", "A battery or source|A mouse|Paper", "A battery or source", "A power source provides energy to a circuit."),
+            q("🔘 What does a closed switch do?", "Completes the circuit path|Deletes every wire|Makes plastic conduct", "Completes the circuit path", "A closed switch completes the conducting path."),
+            q("🔐 Which password is safer?", "A long unique passphrase|123456|Your name only", "A long unique passphrase", "Long, unique passwords are harder to guess."),
+            q("🔗 What should you do with a strange link from a stranger?", "Do not open it; ask a trusted adult|Enter your password|Send it to everyone", "Do not open it; ask a trusted adult", "Suspicious links may be unsafe; check with a trusted adult."),
+            q("⌨️ What does a keyboard do?", "Enters text and commands|Prints paper by itself|Cools a room", "Enters text and commands", "A keyboard is an input device."),
+            q("💻 What is a computer program?", "Instructions for a computer|A kind of food|A planet's orbit", "Instructions for a computer", "A program contains instructions a computer can run."),
+            q("🖱️ Which device moves a pointer on many computers?", "Mouse or touchpad|Speaker|Lamp", "Mouse or touchpad", "A mouse or touchpad is a pointing input device."),
+            q("🔄 Why install trusted software updates?", "They can fix bugs and security problems|They make every password public|They remove the screen", "They can fix bugs and security problems", "Updates often correct bugs and security weaknesses."),
+            q("🛡️ Which should stay private?", "Your home address and password|A public science fact|A maths answer", "Your home address and password", "Addresses and passwords should be protected."),
+            q("💾 What is a backup?", "An extra copy for recovery|A screen colour|A keyboard button", "An extra copy for recovery", "Backups help recover data if the original is lost.")
+        )
+        "health & safety" -> listOf(
+            q("🧼 What helps remove dirt and germs from hands?", "Soap and water|Paint|Sand only", "Soap and water", "Washing with soap and water helps remove dirt and germs."),
+            q("🥗 What is a balanced diet?", "Different foods that provide needed nutrients|Only sweets|One food every day", "Different foods that provide needed nutrients", "Different foods supply different nutrients."),
+            q("🔥 What should you do for a small heat burn?", "Tell an adult and cool it with running water|Rub with soil|Use an unknown chemical", "Tell an adult and cool it with running water", "Get adult help and cool a minor burn with clean cool running water."),
+            q("🫁 Which organs help us breathe?", "Lungs|Stomach|Knees", "Lungs", "The lungs exchange oxygen and carbon dioxide."),
+            q("🌙 Why is sleep important for children?", "It helps growth and learning|It replaces water|It prevents every illness", "It helps growth and learning", "Sleep supports growth, memory and recovery."),
+            q("🚑 What should you do if someone is badly hurt?", "Get an adult and emergency help|Hide it|Try unknown medicine alone", "Get an adult and emergency help", "Serious injuries need a responsible adult and qualified help."),
+            q("💧 What is a good drink for everyday hydration?", "Clean water|Only fizzy drinks|Paint water", "Clean water", "Clean drinking water helps keep the body hydrated."),
+            q("👀 What can help your eyes during screen use?", "Take breaks and look away|Never blink|Hold the screen against your eyes", "Take breaks and look away", "Regular screen breaks may reduce eye strain."),
+            q("💊 Who should help decide if a child takes medicine?", "A parent or qualified health professional|A stranger online|A game character", "A parent or qualified health professional", "Medicine and doses need responsible adult or professional guidance."),
+            q("🏃 Which activity helps keep the body active?", "Age-appropriate play and movement|Sitting all day|Never walking", "Age-appropriate play and movement", "Regular age-appropriate movement supports health.")
+        )
+        "art & design" -> listOf(
+            q("🎨 Which set is often taught as primary paint colours?", "Red, yellow and blue|Green, orange and purple|Black, grey and white", "Red, yellow and blue", "Traditional beginner paint lessons often use red, yellow and blue."),
+            q("🟠 What do red and yellow paint often make?", "Orange|Green|Blue", "Orange", "Red and yellow commonly mix to make orange."),
+            q("⚽ What helps a ball drawing look round?", "Light and shadow|Only a flat outline|No colour at all", "Light and shadow", "Shading and highlights suggest a rounded surface."),
+            q("🏞️ What can perspective show in a picture?", "Depth and distance|A sound|A smell", "Depth and distance", "Perspective helps a flat picture suggest space."),
+            q("🔺 Which shape has three straight sides?", "Triangle|Circle|Oval", "Triangle", "A triangle has three sides."),
+            q("🎨 Which pair is opposite on a common colour wheel?", "Blue and orange|Blue and blue|Yellow and yellow", "Blue and orange", "Blue and orange are complementary on a common traditional colour wheel."),
+            q("✏️ What is a sketch?", "A quick drawing to try an idea|A weather report|A computer password", "A quick drawing to try an idea", "A sketch helps plan an idea before adding details."),
+            q("🧶 What can texture tell us about a surface?", "How it looks or feels|Its birthday|Its name only", "How it looks or feels", "Texture can suggest roughness, softness or smoothness."),
+            q("🪞 What is symmetry?", "Parts match across a line|Every colour is the same|A type of paper", "Parts match across a line", "Symmetry means parts match in a balanced arrangement."),
+            q("🖌️ Why choose a colour palette?", "To plan colours that work together|To measure weight|To remove every shape", "To plan colours that work together", "A palette helps plan colours for an artwork.")
+        )
+        "drawing & colour" -> listOf(
+            q("✏️ What is a good first step when drawing a toy?", "Start with light simple shapes|Draw every tiny detail first|Colour the page black", "Start with light simple shapes", "Simple construction shapes help place the drawing."),
+            q("🖊️ What does a contour line show?", "The edge of a shape|The sound of a colour|A person's age", "The edge of a shape", "Contour lines show important edges and boundaries."),
+            q("🏠 How can a drawing make a nearby house look closer?", "Draw it larger in the scene|Always make it tiny|Remove all overlap", "Draw it larger in the scene", "Size and overlap help suggest distance."),
+            q("✏️ Which tool is useful for a light first sketch?", "Pencil|Spoon|Thermometer", "Pencil", "A pencil allows light marks that can be changed."),
+            q("〰️ What does hatching use to make shading?", "Repeated lines|Only dots of glue|Water only", "Repeated lines", "Hatching uses repeated lines to suggest tone."),
+            q("⬜ What is negative space?", "The empty space around shapes|The darkest pencil|A glue bottle", "The empty space around shapes", "The empty spaces around shapes help us judge placement."),
+            q("🌄 What does a horizon line help show?", "Eye level in a landscape|The page's weight|A sound", "Eye level in a landscape", "The horizon line is often connected to the viewer's eye level."),
+            q("⚽ How can you make a shiny ball look round?", "Use a bright highlight and smooth shading|Use one flat line|Erase all light", "Use a bright highlight and smooth shading", "Highlights and smooth shading suggest a rounded shiny object."),
+            q("📏 What can help fix a drawing that looks too wide?", "Compare its height and width|Press harder|Stop looking at it", "Compare its height and width", "Comparing proportions helps correct a sketch."),
+            q("🧩 How does overlap help show depth?", "One shape hides part of another|All shapes must be separate|All shapes need equal size", "One shape hides part of another", "Overlap shows which object is in front.")
+        )
+        "english" -> listOf(
+            q("📖 Which word names a thing?", "Book|Quickly|Blue", "Book", "A noun can name a person, place, thing or idea."),
+            q("🏃 Which word tells an action?", "Run|Chair|Green", "Run", "A verb can tell an action."),
+            q("🌞 Which word means the opposite of hot?", "Cold|Warm|Sunny", "Cold", "Cold is an opposite of hot."),
+            q("❓ Which sentence asks a question?", "Where is my book?|My book is blue.|I have a book.", "Where is my book?", "A question asks for information."),
+            q("🔤 Which letter comes after A?", "B|D|Z", "B", "B follows A in the English alphabet."),
+            q("🐈 Which word rhymes with cat?", "Hat|Dog|Sun", "Hat", "Cat and hat share the same ending sound."),
+            q("🧩 Which word completes: I ___ happy.", "am|are|is", "am", "We say 'I am happy.'"),
+            q("🧱 Which word is an adjective in 'a red ball'?", "Red|Ball|A", "Red", "An adjective describes a noun."),
+            q("✉️ What mark often ends a statement?", "Full stop|Question mark every time|Comma only", "Full stop", "A full stop commonly ends a statement."),
+            q("📚 What helps you find a word's meaning?", "Dictionary|Compass|Thermometer", "Dictionary", "A dictionary explains words and their meanings.")
+        )
+        else -> emptyList()
+    }
     private val maths = listOf(
         q("🚀 Space-builder mission: rotate the floating cube and count its square faces. How many are there?", "4|6|8", "6", "A cube has six square faces, twelve edges and eight vertices."),
         q("🧊 Ice-robot challenge: a cube-shaped ice block is 3 cm on each side. What is its volume?", "9 cm³|18 cm³|27 cm³", "27 cm³", "Volume = side × side × side = 3 × 3 × 3 = 27 cm³."),
