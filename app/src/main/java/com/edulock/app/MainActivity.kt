@@ -289,6 +289,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var pairingChildName by remember { mutableStateOf("") }
     var pairingCodeExpiry by remember { mutableStateOf(0) }
     var earnedToday by remember { mutableStateOf(0) }
+    var childStreakDays by remember { mutableIntStateOf(0) }
     var activeTask by remember { mutableStateOf<TaskRow?>(null) }
     var questionIndex by remember { mutableStateOf(0) }
     var expandedFourDQuestionId by remember { mutableStateOf<String?>(null) }
@@ -919,6 +920,17 @@ private fun EduLockApp(repository: EduLockRepository) {
                     notice = "Today's educational game time is finished. Ask your parent to change the daily allowance."
                     break
                 }
+            }
+        }
+    }
+
+    LaunchedEffect(screen, childProfile?.id) {
+        val activeChildId = childProfile?.id
+        if (screen == AppScreen.CHILD_HOME && !activeChildId.isNullOrBlank()) {
+            try {
+                childStreakDays = repository.loadChildTaskStreak(activeChildId).first
+            } catch (_: Exception) {
+                childStreakDays = 0
             }
         }
     }
@@ -3352,6 +3364,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                     OutlinedButton(onClick = { openKidsDrawingStudio() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎨 Draw & colour • daily time limit") }
                     OutlinedButton(onClick = { openKids3DLab() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🪐 Explore 4D learning models • timed") }
                     OutlinedButton(onClick = { openSolarQuiz() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🚀 Play the 4D Solar System explorer • timed") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        SummaryCard("Minutes earned today", earnedToday.toString(), "Minutes available from completed tasks.")
+                        SummaryCard("Task streak", "$childStreakDays day${if (childStreakDays == 1) "" else "s"}", "Pass at least one task each day to build your streak.")
+                    }
                     AppUiText("Assigned tasks")
                     if (tasks.isEmpty()) AppUiText("No active tasks yet. Ask your parent to assign a task.")
                     tasks.forEach { task ->
