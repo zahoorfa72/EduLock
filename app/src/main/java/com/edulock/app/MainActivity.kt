@@ -101,6 +101,20 @@ private fun religionTrackForSubject(title: String): String? = when {
     else -> null
 }
 
+private fun learningTemplateCategories(countryCode: String): List<String> {
+    val common = listOf(
+        "Mathematics", "Physics", "Chemistry", "Biology", "General Science",
+        "English", "Social Studies", "Computer Skills", "Astronomy", "Geography",
+        "Health & Safety", "Art & Design", "Drawing & Colour", "Religious Education"
+    )
+    val localLanguageSubjects = when (countryCode.uppercase(Locale.ROOT)) {
+        "PK" -> listOf("Urdu", "Sindhi")
+        "IN" -> listOf("Hindi", "Urdu")
+        else -> emptyList()
+    }
+    return (common + localLanguageSubjects).distinct()
+}
+
 private enum class AppScreen {
     DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ, KIDS_GAMES, LEARNING_3D_LAB, DRAWING_STUDIO,
     SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
@@ -1782,7 +1796,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         modifier = Modifier.fillMaxWidth()
                     ) { AppUiText("🌌 Preview all interactive 3D learning models") }
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("Mathematics", "Physics", "Chemistry", "Biology", "General Science", "English", "Urdu", "Sindhi", "Hindi", "Social Studies", "Computer Skills", "Astronomy", "Geography", "Health & Safety", "Art & Design", "Drawing & Colour", "Religious Education")
+                        learningTemplateCategories(parentCountryCode)
                             .chunked(2).forEach { categories ->
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     categories.forEach { category ->
