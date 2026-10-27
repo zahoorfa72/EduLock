@@ -840,9 +840,8 @@ ParentLearningTemplate(
             options = listOf("Care and non-harm", "Waste and harm", "Ignoring all living things"), answer = "Care and non-harm",
             conceptKey = "faith:jain:care-for-life",
             solution = "Jain traditions strongly emphasise non-violence and careful treatment of living beings."
-        )
-
-        ,ParentLearningTemplate(
+        ),
+        ParentLearningTemplate(
             title = "اسلام: رمضان", category = "Religious Education", subjectTitle = "Islamic Studies",
             languageCode = "ur", questionType = "multiple_choice",
             prompt = "اسلام میں کس مہینے میں مسلمان روزہ رکھتے ہیں؟",
