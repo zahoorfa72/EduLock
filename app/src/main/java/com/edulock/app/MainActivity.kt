@@ -79,7 +79,7 @@ import java.time.LocalDate
 import java.util.Locale
 
 private enum class AppScreen {
-    DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ, KIDS_GAMES,
+    DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ, KIDS_GAMES, LEARNING_3D_LAB, DRAWING_STUDIO,
     SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
     REPORTS, ALLOWED_APPS, PROTECTION_STATUS, CHILD_LOCATIONS, APP_USAGE_REPORT, PLAY_TASK, TASK_RESULT
 }
@@ -92,6 +92,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var deviceMode by remember { mutableStateOf(devicePreferences.getString("mode", "unknown") ?: "unknown") }
     var screen by remember { mutableStateOf(if (deviceMode == "unknown") AppScreen.DEVICE_SETUP else AppScreen.AUTH) }
     var solarQuizReturnScreen by remember { mutableStateOf(AppScreen.PARENT_HOME) }
+    var selected3DModel by remember { mutableStateOf("solar-system") }
     // Never populate the UI from an unverified cached session.
     var session by remember { mutableStateOf<AuthSession?>(null) }
     var accountRole by remember { mutableStateOf("parent") }
