@@ -13,6 +13,11 @@ on:
 permissions:
   contents: read
 
+# Serialize schema pushes so two commits cannot apply the same migration concurrently.
+concurrency:
+  group: edulock-supabase-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
