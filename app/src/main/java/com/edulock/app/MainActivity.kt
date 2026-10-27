@@ -3365,8 +3365,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                     OutlinedButton(onClick = { openKids3DLab() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🪐 Explore 4D learning models • timed") }
                     OutlinedButton(onClick = { openSolarQuiz() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🚀 Play the 4D Solar System explorer • timed") }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        SummaryCard("Minutes earned today", earnedToday.toString(), "Minutes available from completed tasks.")
-                        SummaryCard("Task streak", "$childStreakDays day${if (childStreakDays == 1) "" else "s"}", "Pass at least one task each day to build your streak.")
+                        Column(Modifier.weight(1f)) {
+                            SummaryCard("Minutes earned today", earnedToday.toString(), "Minutes available from completed tasks.")
+                        }
+                        Column(Modifier.weight(1f)) {
+                            SummaryCard("Task streak", "$childStreakDays day${if (childStreakDays == 1) "" else "s"}", "Pass at least one task each day to build your streak.")
+                        }
                     }
                     AppUiText("My apps", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     if (allowedApps.none { it.enabled }) {
@@ -3399,6 +3403,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 if (task != null) {
                                                     execute {
                                                         val loadedQuestions = repository.loadQuestionsForTask(task.id, task.subjectId, task.questionCount)
+                                                        if (loadedQuestions.size != task.questionCount) throw IllegalStateException("This task is missing questions.")
                                                         val loadedTranslations = repository.loadQuestionTranslations(loadedQuestions.map { it.id })
                                                         activeTask = task
                                                         questions = loadedQuestions
@@ -3419,6 +3424,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             }
                                         },
                                         enabled = !busy,
+                                        modifier = Modifier.width(116.dp)
                                     ) { AppUiText(if (remaining <= 0) "Unlock" else "Open") }
                                 }
                             }
