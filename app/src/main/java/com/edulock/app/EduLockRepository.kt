@@ -1099,7 +1099,6 @@ class EduLockRepository(context: Context) {
             .putStringSet("blocked_packages", blocked)
             .putStringSet("app_daily_limits", appLimits)
             .putStringSet("app_weekly_schedules", weeklySchedules)
-            .putStringSet("app_weekly_schedules", weeklySchedules)
             .putStringSet("app_earned_minutes", appEarnedRules)
             .putInt("earned_minutes_today", earned)
             .putInt("daily_cap_minutes", child.dailyCapMinutes)
