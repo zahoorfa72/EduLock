@@ -255,6 +255,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     val context = LocalContext.current
 
     val scope = rememberCoroutineScope()
+
     val questionPicturePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedUri ->
         if (selectedUri != null) {
             questionPictureUri = selectedUri
@@ -289,6 +290,7 @@ private fun EduLockApp(repository: EduLockRepository) {
             }
         }
     }
+
     val devicePreferences = remember { context.getSharedPreferences("edulock_device_mode", Context.MODE_PRIVATE) }
     var deviceMode by remember { mutableStateOf(devicePreferences.getString("mode", "unknown") ?: "unknown") }
     var screen by remember { mutableStateOf(if (deviceMode == "unknown") AppScreen.DEVICE_SETUP else AppScreen.AUTH) }
