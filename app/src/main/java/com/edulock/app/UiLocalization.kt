@@ -1,9 +1,19 @@
 package com.edulock.app
 
+import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.Translator
+import com.google.mlkit.nl.translate.TranslatorOptions
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.tasks.await
+import java.util.concurrent.ConcurrentHashMap
 import androidx.compose.material3.Text
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -609,6 +619,62 @@ fun translateEduLockUiText(text: String, languageCode: String): String {
     return translated
 }
 
+/**
+ * On-device UI translation fallback for languages without a bundled dictionary.
+ * Translator/model clients are reused and translated strings cached for the process,
+ * avoiding repeated model downloads or repeated translation of the same label.
+ */
+private object EduLockUiAutoTranslator {
+    private val cache = ConcurrentHashMap<String, String>()
+    private val clients = ConcurrentHashMap<String, Translator>()
+    private val modelLocks = ConcurrentHashMap<String, Mutex>()
+    private val readyModels = ConcurrentHashMap.newKeySet<String>()
+
+    suspend fun translate(text: String, languageCode: String): String? {
+        if (text.isBlank() || languageCode.equals("en", true)) return text
+        val target = TranslateLanguage.fromLanguageTag(languageCode.lowercase().substringBefore('-')) ?: return null
+        val key = "$target\u0000$text"
+        cache[key]?.let { return it }
+        val translator = clients.getOrPut(target) {
+            Translation.getClient(
+                TranslatorOptions.Builder()
+                    .setSourceLanguage(TranslateLanguage.ENGLISH)
+                    .setTargetLanguage(target)
+                    .build()
+            )
+        }
+        if (readyModels.add(target)) {
+            try {
+                modelLocks.getOrPut(target) { Mutex() }.withLock {
+                    if (!readyModels.contains("ready:$target")) {
+                        translator.downloadModelIfNeeded(DownloadConditions.Builder().build()).await()
+                        readyModels.add("ready:$target")
+                    }
+                }
+            } catch (error: Exception) {
+                readyModels.remove(target)
+                return null
+            }
+        } else if (!readyModels.contains("ready:$target")) {
+            try {
+                modelLocks.getOrPut(target) { Mutex() }.withLock {
+                    if (!readyModels.contains("ready:$target")) {
+                        translator.downloadModelIfNeeded(DownloadConditions.Builder().build()).await()
+                        readyModels.add("ready:$target")
+                    }
+                }
+            } catch (error: Exception) {
+                return null
+            }
+        }
+        return try {
+            translator.translate(text).await().also { cache[key] = it }
+        } catch (_: Exception) {
+            null
+        }
+    }
+}
+
 @Composable
 fun AppUiText(
     text: String,
@@ -629,8 +695,19 @@ fun AppUiText(
     style: TextStyle = LocalTextStyle.current
 ) {
     val language = LocalEduLockDisplayLanguage.current
+    val translatedText = produceState(
+        initialValue = translateEduLockUiText(text, language),
+        key1 = text,
+        key2 = language
+    ) {
+        val bundled = translateEduLockUiText(text, language)
+        value = bundled
+        if (bundled == text && !language.equals("en", true)) {
+            value = EduLockUiAutoTranslator.translate(text, language) ?: text
+        }
+    }
     Text(
-        text = translateEduLockUiText(text, language),
+        text = translatedText.value,
         modifier = modifier,
         color = color,
         fontSize = fontSize,
