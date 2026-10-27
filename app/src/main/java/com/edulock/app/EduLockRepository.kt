@@ -656,15 +656,39 @@ class EduLockRepository(context: Context) {
 
         templates.distinctBy { it.conceptKey }.forEach { template ->
             val key = template.conceptKey.trim()
-            if (key.isEmpty() || key in existingConcepts) return@forEach
-
-            // Model matching is improved over time. Update the existing generated seed
-            // by its stable subject/index suffix instead of creating a duplicate question.
+            if (key.isEmpty()) return@forEach
             val wantedSuffix = generatedSeedSuffix(key)
+            val sameKeyIndex = existingRows.indexOfFirst { it.conceptKey == key }
+            if (sameKeyIndex >= 0) {
+                val current = existingRows[sameKeyIndex]
+                val changed = current.prompt != template.prompt ||
+                    current.questionType != template.questionType ||
+                    current.options != template.options ||
+                    !current.languageCode.equals(template.languageCode, ignoreCase = true)
+                // An existing generated question may need updated wording when the parent's
+                // child is in a different grade band. Keep its ID and history; update in place.
+                if (wantedSuffix != null && changed) {
+                    val payload = JSONObject()
+                        .put("prompt", template.prompt)
+                        .put("question_type", template.questionType)
+                        .put("options", JSONArray(template.options))
+                        .put("answer_key", JSONObject().put("answer", template.answer))
+                        .put("language_code", template.languageCode.trim().lowercase(Locale.ROOT))
+                    restArray("questions?id=eq.${current.id}", "PATCH", payload)
+                    if (template.solution.isNotBlank()) saveQuestionSolution(current.id, template.solution)
+                    existingRows[sameKeyIndex] = current.copy(
+                        prompt = template.prompt, questionType = template.questionType,
+                        options = template.options, languageCode = template.languageCode
+                    )
+                }
+                return@forEach
+            }
+            if (key in existingConcepts) return@forEach
+
+            // If a starter's visual-model tag changed, reuse the row with the same stable
+            // subject/index suffix, instead of inserting a duplicate.
             val legacyIndex = if (wantedSuffix == null) -1 else existingRows.indexOfFirst { row ->
-                row.conceptKey != key &&
-                    generatedSeedSuffix(row.conceptKey) == wantedSuffix &&
-                    row.conceptKey !in existingConcepts.minus(row.conceptKey)
+                row.conceptKey != key && generatedSeedSuffix(row.conceptKey) == wantedSuffix
             }
             if (legacyIndex >= 0) {
                 val legacy = existingRows[legacyIndex]
