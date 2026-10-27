@@ -197,7 +197,17 @@ fun Learning3DPreview(modelType: String) {
 }
 
 private fun learning3DHtml(modelType: String): String {
-    val model = modelType.lowercase().filter { it.isLetterOrDigit() || it == '-' }.ifBlank { "geometry" }
+    val rawModel = modelType.lowercase().filter { it.isLetterOrDigit() || it == '-' }.ifBlank { "geometry" }
+    val model = when (rawModel) {
+        "social-studies" -> "earth"
+        "computer-skills" -> "circuit"
+        "health-safety" -> "cell"
+        "art-design", "drawing-colour" -> "flower"
+        "english", "urdu", "sindhi", "hindi",
+        "faith-islamic", "faith-hindu", "faith-christian", "faith-sikh",
+        "faith-buddhist", "faith-jewish", "faith-jain", "faith-world" -> "book"
+        else -> rawModel
+    }
     val title: String
     val description: String
     val shape: String
@@ -276,10 +286,8 @@ private fun learning3DHtml(modelType: String): String {
 .circuit{width:140px;height:96px}.wire{position:absolute;background:#88c9ff;box-shadow:0 0 9px #77e3ff}.wire.top{left:20px;top:5px;width:100px;height:4px}.wire.right{right:17px;top:5px;width:4px;height:84px}.wire.bottom{left:20px;bottom:7px;width:100px;height:4px}.wire.left{left:17px;top:5px;width:4px;height:84px}.battery{position:absolute;left:10px;top:34px;width:18px;height:30px;background:linear-gradient(90deg,#e5efff,#8fa6d6);border:2px solid #fff;border-radius:3px}.lamp{position:absolute;right:7px;top:31px;width:24px;height:24px;border-radius:50%;background:radial-gradient(circle,#fff8bd,#ffd44c 54%,#ac7721);box-shadow:0 0 18px #ffd44c}.electron{position:absolute;width:9px;height:9px;border-radius:50%;background:#b8fdff;box-shadow:0 0 12px #70fff6;animation:electron 2.5s linear infinite}.e1{left:40px;top:1px}.e2{left:116px;top:63px;animation-delay:-.8s}.e3{left:57px;bottom:2px;animation-delay:-1.6s}
 @keyframes spin{to{transform:translate(-50%,-50%) rotateY(360deg) rotateX(22deg)}}@keyframes float{0%,100%{margin-top:0}50%{margin-top:-8px}}@keyframes electron{0%{transform:rotate(0deg) translateX(-42px)}100%{transform:rotate(360deg) translateX(-42px)}}@keyframes roll{0%,100%{left:30%;transform:rotate(0)}50%{left:63%;transform:rotate(320deg)}}@keyframes pulse{50%{transform:scale(1.2);opacity:.6}}@keyframes drift{0%{margin-left:-10px}50%{margin-left:15px}100%{margin-left:-10px}}@keyframes rain{0%{transform:translateY(-5px) rotate(25deg);opacity:0}35%{opacity:1}100%{transform:translateY(50px) rotate(25deg);opacity:0}}
 </style></head><body><div class="wrap"><div class="title">${title}</div><div class="stage" id="stage"><div class="star"></div><div class="model-root" id="model-root">${shape}</div></div>
-<div class="caption">${description} Drag with one finger to rotate; pinch with two fingers or use the +/− zoom buttons. Tap model parts to discover details and hear gentle sound cues.</div>
+<div class="caption">${description} Drag with one finger to rotate; pinch with two fingers to zoom. Tap model parts to discover details and hear gentle sound cues.</div>
 <div class="controls">
-<button id="zoom-out" aria-label="Zoom out">− Zoom</button>
-<button id="zoom-in" aria-label="Zoom in">+ Zoom</button>
 <button id="explode" aria-pressed="false">🧩 Explode parts</button>
 <button id="turn360">⟳ 360°</button>
 <button id="reset-view">Reset</button>
@@ -353,8 +361,6 @@ stage.addEventListener('pointerdown',e=>{activePointers.set(e.pointerId,{x:e.cli
 stage.addEventListener('pointermove',e=>{if(activePointers.has(e.pointerId))activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(activePointers.size>=2){const pts=[...activePointers.values()];const d=Math.max(1,Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y));zoom=Math.max(.55,Math.min(2.2,+(pinchStartZoom*d/Math.max(1,pinchStartDistance)).toFixed(2)));applyView(false);return;}if(!down)return;const dx=e.clientX-lastX,dy=e.clientY-lastY;if(Math.abs(dx)+Math.abs(dy)>2)dragged=true;angle+=dx;pitch=Math.max(-65,Math.min(65,pitch-dy*.65));lastX=e.clientX;lastY=e.clientY;stage.style.perspectiveOrigin=(50+angle*.05)+'% 50%';applyView(false)});
 function endPointer(e){activePointers.delete(e.pointerId);if(activePointers.size<2)pinchStartDistance=0;if(activePointers.size===0)down=false;}
 stage.addEventListener('pointerup',endPointer);stage.addEventListener('pointercancel',endPointer);
-document.getElementById('zoom-in').addEventListener('click',()=>{zoom=Math.min(2.2,+(zoom+.2).toFixed(2));applyView(true);playCue('tap')});
-document.getElementById('zoom-out').addEventListener('click',()=>{zoom=Math.max(.55,+(zoom-.2).toFixed(2));applyView(true);playCue('tap')});
 stage.querySelectorAll('[data-part],.component,[tabindex="0"]').forEach(el=>el.addEventListener('click',()=>playCue('tap')));
 document.getElementById('explode').addEventListener('click',function(){const state=stage.classList.toggle('exploded');this.setAttribute('aria-pressed',String(state));this.textContent=state?'🧩 Reassemble parts':'🧩 Explode parts';playCue('tap');detail.innerHTML=state?'<strong>Exploded view</strong><br>Components are separated for inspection. Tap each component for its name and explanation.':'<strong>Assembled view</strong><br>Components are back in their normal positions.';});
 document.getElementById('turn360').addEventListener('click',()=>{angle+=360;applyView(true);playCue('tap');detail.innerHTML='<strong>360° view</strong><br>Rotate vertically by dragging up/down, or drag sideways to inspect every side.'});
