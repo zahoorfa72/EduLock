@@ -415,6 +415,40 @@ private fun EduLockApp(repository: EduLockRepository) {
             "Device-administrator permission was not enabled. EduLock has not applied or reported that protection."
         }
     }
+    val launchPreferences = remember { context.getSharedPreferences("edulock_screen_time", Context.MODE_PRIVATE) }
+    LaunchedEffect(childProfile?.id, screen) {
+        val requestedTaskId = launchPreferences.getString("pending_task_id", null)
+        if (requestedTaskId != null && childProfile != null && screen == AppScreen.CHILD_HOME &&
+            repository.currentSession()?.accountRole == "child" && !busy) {
+            // Only consume a task after it is loaded and confirmed among the child's active tasks.
+            val target = tasks.firstOrNull { it.id == requestedTaskId && it.active }
+            if (target != null) {
+                launchPreferences.edit().remove("pending_task_id").apply()
+                execute {
+                    val subjectId = target.subjectId
+                        ?: throw IllegalStateException("This task has no subject. Ask your parent to repair it.")
+                    val loadedQuestions = repository.loadQuestions(subjectId, target.questionCount)
+                    if (loadedQuestions.size != target.questionCount) {
+                        throw IllegalStateException("This task needs " + target.questionCount + " questions, but only " + loadedQuestions.size + " are available. Ask your parent to repair the task.")
+                    }
+                    val loadedTranslations = repository.loadQuestionTranslations(loadedQuestions.map { it.id })
+                    questions = loadedQuestions
+                    questionTranslations = loadedTranslations
+                    answerLanguages = loadedQuestions.associate { item ->
+                        val preferred = childProfile?.preferredLanguage ?: item.languageCode
+                        val translated = loadedTranslations[item.id].orEmpty().any { it.languageCode.equals(preferred, ignoreCase = true) }
+                        item.id to if (translated) preferred.lowercase() else item.languageCode
+                    }
+                    activeTask = target
+                    questionIndex = 0
+                    answers = emptyMap()
+                    notice = "Screen-time target reached. Answer the learning task to earn more time."
+                    screen = AppScreen.PLAY_TASK
+                }
+            }
+        }
+    }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
