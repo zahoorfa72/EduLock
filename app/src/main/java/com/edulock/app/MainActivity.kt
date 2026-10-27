@@ -84,8 +84,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.Locale
 
-private suspend fun translateOnDevice(text: String, sourceCode: String, targetCode: String): String {
-    if (text.isBlank() || sourceCode.equals(targetCode, ignoreCase = true)) return text
+private suspend fun translateManyOnDevice(texts: List<String>, sourceCode: String, targetCode: String): List<String> {
+    if (sourceCode.equals(targetCode, ignoreCase = true)) return texts
     val source = TranslateLanguage.fromLanguageTag(sourceCode.trim())
         ?: throw IllegalArgumentException("The on-device translator does not support source language '$sourceCode'.")
     val target = TranslateLanguage.fromLanguageTag(targetCode.trim())
@@ -95,11 +95,14 @@ private suspend fun translateOnDevice(text: String, sourceCode: String, targetCo
     )
     return try {
         translator.downloadModelIfNeeded(DownloadConditions.Builder().build()).await()
-        translator.translate(text).await()
+        texts.map { value -> if (value.isBlank()) value else translator.translate(value).await() }
     } finally {
         translator.close()
     }
 }
+
+private suspend fun translateOnDevice(text: String, sourceCode: String, targetCode: String): String =
+    translateManyOnDevice(listOf(text), sourceCode, targetCode).first()
 
 private fun templateTranslationKey(template: ParentLearningTemplate): String =
     template.subjectTitle + "|" + template.conceptKey
@@ -108,17 +111,21 @@ private suspend fun translateTemplate(
     template: ParentLearningTemplate,
     targetCode: String
 ): ParentLearningTemplate {
-    val source = template.languageCode
+    val values = listOf(template.title, template.prompt) + template.options +
+        listOf(template.answer, template.solution) + template.materials + template.steps + listOf(template.safety)
+    val translated = translateManyOnDevice(values, template.languageCode, targetCode)
+    var index = 0
+    val title = translated[index++]
+    val prompt = translated[index++]
+    val options = translated.subList(index, index + template.options.size); index += template.options.size
+    val answer = translated[index++]
+    val solution = translated[index++]
+    val materials = translated.subList(index, index + template.materials.size); index += template.materials.size
+    val steps = translated.subList(index, index + template.steps.size); index += template.steps.size
+    val safety = translated[index]
     return template.copy(
-        title = translateOnDevice(template.title, source, targetCode),
-        prompt = translateOnDevice(template.prompt, source, targetCode),
-        options = template.options.map { translateOnDevice(it, source, targetCode) },
-        answer = translateOnDevice(template.answer, source, targetCode),
-        solution = translateOnDevice(template.solution, source, targetCode),
-        materials = template.materials.map { translateOnDevice(it, source, targetCode) },
-        steps = template.steps.map { translateOnDevice(it, source, targetCode) },
-        safety = translateOnDevice(template.safety, source, targetCode),
-        languageCode = targetCode
+        title = title, prompt = prompt, options = options, answer = answer, solution = solution,
+        materials = materials, steps = steps, safety = safety, languageCode = targetCode
     )
 }
 
@@ -1482,22 +1489,36 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 onClick = { screen = AppScreen.REPORTS; execute { attempts = repository.loadAttempts(); conceptProgress = repository.loadConceptProgress() } }
                             )
                         }
-                        DashboardIconTile(
-                            icon = "⚙️", title = "App settings", subtitle = "Country, languages, religion, limits and protection",
-                            accent = Color(0xFF4E5D75),
-                            onClick = {
-                                screen = AppScreen.APP_SETTINGS
-                                execute {
-                                    val prefs = repository.loadParentLearningSettings(familyId)
-                                    parentCountryCode = prefs.countryCode
-                                    parentLearningLanguageCode = prefs.learningLanguageCode
-                                    parentStudyTrack = prefs.studyTrack
-                                    parentDisplayLanguageCode = prefs.displayLanguageCode
-                                    context.getSharedPreferences("edulock_display_language", Context.MODE_PRIVATE).edit()
-                                        .putString("language", prefs.displayLanguageCode).apply()
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashboardIconTile(
+                                icon = "⚙️", title = "App settings", subtitle = "Country, languages, religion, limits and protection",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF4E5D75),
+                                onClick = {
+                                    screen = AppScreen.APP_SETTINGS
+                                    execute {
+                                        val prefs = repository.loadParentLearningSettings(familyId)
+                                        parentCountryCode = prefs.countryCode
+                                        parentLearningLanguageCode = prefs.learningLanguageCode
+                                        parentStudyTrack = prefs.studyTrack
+                                        parentDisplayLanguageCode = prefs.displayLanguageCode
+                                        context.getSharedPreferences("edulock_display_language", Context.MODE_PRIVATE).edit()
+                                            .putString("language", prefs.displayLanguageCode).apply()
+                                    }
                                 }
-                            }
-                        )
+                            )
+                            DashboardIconTile(
+                                icon = "🚪", title = "Log out", subtitle = "Safely sign out of this parent account",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF69758C),
+                                onClick = {
+                                    repository.signOut()
+                                    session = null
+                                    childProfile = null
+                                    screen = AppScreen.AUTH
+                                    isRegistering = false
+                                    notice = "You have been logged out."
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -2308,13 +2329,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         if (question.languageCode.equals(targetCode, ignoreCase = true)) {
                                             skipped++
                                         } else {
-                                            val translatedPrompt = translateOnDevice(question.prompt, question.languageCode, targetCode)
-                                            val translatedOptions = question.options.map { translateOnDevice(it, question.languageCode, targetCode) }
-                                            val translatedAnswer = if (question.options.isNotEmpty()) {
-                                                val answerIndex = question.options.indexOfFirst { it.equals(question.answer, ignoreCase = true) }
-                                                if (answerIndex >= 0) translatedOptions[answerIndex]
-                                                else translateOnDevice(question.answer, question.languageCode, targetCode)
-                                            } else translateOnDevice(question.answer, question.languageCode, targetCode)
+                                            val answerIndex = question.options.indexOfFirst { it.equals(question.answer, ignoreCase = true) }
+                                            val needsSeparateAnswer = answerIndex < 0
+                                            val sourceValues = listOf(question.prompt) + question.options +
+                                                if (needsSeparateAnswer) listOf(question.answer) else emptyList()
+                                            val translatedValues = translateManyOnDevice(sourceValues, question.languageCode, targetCode)
+                                            val translatedPrompt = translatedValues.first()
+                                            val translatedOptions = translatedValues.subList(1, 1 + question.options.size)
+                                            val translatedAnswer = if (answerIndex >= 0) translatedOptions[answerIndex]
+                                                else translatedValues.last()
                                             repository.saveQuestionTranslation(
                                                 question, targetCode, translatedPrompt, translatedOptions, listOf(translatedAnswer)
                                             )
