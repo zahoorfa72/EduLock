@@ -2314,19 +2314,21 @@ private fun EduLockApp(repository: EduLockRepository) {
                             AppUiText((if (selectedChild?.id == child.id) "✓ " else "") + child.displayName)
                         }
                     }
+                    val selectedTaskCountry = selectedChild?.countryCode ?: parentCountryCode
+                    val selectedChildTrack = selectedChild?.studyTrack ?: "none"
                     AppUiText(
-                        "Country curriculum: " + displayCountryName(parentCountryCode) +
-                            " • Religious education: " + studyTrackLabel(parentStudyTrack),
+                        "Country curriculum: " + displayCountryName(selectedTaskCountry) +
+                            " • Child's religious education: " + studyTrackLabel(selectedChildTrack),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
                     AppUiText("Choose a subject")
                     val assignableSubjects = subjects.filter { subject ->
                         val religionTrack = religionTrackForSubject(subject.title)
-                        val isCountrySubject = subject.countryCode.equals(parentCountryCode, ignoreCase = true) ||
+                        val isCountrySubject = subject.countryCode.equals(selectedTaskCountry, ignoreCase = true) ||
                             subject.countryCode.equals("ZZ", ignoreCase = true)
                         isCountrySubject && (religionTrack == null ||
-                            (parentStudyTrack != "none" && religionTrack == parentStudyTrack))
+                            (selectedChildTrack != "none" && religionTrack == selectedChildTrack))
                     }
                     if (assignableSubjects.isEmpty()) {
                         AppUiText("No matching subjects yet. Open the country-specific learning templates, add a subject, then return here to assign its task.")
