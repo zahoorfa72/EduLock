@@ -925,6 +925,19 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Text(if (isRegistering) "Create a parent account to manage learning, games and screen time." else "Sign in to continue managing your family.", style = MaterialTheme.typography.bodyMedium)
                     if (isRegistering) {
                         Field(displayName, { displayName = it }, "Parent name")
+                        OutlinedButton(onClick = { countryPickerTarget = "parent"; countrySearch = ""; countryPickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text("🌍 Curriculum country: " + displayCountryName(parentCountryCode))
+                        }
+                        OutlinedButton(onClick = { languagePickerTarget = "parent-learning"; languageSearch = ""; languagePickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text("📚 Preferred lesson language: " + languageLabel(parentLearningLanguageCode))
+                        }
+                        OutlinedButton(onClick = { studyTrackPickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text("🕊 Religious-education preference: " + studyTrackLabel(parentStudyTrack))
+                        }
+                        OutlinedButton(onClick = { languagePickerTarget = "display"; languageSearch = ""; languagePickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text("🌐 App display language: " + languageLabel(parentDisplayLanguageCode))
+                        }
+                        Text("You can change these choices later in Family learning settings. Country is chosen by you, never inferred from location.")
                     }
                     Field(email, { email = it }, "Parent email", keyboardType = KeyboardType.Email)
                     Field(password, { password = it }, "Password (minimum 8 characters)", password = true)
