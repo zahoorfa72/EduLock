@@ -151,6 +151,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var subjectTitle by remember { mutableStateOf("") }
     var subjectLanguage by remember { mutableStateOf("en") }
     var questionPrompt by remember { mutableStateOf("") }
+    var question3DModel by remember { mutableStateOf("none") }
     var questionType by remember { mutableStateOf("multiple_choice") }
     var questionOptions by remember { mutableStateOf("") }
     var questionAnswer by remember { mutableStateOf("") }
@@ -1356,6 +1357,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 }
                                 Text("Question preview", fontWeight = FontWeight.Bold)
                                 if (template.conceptKey == "solar-system-planet-id") SolarSystemModelPreview()
+                                else if (template.conceptKey.startsWith("3d:")) {
+                                    val model = template.conceptKey.removePrefix("3d:").substringBefore(":")
+                                    if (model == "solar-system") SolarSystemModelPreview() else Learning3DPreview(model)
+                                }
                                 Text(template.prompt)
                                 if (template.options.isNotEmpty()) {
                                     Text("Answer choices: " + template.options.joinToString(" • "))
@@ -1380,11 +1385,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
                                             questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
                                             questionPrompt = template.prompt
+                                            question3DModel = if (template.conceptKey.startsWith("3d:"))
+                                                template.conceptKey.removePrefix("3d:").substringBefore(":") else "none"
                                             questionType = template.questionType
                                             questionOptions = template.options.joinToString("\n")
                                             questionAnswer = template.answer
                                             questionLanguage = template.languageCode
-                                            questionConceptKey = template.conceptKey
+                                            questionConceptKey = if (template.conceptKey.startsWith("3d:"))
+                                                template.conceptKey.removePrefix("3d:").substringAfter(":").substringAfter(":")
+                                            else template.conceptKey
                                             questionSolution = buildString {
                                                 append(template.solution)
                                                 if (template.materials.isNotEmpty()) {
@@ -1445,6 +1454,21 @@ private fun EduLockApp(repository: EduLockRepository) {
                             questionSolution = ""
                             screen = AppScreen.ADD_QUESTION
                         }, modifier = Modifier.fillMaxWidth()) { Text("Add question") }
+                        OutlinedButton(
+                            onClick = {
+                                questionPrompt = ""
+                                questionOptions = ""
+                                questionAnswer = ""
+                                questionSolution = ""
+                                questionConceptKey = "custom-3d-question"
+                                questionLanguage = subject.languageCode
+                                question3DModel = "atom"
+                                questionType = "multiple_choice"
+                                screen = AppScreen.ADD_QUESTION
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("✨ Create a custom interactive 3D question") }
                         if (questions.isEmpty()) Text("No questions yet.")
                         questions.forEachIndexed { index, question ->
                             CompositionLocalProvider(LocalLayoutDirection provides directionFor(question.languageCode)) {
@@ -1481,6 +1505,34 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.ADD_QUESTION -> ScreenFrame("Add question", onBack = { screen = AppScreen.QUESTIONS }, notice = notice, busy = busy) {
                     val lang = questionLanguage
                     Text("Question language: " + lang + ". Type in Urdu, Sindhi, English or another Unicode language.")
+                    Text("Optional interactive 3D model", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Choose a model to attach a touch-friendly learning visual to your question.")
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(
+                            "none" to "No model",
+                            "atom" to "⚛ Atom",
+                            "molecule" to "🧪 Molecule",
+                            "geometry" to "📐 3D shapes",
+                            "cell" to "🧬 Cell",
+                            "force" to "🏀 Forces",
+                            "water-cycle" to "🌧 Water cycle",
+                            "earth" to "🌍 Earth",
+                            "circuit" to "⚡ Circuit",
+                            "solar-system" to "🪐 Solar System"
+                        ).chunked(2).forEach { group ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                group.forEach { (model, label) ->
+                                    OutlinedButton(onClick = { question3DModel = model }, enabled = !busy, modifier = Modifier.weight(1f)) {
+                                        Text(if (question3DModel == model) "✓ $label" else label)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (question3DModel != "none") {
+                        if (question3DModel == "solar-system") SolarSystemModelPreview()
+                        else Learning3DPreview(question3DModel)
+                    }
                     CompositionLocalProvider(LocalLayoutDirection provides directionFor(lang)) {
                         Field(questionPrompt, { questionPrompt = it }, "Question prompt")
                         Field(questionConceptKey, { questionConceptKey = it }, "Concept tag (reuse for same idea across questions)")
@@ -1507,7 +1559,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                         execute {
                             val subject = selectedSubject ?: throw IllegalStateException("Choose a subject first.")
                             val options = questionOptions.lines().map { it.trim() }.filter { it.isNotEmpty() }
-                            repository.addQuestion(subject.id, questionPrompt, questionType, options, questionAnswer, questionLanguage, questionConceptKey, questionSolution)
+                            val savedConceptKey = if (question3DModel == "none") questionConceptKey else "3d:$question3DModel:$questionConceptKey"
+                            repository.addQuestion(subject.id, questionPrompt, questionType, options, questionAnswer, questionLanguage, savedConceptKey, questionSolution)
                             questions = repository.loadQuestions(subject.id)
                             questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
                             questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
@@ -2263,6 +2316,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                         LinearProgressIndicator(progress = { (questionIndex + 1).toFloat() / questions.size.toFloat() }, modifier = Modifier.fillMaxWidth())
                         Text("Concept: " + question.conceptKey, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         if (question.conceptKey == "solar-system-planet-id") SolarSystemModelPreview()
+                        else if (question.conceptKey.startsWith("3d:")) {
+                            val model = question.conceptKey.removePrefix("3d:").substringBefore(":")
+                            if (model == "solar-system") SolarSystemModelPreview() else Learning3DPreview(model)
+                        }
                         Text("Try this same concept in another language:", style = MaterialTheme.typography.bodyMedium)
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             languageOptions.forEach { lang ->

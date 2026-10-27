@@ -147,3 +147,97 @@ requestAnimationFrame(frame);
 </body>
 </html>
 """.trimIndent()
+
+
+@Composable
+fun Learning3DPreview(modelType: String) {
+    AndroidView(
+        modifier = Modifier.fillMaxWidth().height(230.dp),
+        factory = { ctx ->
+            WebView(ctx).apply {
+                setBackgroundColor(android.graphics.Color.rgb(7, 12, 34))
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = false
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                settings.setSupportZoom(false)
+                webViewClient = WebViewClient()
+                tag = modelType
+                loadDataWithBaseURL("https://edulock.local/", learning3DHtml(modelType), "text/html", "UTF-8", null)
+            }
+        },
+        update = { view ->
+            if (view.tag != modelType) {
+                view.tag = modelType
+                view.loadDataWithBaseURL("https://edulock.local/", learning3DHtml(modelType), "text/html", "UTF-8", null)
+            }
+        }
+    )
+}
+
+private fun learning3DHtml(modelType: String): String {
+    val model = modelType.lowercase().filter { it.isLetterOrDigit() || it == '-' }.ifBlank { "geometry" }
+    val title: String
+    val description: String
+    val shape: String
+    when (model) {
+        "atom" -> {
+            title = "Atom explorer"; description = "The nucleus is central, with electron paths around it."
+            shape = """<div class="atom"><div class="nucleus"></div><div class="orbit orbit1"><b></b></div><div class="orbit orbit2"><b></b></div><div class="orbit orbit3"><b></b></div></div>"""
+        }
+        "molecule" -> {
+            title = "Molecule explorer"; description = "Atoms connect through bonds; red represents oxygen."
+            shape = """<div class="molecule"><i class="bond b1"></i><i class="bond b2"></i><b class="sphere oxygen"></b><b class="sphere hydrogen h1"></b><b class="sphere hydrogen h2"></b></div>"""
+        }
+        "geometry" -> {
+            title = "3D geometry lab"; description = "Rotate the cube to inspect its faces, edges and vertices."
+            shape = """<div class="cube"><i class="face front"></i><i class="face back"></i><i class="face right"></i><i class="face left"></i><i class="face top"></i><i class="face bottom"></i></div><div class="shape-label">CUBE · 6 FACES</div>"""
+        }
+        "cell" -> {
+            title = "Cell explorer"; description = "Illustrative animal cell with membrane, nucleus and organelles."
+            shape = """<div class="cell"><b class="membrane"></b><b class="cell-nucleus"></b><i class="organelle o1"></i><i class="organelle o2"></i><i class="organelle o3"></i><i class="organelle o4"></i></div>"""
+        }
+        "force" -> {
+            title = "Forces and motion"; description = "A moving ball and arrows illustrate motion and force."
+            shape = """<div class="ramp"></div><div class="ball"></div><div class="arrow arrow1">➜</div><div class="arrow arrow2">⬆</div>"""
+        }
+        "water-cycle" -> {
+            title = "Water-cycle explorer"; description = "Water evaporates, cools and returns as precipitation."
+            shape = """<div class="sun"></div><div class="cloud cloud1"></div><div class="cloud cloud2"></div><div class="drop d1"></div><div class="drop d2"></div><div class="drop d3"></div><div class="ocean"></div><div class="vapour"></div>"""
+        }
+        "earth" -> {
+            title = "Earth explorer"; description = "A rotating globe illustrates the day/night cycle."
+            shape = """<div class="earth"><i class="land l1"></i><i class="land l2"></i><i class="land l3"></i><i class="atmosphere"></i></div>"""
+        }
+        "circuit" -> {
+            title = "Circuit explorer"; description = "Animated current demonstrates a closed electric circuit."
+            shape = """<div class="circuit"><i class="wire top"></i><i class="wire right"></i><i class="wire bottom"></i><i class="wire left"></i><b class="battery"></b><b class="lamp"></b><i class="electron e1"></i><i class="electron e2"></i><i class="electron e3"></i></div>"""
+        }
+        else -> {
+            title = "3D learning model"; description = "Touch and drag the model; use its shapes to answer the question."
+            shape = """<div class="cube"><i class="face front"></i><i class="face back"></i><i class="face right"></i><i class="face left"></i><i class="face top"></i><i class="face bottom"></i></div>"""
+        }
+    }
+    return """
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#070c22;color:#f5f7ff;font-family:system-ui,sans-serif}
+.wrap{padding:8px}.stage{height:178px;position:relative;overflow:hidden;border:1px solid #344476;border-radius:16px;background:radial-gradient(ellipse at 50% 40%,#283d77,#0a112f 72%);perspective:700px;touch-action:pan-y}
+.star{position:absolute;width:2px;height:2px;border-radius:50%;background:#dce7ff;box-shadow:30px 26px #dce7ff,72px 93px #9db4f5,145px 20px #fff,210px 120px #dce7ff,260px 46px #8faaff,330px 85px #fff,385px 27px #dce7ff,410px 135px #b5c5ff}
+.caption{padding:7px 3px 2px;color:#bfd0ff;font-size:12px;line-height:1.4}.title{font-size:14px;font-weight:800;color:#f7f4ff}
+.atom,.molecule,.cube,.cell,.earth,.circuit{position:absolute;left:50%;top:49%;transform:translate(-50%,-50%);transform-style:preserve-3d}
+.atom{width:128px;height:110px;animation:float 4s ease-in-out infinite}.nucleus{position:absolute;left:54px;top:44px;width:25px;height:25px;border-radius:50%;background:radial-gradient(circle at 30% 25%,#ffc2ba,#e64756 42%,#67184f);box-shadow:0 0 19px #f05c9b}
+.orbit{position:absolute;left:9px;top:24px;width:110px;height:60px;border:2px solid #65d9ff;border-radius:50%;transform-style:preserve-3d}.orbit1{transform:rotateX(65deg) rotateZ(22deg)}.orbit2{transform:rotateX(65deg) rotateZ(82deg)}.orbit3{transform:rotateX(65deg) rotateZ(143deg)}.orbit b{position:absolute;left:90%;top:18%;width:12px;height:12px;background:radial-gradient(circle at 30% 20%,white,#46c8ff 55%,#1e53a8);border-radius:50%;box-shadow:0 0 12px #42d6ff;animation:electron 2s linear infinite}.orbit2 b{animation-delay:-.65s}.orbit3 b{animation-delay:-1.2s}
+.molecule{width:175px;height:118px;animation:float 4s ease-in-out infinite}.sphere{position:absolute;border-radius:50%;box-shadow:inset -10px -10px 15px #02061766,0 0 16px #b6ccff44}.oxygen{width:56px;height:56px;left:60px;top:28px;background:radial-gradient(circle at 28% 22%,#fff0ed,#f14f57 48%,#8d193b)}.hydrogen{width:35px;height:35px;background:radial-gradient(circle at 28% 20%,white,#d8e2ed 55%,#61718d)}.h1{left:22px;top:66px}.h2{left:119px;top:66px}.bond{position:absolute;width:58px;height:9px;background:linear-gradient(#c8e2fc,#4a6d98);top:70px;border-radius:9px;transform-style:preserve-3d}.b1{left:34px;transform:rotate(36deg)}.b2{left:91px;transform:rotate(-36deg)}
+.cube{width:94px;height:94px;animation:spin 9s linear infinite}.face{position:absolute;width:94px;height:94px;border:2px solid #e6edff;background:linear-gradient(135deg,#7a64ffb8,#24c6dc73);box-shadow:inset 0 0 25px #d9e4ff30}.front{transform:translateZ(47px)}.back{transform:rotateY(180deg) translateZ(47px)}.right{transform:rotateY(90deg) translateZ(47px)}.left{transform:rotateY(-90deg) translateZ(47px)}.top{transform:rotateX(90deg) translateZ(47px)}.bottom{transform:rotateX(-90deg) translateZ(47px)}.shape-label{position:absolute;top:83%;left:50%;transform:translateX(-50%);font-size:10px;font-weight:900;letter-spacing:.12em;color:#c3d5ff}
+.cell{width:146px;height:105px;animation:spin 17s linear infinite}.membrane{position:absolute;left:3px;top:5px;width:140px;height:95px;border:5px solid #8ce5d4;border-radius:50%;background:radial-gradient(ellipse at 35% 28%,#51dbc955,#8a64ec66,#162556aa);box-shadow:0 0 16px #5ddfc688}.cell-nucleus{position:absolute;left:54px;top:32px;width:37px;height:37px;border-radius:50%;background:radial-gradient(circle at 30% 20%,#ffd3fa,#ad52d4 55%,#602a9e);border:2px solid #e2aeff}.organelle{position:absolute;width:22px;height:11px;border-radius:50%;background:linear-gradient(90deg,#ffc16b,#f46c5f);border:1px solid #ffe2ac}.o1{left:20px;top:36px}.o2{left:91px;top:58px;transform:rotate(-25deg)}.o3{left:40px;top:74px;transform:rotate(20deg)}.o4{left:100px;top:24px}
+.ramp{position:absolute;left:24%;top:56%;width:58%;height:9px;background:linear-gradient(90deg,#8eeaff,#8f78ff);transform:rotate(-20deg);border-radius:9px;box-shadow:0 0 15px #59bffb}.ball{position:absolute;left:34%;top:29%;width:33px;height:33px;border-radius:50%;background:radial-gradient(circle at 28% 23%,#ffd7a0,#ff923d 48%,#ad3c23);box-shadow:0 0 15px #ff995566;animation:roll 3s ease-in-out infinite}.arrow{position:absolute;color:#b6f6e2;font-size:30px;font-weight:900;text-shadow:0 0 10px #5df8c5}.arrow1{left:58%;top:12%;animation:pulse 1.3s ease-in-out infinite}.arrow2{left:76%;top:42%;color:#ffcc74}
+.sun{position:absolute;left:13%;top:14%;width:31px;height:31px;border-radius:50%;background:radial-gradient(circle at 25% 25%,#fff9bd,#ffb84d 65%,#e96739);box-shadow:0 0 24px #ffb84d}.cloud{position:absolute;width:73px;height:27px;border-radius:20px;background:#e3eeff;box-shadow:inset 0 -6px #a3bbed}.cloud:before,.cloud:after{content:'';position:absolute;border-radius:50%;background:#e3eeff}.cloud:before{width:30px;height:30px;top:-14px;left:10px}.cloud:after{width:38px;height:35px;top:-17px;right:7px}.cloud1{left:48%;top:24%;animation:drift 6s linear infinite}.cloud2{left:18%;top:43%;transform:scale(.65);opacity:.9}.drop{position:absolute;width:8px;height:15px;background:linear-gradient(#a9efff,#388df4);border-radius:70% 25% 70% 70%;transform:rotate(25deg);animation:rain 1.4s ease-in infinite}.d1{left:58%;top:42%}.d2{left:68%;top:48%;animation-delay:-.4s}.d3{left:75%;top:40%;animation-delay:-.8s}.ocean{position:absolute;bottom:-19px;left:0;width:100%;height:55px;border-radius:48% 48% 0 0;background:linear-gradient(#21b8e6,#1857b9)}.vapour{position:absolute;left:23%;bottom:23%;width:20px;height:34px;border-left:3px dashed #d5f8ff}
+.earth{width:116px;height:116px;border-radius:50%;overflow:hidden;background:radial-gradient(circle at 30% 24%,#a7f8ff 0%,#3899f5 28%,#1750ba 65%,#08184c 100%);box-shadow:inset -18px -7px 22px #030924b8,0 0 17px #5fb5ff88;animation:spin 14s linear infinite}.land{position:absolute;background:linear-gradient(120deg,#7cf1a2,#1c9865);border-radius:48% 30% 55% 45%;box-shadow:inset -3px -4px 5px #0a553f99}.l1{width:36px;height:48px;left:25px;top:20px;transform:rotate(22deg)}.l2{width:25px;height:37px;left:58px;top:57px;transform:rotate(-17deg)}.l3{width:29px;height:21px;left:70px;top:21px;transform:rotate(15deg)}.atmosphere{position:absolute;inset:-4px;border:3px solid #88dfff;border-radius:50%;box-shadow:0 0 13px #5ec9ff}
+.circuit{width:140px;height:96px}.wire{position:absolute;background:#88c9ff;box-shadow:0 0 9px #77e3ff}.wire.top{left:20px;top:5px;width:100px;height:4px}.wire.right{right:17px;top:5px;width:4px;height:84px}.wire.bottom{left:20px;bottom:7px;width:100px;height:4px}.wire.left{left:17px;top:5px;width:4px;height:84px}.battery{position:absolute;left:10px;top:34px;width:18px;height:30px;background:linear-gradient(90deg,#e5efff,#8fa6d6);border:2px solid #fff;border-radius:3px}.lamp{position:absolute;right:7px;top:31px;width:24px;height:24px;border-radius:50%;background:radial-gradient(circle,#fff8bd,#ffd44c 54%,#ac7721);box-shadow:0 0 18px #ffd44c}.electron{position:absolute;width:9px;height:9px;border-radius:50%;background:#b8fdff;box-shadow:0 0 12px #70fff6;animation:electron 2.5s linear infinite}.e1{left:40px;top:1px}.e2{left:116px;top:63px;animation-delay:-.8s}.e3{left:57px;bottom:2px;animation-delay:-1.6s}
+@keyframes spin{to{transform:translate(-50%,-50%) rotateY(360deg) rotateX(22deg)}}@keyframes float{0%,100%{margin-top:0}50%{margin-top:-8px}}@keyframes electron{0%{transform:rotate(0deg) translateX(-42px)}100%{transform:rotate(360deg) translateX(-42px)}}@keyframes roll{0%,100%{left:30%;transform:rotate(0)}50%{left:63%;transform:rotate(320deg)}}@keyframes pulse{50%{transform:scale(1.2);opacity:.6}}@keyframes drift{0%{margin-left:-10px}50%{margin-left:15px}100%{margin-left:-10px}}@keyframes rain{0%{transform:translateY(-5px) rotate(25deg);opacity:0}35%{opacity:1}100%{transform:translateY(50px) rotate(25deg);opacity:0}}
+</style></head><body><div class="wrap"><div class="title">${title}</div><div class="stage" id="stage"><div class="star"></div>${shape}</div><div class="caption">${description} Touch the scene to spin the model.</div></div>
+<script>(function(){const stage=document.getElementById('stage');let down=false,lastX=0,angle=0;stage.addEventListener('pointerdown',e=>{down=true;lastX=e.clientX;stage.setPointerCapture(e.pointerId)});stage.addEventListener('pointermove',e=>{if(!down)return;angle+=e.clientX-lastX;lastX=e.clientX;stage.style.perspectiveOrigin=(50+angle*.12)+'% 50%';const model=stage.querySelector('.cube,.atom,.molecule,.cell,.earth,.circuit');if(model){model.style.animationPlayState='paused';model.style.transform='translate(-50%,-50%) rotateY('+angle+'deg) rotateX('+(angle*.35)+'deg)'}});stage.addEventListener('pointerup',()=>{down=false});stage.addEventListener('pointercancel',()=>{down=false});})();</script>
+</body></html>
+""".trimIndent()
+}
