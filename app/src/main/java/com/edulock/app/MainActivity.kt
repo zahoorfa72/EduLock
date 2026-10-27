@@ -431,6 +431,27 @@ private fun EduLockApp(repository: EduLockRepository) {
         }
     }
 
+    fun openKids3DLab() {
+        val learner = childProfile
+        if (learner == null) {
+            selected3DModel = "solar-system"
+            solarQuizReturnScreen = AppScreen.PARENT_HOME
+            screen = AppScreen.LEARNING_3D_LAB
+            notice = null
+            return
+        }
+        kidsGameSecondsRemaining = remainingKidsGameSeconds(learner)
+        if (kidsGameSecondsRemaining <= 0) {
+            screen = AppScreen.KIDS_GAMES
+            notice = "Today's educational game time is finished. Ask your parent to change the daily allowance."
+        } else {
+            selected3DModel = "solar-system"
+            solarQuizReturnScreen = AppScreen.CHILD_HOME
+            screen = AppScreen.LEARNING_3D_LAB
+            notice = null
+        }
+    }
+
     fun execute(action: suspend () -> Unit) {
         scope.launch {
             busy = true
@@ -635,11 +656,13 @@ private fun EduLockApp(repository: EduLockRepository) {
     LaunchedEffect(screen, childProfile?.id) {
         val learner = childProfile
         val isChildSolarGame = screen == AppScreen.SOLAR_SYSTEM_QUIZ && solarQuizReturnScreen == AppScreen.CHILD_HOME
+        val isChild3DLab = screen == AppScreen.LEARNING_3D_LAB && solarQuizReturnScreen == AppScreen.CHILD_HOME
         val isChildDrawingGame = screen == AppScreen.DRAWING_STUDIO && learner != null
-        if ((screen == AppScreen.KIDS_GAMES || isChildSolarGame || isChildDrawingGame) && learner != null) {
+        if ((screen == AppScreen.KIDS_GAMES || isChildSolarGame || isChild3DLab || isChildDrawingGame) && learner != null) {
             val prefs = context.getSharedPreferences("edulock_kids_games", Context.MODE_PRIVATE)
             while ((screen == AppScreen.KIDS_GAMES ||
                     (screen == AppScreen.SOLAR_SYSTEM_QUIZ && solarQuizReturnScreen == AppScreen.CHILD_HOME) ||
+                    (screen == AppScreen.LEARNING_3D_LAB && solarQuizReturnScreen == AppScreen.CHILD_HOME) ||
                     (screen == AppScreen.DRAWING_STUDIO && childProfile?.id == learner.id)) &&
                 childProfile?.id == learner.id) {
                 delay(1000)
@@ -798,7 +821,7 @@ private fun EduLockApp(repository: EduLockRepository) {
             AppScreen.SOLAR_SYSTEM_QUIZ -> solarQuizReturnScreen
             AppScreen.KIDS_GAMES -> AppScreen.CHILD_HOME
             AppScreen.APP_SETTINGS -> AppScreen.PARENT_HOME
-            AppScreen.LEARNING_3D_LAB -> AppScreen.PARENT_HOME
+            AppScreen.LEARNING_3D_LAB -> if (solarQuizReturnScreen == AppScreen.CHILD_HOME) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME
             AppScreen.DRAWING_STUDIO -> if (childProfile != null) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME
         }
         notice = null
@@ -2526,6 +2549,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                     Button(onClick = { openKidsGames() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎮  Learning Games • daily time limit") }
                     OutlinedButton(onClick = { openKidsDrawingStudio() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎨 Draw & colour • daily time limit") }
+                    OutlinedButton(onClick = { openKids3DLab() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🪐 Explore 3D learning models • timed") }
                     OutlinedButton(onClick = { openSolarQuiz() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🚀 Play the 3D Solar System planet quiz • timed") }
                     SummaryCard("Learning rewards earned today", earnedToday.toString() + " minutes", "Successful tasks add reward minutes. Rewards are tracked separately from app access.")
                     SummaryCard(
@@ -2959,11 +2983,17 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                 }
 
-                AppScreen.LEARNING_3D_LAB -> ScreenFrame("3D Learning Lab", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
+                AppScreen.LEARNING_3D_LAB -> ScreenFrame("3D Learning Lab", onBack = { screen = if (solarQuizReturnScreen == AppScreen.CHILD_HOME) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
+                    if (solarQuizReturnScreen == AppScreen.CHILD_HOME) {
+                        AppUiText("Your educational game time left today: " + (kidsGameSecondsRemaining / 60) + " min " + (kidsGameSecondsRemaining % 60) + " sec.")
+                    }
                     Learning3DLabScreen(
                         selectedModel = selected3DModel,
                         onSelectModel = { selected3DModel = it },
-                        onStartSolarQuiz = { solarQuizReturnScreen = AppScreen.LEARNING_3D_LAB; screen = AppScreen.SOLAR_SYSTEM_QUIZ },
+                        onStartSolarQuiz = {
+                            solarQuizReturnScreen = if (solarQuizReturnScreen == AppScreen.CHILD_HOME) AppScreen.CHILD_HOME else AppScreen.LEARNING_3D_LAB
+                            screen = AppScreen.SOLAR_SYSTEM_QUIZ
+                        },
                         onCreateQuestion = { option ->
                             execute {
                                 val targetSubject = repository.findOrCreateSubject(familyId, option.subject, "en", parentCountryCode)
