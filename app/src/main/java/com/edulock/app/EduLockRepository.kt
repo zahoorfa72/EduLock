@@ -1249,16 +1249,15 @@ class EduLockRepository(context: Context) {
         val launchPrefs = prefs.edit()
         if (pendingTask != null && pendingTask !in activeTaskIds) launchPrefs.remove("pending_task_id")
         launchPrefs
-            .putStringSet(
-                "app_daily_limits",
-                appLimits + if (activeTaskIds.isEmpty()) emptySet() else setOf("screen_time_task_id=" + activeTaskIds.first())
-            )
             .putBoolean("child_active", true)
             .putString("child_id", child.id)
             .putBoolean("kids_mode_enabled", lockdownMode)
             .putStringSet("allowed_packages", allowed)
             .putStringSet("blocked_packages", blocked)
-            .putStringSet("app_daily_limits", appLimits)
+            .putStringSet(
+                "app_daily_limits",
+                appLimits + if (activeTaskIds.isEmpty()) emptySet() else setOf("screen_time_task_id=" + activeTaskIds.first())
+            )
             .putStringSet("app_weekly_schedules", weeklySchedules)
             .putStringSet("app_earned_minutes", appEarnedRules)
             .putInt("earned_minutes_today", earned)
