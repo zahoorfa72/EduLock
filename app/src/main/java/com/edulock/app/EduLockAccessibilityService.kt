@@ -13,6 +13,10 @@ import android.content.Intent
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.view.inputmethod.InputMethodManager
+import android.content.IntentFilter
+import android.os.BatteryManager
+import java.util.concurrent.Executors
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
@@ -31,6 +35,10 @@ class EduLockAccessibilityService : AccessibilityService() {
     private var lastPackage = ""
     private var lastEventAt = 0L
     private var blockedPackageName = ""
+    private var blockedAppEvents = 0
+    private var lastStatusReportAt = 0L
+    private val statusExecutor = Executors.newSingleThreadExecutor()
+    private val statusReportInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
 
     private val ticker = object : Runnable {
         override fun run() {
@@ -39,6 +47,10 @@ class EduLockAccessibilityService : AccessibilityService() {
             accountForegroundUsage(now)
             val current = lastPackage
             if (current.isNotBlank()) applyRestriction(current)
+            if (now - lastStatusReportAt >= STATUS_REPORT_INTERVAL_MS) {
+                lastStatusReportAt = now
+                reportLiveStatus()
+            }
             handler.postDelayed(this, TICK_MILLIS)
         }
     }
@@ -77,6 +89,7 @@ class EduLockAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(ticker)
         lockPrefs().edit().putLong(KEY_LAST_SERVICE_TICK_AT, 0L).apply()
         hideBlocker()
+        statusExecutor.shutdown()
         super.onDestroy()
     }
 
@@ -130,6 +143,7 @@ class EduLockAccessibilityService : AccessibilityService() {
         val prefs = lockPrefs()
         val kidsModeEnabled = prefs.getBoolean(KEY_KIDS_MODE_ENABLED, false)
         if (!prefs.getBoolean(KEY_CHILD_ACTIVE, false) || packageName == applicationContext.packageName ||
+            isKeyboardPackage(packageName) ||
             // In managed kiosk mode the Lock Task controller is authoritative. The Accessibility
             // overlay must not blanket-exempt the normal launcher when Kids Mode is on.
             packageName in essentialPackages(kidsModeEnabled) ||
@@ -172,6 +186,8 @@ class EduLockAccessibilityService : AccessibilityService() {
             totalUsed >= earnedMinutes * MILLIS_PER_MINUTE && appEarnedMinutes == 0 && !groupTimeAvailable
         val blockedForSchedule = !isWithinWeeklySchedule(packageName)
         if (blockedByKidsMode || explicitlyBlocked || blockedForAppTime || blockedForEarnedTime || blockedForSchedule) {
+            blockedAppEvents = (blockedAppEvents + 1).coerceAtMost(Int.MAX_VALUE - 1)
+            prefs.edit().putInt(KEY_BLOCKED_APP_EVENTS, blockedAppEvents).apply()
             val message = when {
                 blockedByKidsMode -> "Kids Mode is on. Ask your parent to allow this app in EduLock."
                 explicitlyBlocked -> "This app has been disabled by your parent."
@@ -182,6 +198,60 @@ class EduLockAccessibilityService : AccessibilityService() {
             showBlocker(message, packageName)
         } else {
             hideBlocker()
+        }
+    }
+
+    private fun isKeyboardPackage(packageName: String): Boolean = try {
+        val manager = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+        manager.enabledInputMethodList.any { it.packageName == packageName }
+    } catch (_: Exception) { false }
+
+    private fun reportLiveStatus() {
+        val prefs = lockPrefs()
+        val childId = prefs.getString(KEY_CHILD_ID, null)?.takeIf {
+            it.matches(Regex("[0-9a-fA-F-]{36}"))
+        } ?: return
+        val session = SecureSessionStore(applicationContext).read() ?: return
+        if (session.accountRole != "child" || !statusReportInFlight.compareAndSet(false, true)) return
+        val now = System.currentTimeMillis()
+        val power = applicationContext.getSystemService(POWER_SERVICE) as? android.os.PowerManager
+        val screenOn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
+            power?.isInteractive
+        } else {
+            @Suppress("DEPRECATION")
+            power?.isScreenOn
+        }
+        val battery = try {
+            val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+            val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+            if (level >= 0 && scale > 0) ((level * 100f) / scale).toInt().coerceIn(0, 100) else null
+        } catch (_: Exception) { null }
+        val mode = when {
+            prefs.getBoolean("lock_task_kiosk_active", false) &&
+                prefs.getBoolean("lock_task_policy_applied", false) -> "kiosk"
+            prefs.getLong(KEY_LAST_SERVICE_TICK_AT, 0L) > 0L -> "accessibility"
+            else -> "off"
+        }
+        statusExecutor.execute {
+            try {
+                ChildLocationSyncClient.sendHeartbeat(
+                    applicationContext,
+                    childId,
+                    prefs.getBoolean("location_sharing_enabled", false),
+                    battery,
+                    deviceLocked = prefs.getBoolean(KEY_KIDS_MODE_ENABLED, false),
+                    guardMode = mode,
+                    currentAppPackage = lastPackage,
+                    screenOn = screenOn,
+                    blockedAppEvents = prefs.getInt(KEY_BLOCKED_APP_EVENTS, blockedAppEvents)
+                )
+                prefs.edit().putLong(KEY_LAST_STATUS_REPORT_AT, now).apply()
+            } catch (_: Exception) {
+                // No false success indicator: the persisted timestamp updates only after HTTP success.
+            } finally {
+                statusReportInFlight.set(false)
+            }
         }
     }
 
@@ -340,6 +410,9 @@ class EduLockAccessibilityService : AccessibilityService() {
     private companion object {
         const val LOCK_PREFS = "edulock_lock_state"
         const val KEY_PENDING_TASK_ID = "pending_task_id"
+        private const val KEY_CHILD_ID = "child_id"
+        private const val KEY_BLOCKED_APP_EVENTS = "blocked_app_events"
+        private const val KEY_LAST_STATUS_REPORT_AT = "last_status_report_at"
         const val KEY_LAST_SERVICE_TICK_AT = "last_service_tick_at"
         const val KEY_LAST_BLOCKER_SUCCESS_AT = "last_blocker_success_at"
         const val KEY_LAST_BLOCKER_ERROR = "last_blocker_error"
@@ -362,5 +435,6 @@ class EduLockAccessibilityService : AccessibilityService() {
         const val MILLIS_PER_MINUTE = 60_000L
         const val MAX_SINGLE_DELTA_MS = 20_000L
         const val TICK_MILLIS = 10_000L
+        const val STATUS_REPORT_INTERVAL_MS = 30_000L
     }
 }
