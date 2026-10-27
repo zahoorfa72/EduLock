@@ -1120,47 +1120,86 @@ private fun EduLockApp(repository: EduLockRepository) {
 
                 AppScreen.PARENT_HOME -> ScreenFrame("Parent dashboard", notice = notice, busy = busy) {
                     AppUiText("Your family is protected by your signed-in parent account.")
-                    SummaryCard("Children", children.size.toString() + " profile(s)", "Add children and link their own devices.")
-                    SummaryCard("Learning", subjects.size.toString() + " subject(s)", "Create questions in Urdu, Sindhi, English or another language.")
-                    Button(onClick = { screen = AppScreen.CHILDREN; execute { children = repository.loadChildren(familyId) } }, modifier = Modifier.fillMaxWidth()) { AppUiText("Manage child profiles") }
-                    Button(onClick = { screen = AppScreen.SUBJECTS; execute { subjects = repository.loadSubjects(familyId, parentCountryCode) } }, modifier = Modifier.fillMaxWidth()) { AppUiText("Subjects & questions") }
-                    OutlinedButton(onClick = { selectedSubject = null; templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES }, modifier = Modifier.fillMaxWidth()) { AppUiText("🧪 Learning templates for all subjects") }
-                    OutlinedButton(onClick = { selected3DModel = "solar-system"; screen = AppScreen.LEARNING_3D_LAB }, modifier = Modifier.fillMaxWidth()) { AppUiText("🌌 3D Learning Lab • all models") }
-                    OutlinedButton(onClick = { screen = AppScreen.DRAWING_STUDIO }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎨 Drawing & Colour Studio") }
-                    OutlinedButton(onClick = { familySettingsOpen = true }, modifier = Modifier.fillMaxWidth()) { AppUiText("⚙ Family settings • country, religion & app language") }
-                    Button(onClick = { selectedChild = null; selectedSubject = null; screen = AppScreen.ASSIGN_TASK }, modifier = Modifier.fillMaxWidth()) { AppUiText("Assign learning task & reward") }
-                    OutlinedButton(onClick = { screen = AppScreen.REPORTS; execute { attempts = repository.loadAttempts(); conceptProgress = repository.loadConceptProgress() } }, modifier = Modifier.fillMaxWidth()) { AppUiText("🏆  Learning progress reports") }
-                    OutlinedButton(onClick = {
-                        screen = AppScreen.CHILDREN
-                        execute { children = repository.loadChildren(familyId) }
-                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("Allowed apps & screen-time settings") }
-                    OutlinedButton(onClick = {
-                        screen = AppScreen.CHILD_LOCATIONS
-                        execute {
-                            val latestChildren = repository.loadChildren(familyId)
-                            children = latestChildren
-                            childLocationRows = latestChildren.map { repository.loadChildLocationSnapshot(it.id) }
-                        }
-                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("📍 Family location & offline alerts") }
-                    if (Build.VERSION.SDK_INT >= 33 &&
-                        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                        OutlinedButton(
-                            onClick = { notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { AppUiText("Enable offline-device notifications") }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        DashboardIconTile(
+                            icon = "👨‍👩‍👧",
+                            title = children.size.toString() + " children",
+                            subtitle = "Add profiles and pair their devices",
+                            modifier = Modifier.weight(1f),
+                            accent = Color(0xFF6756E8),
+                            onClick = { screen = AppScreen.CHILDREN; execute { children = repository.loadChildren(familyId) } }
+                        )
+                        DashboardIconTile(
+                            icon = "📚",
+                            title = subjects.size.toString() + " subjects",
+                            subtitle = "Questions for " + displayCountryName(parentCountryCode),
+                            modifier = Modifier.weight(1f),
+                            accent = Color(0xFF079B91),
+                            onClick = { screen = AppScreen.SUBJECTS; execute { subjects = repository.loadSubjects(familyId, parentCountryCode) } }
+                        )
                     }
-                    OutlinedButton(onClick = {
-                        refreshProtectionStatus()
-                        screen = AppScreen.PROTECTION_STATUS
-                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("Device protection & setup status") }
-                    OutlinedButton(onClick = {
-                        repository.signOut()
-                        session = null
-                        childProfile = null
-                        screen = AppScreen.AUTH
-                        isRegistering = false
-                        notice = "Signed out."
-                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("Sign out") }
+                    AppUiText("Your learning toolkit", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashboardIconTile(
+                                icon = "🧪", title = "Subjects & questions", subtitle = "Create and manage question banks",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF5147E8),
+                                onClick = { screen = AppScreen.SUBJECTS; execute { subjects = repository.loadSubjects(familyId, parentCountryCode) } }
+                            )
+                            DashboardIconTile(
+                                icon = "🗂️", title = "Learning templates", subtitle = "Ready-made subjects and activities",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF078C87),
+                                onClick = { selectedSubject = null; templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES }
+                            )
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashboardIconTile(
+                                icon = "🌌", title = "3D Learning Lab", subtitle = "Explore interactive models in every subject",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF7759D7),
+                                onClick = { selected3DModel = "solar-system"; screen = AppScreen.LEARNING_3D_LAB }
+                            )
+                            DashboardIconTile(
+                                icon = "🎨", title = "Drawing & colour", subtitle = "Draw, colour and practise shapes",
+                                modifier = Modifier.weight(1f), accent = Color(0xFFDA6195),
+                                onClick = { screen = AppScreen.DRAWING_STUDIO }
+                            )
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashboardIconTile(
+                                icon = "🎯", title = "Assign learning", subtitle = "Build tasks and learning rewards",
+                                modifier = Modifier.weight(1f), accent = Color(0xFFE19B32),
+                                onClick = { selectedChild = null; selectedSubject = null; screen = AppScreen.ASSIGN_TASK }
+                            )
+                            DashboardIconTile(
+                                icon = "🏆", title = "Progress reports", subtitle = "View scores and learning progress",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF168DBA),
+                                onClick = { screen = AppScreen.REPORTS; execute { attempts = repository.loadAttempts(); conceptProgress = repository.loadConceptProgress() } }
+                            )
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashboardIconTile(
+                                icon = "⚙️", title = "App settings", subtitle = "Country, languages, religion, limits and protection",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF4E5D75),
+                                onClick = {
+                                    screen = AppScreen.APP_SETTINGS
+                                    execute {
+                                        val prefs = repository.loadParentLearningSettings(familyId)
+                                        parentCountryCode = prefs.countryCode
+                                        parentLearningLanguageCode = prefs.learningLanguageCode
+                                        parentStudyTrack = prefs.studyTrack
+                                        parentDisplayLanguageCode = prefs.displayLanguageCode
+                                        context.getSharedPreferences("edulock_display_language", Context.MODE_PRIVATE).edit()
+                                            .putString("language", prefs.displayLanguageCode).apply()
+                                    }
+                                }
+                            )
+                            DashboardIconTile(
+                                icon = "🛡️", title = "Protection status", subtitle = "Review this device's setup",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF0C948F),
+                                onClick = { refreshProtectionStatus(); screen = AppScreen.PROTECTION_STATUS }
+                            )
+                        }
+                    }
                 }
 
                 AppScreen.CHILDREN -> ScreenFrame("Child profiles", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
