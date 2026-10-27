@@ -124,7 +124,8 @@ data class TaskRow(
     val dailyCapMinutes: Int,
     val active: Boolean,
     val rewardPackageName: String? = null,
-    val rewardGroupId: String? = null
+    val rewardGroupId: String? = null,
+    val timeLimitSeconds: Int? = null
 )
 
 data class AllowedApp(
@@ -966,7 +967,8 @@ class EduLockRepository(context: Context) {
     suspend fun addTask(
         familyId: String, child: ChildProfile, subjects: List<SubjectRow>, title: String,
         questionCount: Int, passPercent: Int, rewardMinutes: Int, taskDailyCapMinutes: Int,
-        rewardPackageName: String? = null, rewardGroupId: String? = null
+        rewardPackageName: String? = null, rewardGroupId: String? = null,
+        timeLimitSeconds: Int? = null
     ) {
         requireSession("parent")
         val selectedSubjects = subjects.distinctBy { it.id }.take(20)
@@ -976,6 +978,9 @@ class EduLockRepository(context: Context) {
         require(passPercent in 0..100) { "Passing score must be from 0 to 100 percent" }
         require(rewardMinutes in 0..1440) { "Reward is out of range." }
         require(taskDailyCapMinutes in 0..1440) { "Task daily cap must be from 0 to 1440 minutes" }
+        require(timeLimitSeconds == null || timeLimitSeconds in 10..3600) {
+            "Task time limit must be between 10 and 3600 seconds."
+        }
         require(rewardPackageName.isNullOrBlank() || rewardGroupId.isNullOrBlank()) {
             "Choose either one app or one app group as the reward destination, not both."
         }
@@ -1017,6 +1022,7 @@ class EduLockRepository(context: Context) {
                 .put("reward_package_name", rewardPackageName?.takeIf { it.isNotBlank() } ?: JSONObject.NULL)
                 .put("reward_group_id", rewardGroupId?.takeIf { it.isNotBlank() } ?: JSONObject.NULL)
                 .put("daily_cap_minutes", minOf(taskDailyCapMinutes, child.dailyCapMinutes))
+                .put("time_limit_seconds", timeLimitSeconds ?: JSONObject.NULL)
                 .put("active", true))
         val taskId = createdRows.optJSONObject(0)?.optString("id")
             ?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) }
@@ -1094,7 +1100,12 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadChildTasks(childId: String): List<TaskRow> {
         requireSession("child")
-        val rows = restArray("tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id&child_id=eq.$childId&active=eq.true&order=created_at.desc")
+        val rows = try {
+            restArray("tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id,time_limit_seconds&child_id=eq.$childId&active=eq.true&order=created_at.desc")
+        } catch (_: IOException) {
+            // Existing deployments without migration 0033 keep their prior task shape.
+            restArray("tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id&child_id=eq.$childId&active=eq.true&order=created_at.desc")
+        }
         return (0 until rows.length()).mapNotNull { i -> rows.optJSONObject(i)?.toTaskRow() }
     }
 
@@ -1766,7 +1777,8 @@ class EduLockRepository(context: Context) {
         dailyCapMinutes = optInt("daily_cap_minutes").coerceIn(0, 1440),
         active = optBoolean("active", true),
         rewardPackageName = optString("reward_package_name").takeIf { it.isNotBlank() && it != "null" },
-        rewardGroupId = optString("reward_group_id").takeIf { it.isNotBlank() && it != "null" }
+        rewardGroupId = optString("reward_group_id").takeIf { it.isNotBlank() && it != "null" },
+        timeLimitSeconds = optInt("time_limit_seconds", 0).takeIf { !isNull("time_limit_seconds") && it in 10..3600 }
     )
 
     private fun JSONObject.toQuestionRow(): QuestionRow {
