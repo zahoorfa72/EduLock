@@ -127,7 +127,7 @@ data class TaskRow(
     val rewardPackageName: String? = null,
     val rewardGroupId: String? = null,
     val timeLimitSeconds: Int? = null,
-    val rewardToBank: Boolean = false
+    val rewardToBank: Boolean = true
 )
 
 data class AllowedApp(
@@ -1118,7 +1118,7 @@ class EduLockRepository(context: Context) {
         familyId: String, child: ChildProfile, subjects: List<SubjectRow>, title: String,
         questionCount: Int, passPercent: Int, rewardMinutes: Int, taskDailyCapMinutes: Int,
         rewardPackageName: String? = null, rewardGroupId: String? = null,
-        timeLimitSeconds: Int? = null, rewardToBank: Boolean = false
+        timeLimitSeconds: Int? = null, rewardToBank: Boolean = true
     ) {
         requireSession("parent")
         val selectedSubjects = subjects.distinctBy { it.id }.take(20)
