@@ -620,7 +620,7 @@ private fun EduLockApp(repository: EduLockRepository) {
         }
     }
 
-    val launchPreferences = remember { context.getSharedPreferences("edulock_screen_time", Context.MODE_PRIVATE) }
+    val launchPreferences = remember { context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE) }
     LaunchedEffect(childProfile?.id, screen) {
         val requestedTaskId = launchPreferences.getString("pending_task_id", null)
         if (requestedTaskId != null && childProfile != null && screen == AppScreen.CHILD_HOME &&
@@ -3944,7 +3944,41 @@ private fun EduLockApp(repository: EduLockRepository) {
                         SummaryCard("Screen time awarded", result.awardedMinutes.toString() + " minutes", "Rewards are calculated and recorded by Supabase.")
                         SummaryCard("Daily reward cap", result.dailyUsedMinutes.toString() + " / " + result.dailyCapMinutes + " minutes", "The child-wide daily cap is enforced server-side.")
                     }
-                    Button(onClick = { screen = AppScreen.CHILD_HOME }, modifier = Modifier.fillMaxWidth()) { AppUiText("Back to my tasks") }
+                    Button(
+                        onClick = {
+                            val task = activeTask
+                            if (result?.passed == true && task != null) {
+                                execute {
+                                    val refreshedChild = childProfile
+                                    if (refreshedChild != null) {
+                                        try { earnedToday = repository.refreshChildDeviceRestrictions(refreshedChild) }
+                                        catch (_: Exception) { /* keep the result screen usable offline */ }
+                                    }
+                                    val targetPackage = task.rewardPackageName
+                                    if (!targetPackage.isNullOrBlank()) {
+                                        val launchIntent = context.packageManager.getLaunchIntentForPackage(targetPackage)
+                                        if (launchIntent != null) {
+                                            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            context.startActivity(launchIntent)
+                                        } else {
+                                            notice = "The app is not installed on this phone. Ask your parent to check My apps."
+                                        }
+                                    } else {
+                                        screen = AppScreen.CHILD_HOME
+                                    }
+                                }
+                            } else {
+                                screen = AppScreen.CHILD_HOME
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        AppUiText(
+                            if (result?.passed == true && activeTask?.rewardPackageName != null)
+                                "Unlocked! Back to " + (allowedApps.firstOrNull { it.packageName == activeTask?.rewardPackageName }?.displayName ?: activeTask?.rewardPackageName)
+                            else "Back to my tasks"
+                        )
+                    }
                 }
             }
         }
