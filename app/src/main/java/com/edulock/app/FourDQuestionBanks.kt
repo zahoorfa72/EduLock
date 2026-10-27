@@ -21,7 +21,7 @@ object FourDQuestionBanks {
     private val maths = listOf(
         q("Rotate the exploded cube. How many square faces does a cube have?", "4|6|8", "6", "A cube has six square faces, twelve edges and eight vertices."),
         q("What is the volume of a cube with side length 3 cm?", "9 cm³|18 cm³|27 cm³", "27 cm³", "Volume = side × side × side = 3 × 3 × 3 = 27 cm³."),
-        q("Which 3D solid has two circular faces and one curved surface?", "Cylinder|Cone|Cube", "Cylinder", "A cylinder has two circular ends joined by a curved surface."),
+        q("Which solid has two circular faces and one curved surface?", "Cylinder|Cone|Cube", "Cylinder", "A cylinder has two circular ends joined by a curved surface."),
         q("How many vertices does a triangular prism have?", "5|6|8", "6", "A triangular prism has two triangular ends, giving six vertices."),
         q("Which solid has one curved surface and no vertices?", "Sphere|Cube|Triangular prism", "Sphere", "A sphere is round with no flat faces, straight edges or vertices."),
         q("If each cube edge doubles, by what factor does its volume change?", "2|4|8", "8", "Volume scales with the cube of edge length; 2³ = 8."),
