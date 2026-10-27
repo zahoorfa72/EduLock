@@ -20,19 +20,19 @@ object FourDQuestionBanks {
     }
 
     private val maths = listOf(
-        q("Rotate the exploded cube. How many square faces does a cube have?", "4|6|8", "6", "A cube has six square faces, twelve edges and eight vertices."),
-        q("What is the volume of a cube with side length 3 cm?", "9 cm³|18 cm³|27 cm³", "27 cm³", "Volume = side × side × side = 3 × 3 × 3 = 27 cm³."),
-        q("Which solid has two circular faces and one curved surface?", "Cylinder|Cone|Cube", "Cylinder", "A cylinder has two circular ends joined by a curved surface."),
-        q("How many vertices does a triangular prism have?", "5|6|8", "6", "A triangular prism has two triangular ends, giving six vertices."),
-        q("Which solid has one curved surface and no vertices?", "Sphere|Cube|Triangular prism", "Sphere", "A sphere is round with no flat faces, straight edges or vertices."),
-        q("If each cube edge doubles, by what factor does its volume change?", "2|4|8", "8", "Volume scales with the cube of edge length; 2³ = 8."),
-        q("Which solid has a circular base that narrows to one vertex?", "Cone|Cylinder|Cuboid", "Cone", "A cone has a circular base and a single apex."),
-        q("What is the total number of edges on a cuboid?", "8|10|12", "12", "A cuboid has twelve edges."),
-        q("A cuboid is 4 cm long, 3 cm wide and 2 cm high. What is its volume?", "9 cm³|24 cm³|36 cm³", "24 cm³", "Multiply length × width × height: 4 × 3 × 2 = 24 cm³."),
-        q("Which view helps you see the front, side and top of a solid at once?", "Isometric view|Single straight line|A dot only", "Isometric view", "An isometric drawing shows three dimensions in one view.")
+        q("🚀 Space-builder mission: rotate the floating cube and count its square faces. How many are there?", "4|6|8", "6", "A cube has six square faces, twelve edges and eight vertices."),
+        q("🧊 Ice-robot challenge: a cube-shaped ice block is 3 cm on each side. What is its volume?", "9 cm³|18 cm³|27 cm³", "27 cm³", "Volume = side × side × side = 3 × 3 × 3 = 27 cm³."),
+        q("🎪 Toy-factory mystery: which shape has two round ends and one curved side?", "Cylinder|Cone|Cube", "Cylinder", "A cylinder has two circular ends joined by a curved surface."),
+        q("🏕️ Build a tiny tent-shaped prism: how many corner points (vertices) does it have?", "5|6|8", "6", "A triangular prism has two triangular ends, giving six vertices."),
+        q("🪐 Planet explorer: which perfectly round solid has no corners at all?", "Sphere|Cube|Triangular prism", "Sphere", "A sphere is round with no flat faces, straight edges or vertices."),
+        q("🧱 Mega-builder mission: if every cube edge becomes twice as long, how many times bigger is its volume?", "2|4|8", "8", "Volume scales with the cube of edge length; 2³ = 8."),
+        q("🍦 Ice-cream shop: which 3D shape has a round base that narrows to one tip?", "Cone|Cylinder|Cuboid", "Cone", "A cone has a circular base and a single apex."),
+        q("📦 Robot delivery box: how many straight edges does a cuboid have?", "8|10|12", "12", "A cuboid has twelve edges."),
+        q("🎁 Gift-box mission: a box is 4 cm long, 3 cm wide and 2 cm high. What space does it hold?", "9 cm³|24 cm³|36 cm³", "24 cm³", "Multiply length × width × height: 4 × 3 × 2 = 24 cm³."),
+        q("🧭 3D explorer challenge: which drawing lets you see the front, side and top of a solid together?", "Isometric view|Single straight line|A dot only", "Isometric view", "An isometric drawing shows three dimensions in one view.")
     )
     private val physics = listOf(
-        q("The 4D force model shows a ball. What can an unbalanced force change?", "Speed or direction|Mass always|The object's material automatically", "Speed or direction", "A net force changes velocity: speed, direction, or both."),
+        q("⚽ Space-arena challenge: kick the glowing ball. What can an unbalanced force change about its motion?", "Speed or direction|Mass always|The object's material automatically", "Speed or direction", "A net force changes velocity: speed, direction, or both."),
         q("Which force usually opposes sliding between two surfaces?", "Friction|Gravity only|Magnetic poles only", "Friction", "Friction acts against relative sliding at contacting surfaces."),
         q("Which unit measures force?", "Newton|Joule|Watt", "Newton", "Force is measured in newtons (N)."),
         q("A 2 kg object accelerates at 3 m/s². What is the net force?", "5 N|6 N|9 N", "6 N", "Using F = ma, 2 kg × 3 m/s² = 6 N."),
@@ -46,7 +46,7 @@ object FourDQuestionBanks {
     private val chemistry = listOf(
         q("Which atomic particle has a negative electric charge?", "Electron|Proton|Neutron", "Electron", "Electrons have negative charge; protons are positive and neutrons have no net charge."),
         q("Where are protons and neutrons found in an atom?", "Nucleus|Outer electron region|Outside the atom only", "Nucleus", "The nucleus contains protons and neutrons."),
-        q("What is the chemical formula for water?", "H₂O|CO₂|NaCl", "H₂O", "Each water molecule contains two hydrogen atoms and one oxygen atom."),
+        q("💧 Water-world mission: build a water molecule from hydrogen and oxygen. Which formula is correct?", "H₂O|CO₂|NaCl", "H₂O", "Each water molecule contains two hydrogen atoms and one oxygen atom."),
         q("Which particle determines the atomic number of an element?", "Proton|Neutron|Electron in a neutral atom only", "Proton", "Atomic number is the number of protons in the nucleus."),
         q("A solution with pH 3 is generally what?", "Acidic|Neutral|Alkaline", "Acidic", "Values below pH 7 are acidic in the usual aqueous pH scale."),
         q("Which is a mixture rather than a single pure substance?", "Air|Pure oxygen gas|Distilled water", "Air", "Air contains several gases mixed together."),
@@ -56,7 +56,7 @@ object FourDQuestionBanks {
         q("Which observation can indicate a chemical reaction?", "A new substance forms|An object is moved|A shadow changes", "A new substance forms", "Chemical reactions rearrange particles and produce substances with new properties.")
     )
     private val biology = listOf(
-        q("Which part of a typical animal cell contains most of its DNA?", "Nucleus|Cell membrane|Cytoplasm only", "Nucleus", "The nucleus stores most genetic material in a typical animal cell."),
+        q("🔬 Mini-scientist mission: zoom into an animal cell. Which part keeps most of its DNA?", "Nucleus|Cell membrane|Cytoplasm only", "Nucleus", "The nucleus stores most genetic material in a typical animal cell."),
         q("What is the cell membrane's main role?", "Controls movement into and out of the cell|Makes sunlight|Stores every bone", "Controls movement into and out of the cell", "The cell membrane acts as a selective boundary."),
         q("Which plant part mainly absorbs water and minerals from soil?", "Roots|Petals|Fruit skin", "Roots", "Roots absorb water and minerals and help anchor the plant."),
         q("What do green plants use light energy for during photosynthesis?", "Making sugars from water and carbon dioxide|Turning oxygen into metal|Making soil", "Making sugars from water and carbon dioxide", "Photosynthesis stores light energy in sugars."),
