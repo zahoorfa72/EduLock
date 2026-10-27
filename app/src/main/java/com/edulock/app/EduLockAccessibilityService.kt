@@ -73,8 +73,11 @@ class EduLockAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
-        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
-            event.eventType != AccessibilityEvent.TYPE_WINDOWS_CHANGED) return
+        // WINDOW_STATE_CHANGED identifies the actual foreground app. WINDOWS_CHANGED also
+        // fires for system bars, keyboard/overlay windows and transient dialogs; treating those
+        // events as the foreground package can hide the blocker while the disallowed app remains
+        // visible underneath (the reported "EduLock flashes, then app works" failure).
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val packageName = event.packageName?.toString() ?: return
         if (packageName.isBlank()) return
         val now = System.currentTimeMillis()
@@ -146,13 +149,24 @@ class EduLockAccessibilityService : AccessibilityService() {
     private fun applyRestriction(packageName: String) {
         val prefs = lockPrefs()
         val kidsModeEnabled = prefs.getBoolean(KEY_KIDS_MODE_ENABLED, false)
-        if (!prefs.getBoolean(KEY_CHILD_ACTIVE, false) || packageName == applicationContext.packageName ||
-            isKeyboardPackage(packageName) ||
-            // In managed kiosk mode the Lock Task controller is authoritative. The Accessibility
-            // overlay must not blanket-exempt the normal launcher when Kids Mode is on.
+        if (!prefs.getBoolean(KEY_CHILD_ACTIVE, false) || packageName == applicationContext.packageName) {
+            hideBlocker()
+            return
+        }
+        // While a restricted app is covered, transient system/permission/keyboard windows must
+        // not remove the full-screen blocker. Only a genuine allowed foreground app transition
+        // may clear it; keyboard remains exempt as requested.
+        if (blocker != null) {
+            if (isKeyboardPackage(packageName)) return
+            if (packageName in essentialPackages(kidsModeEnabled) || isInternalSystemPackage(packageName)) {
+                if (packageName == "com.android.systemui" || packageName == "com.android.permissioncontroller" ||
+                    packageName == "com.google.android.permissioncontroller") return
+                hideBlocker()
+                return
+            }
+        } else if (isKeyboardPackage(packageName) ||
             packageName in essentialPackages(kidsModeEnabled) ||
             isInternalSystemPackage(packageName)) {
-            hideBlocker()
             return
         }
         val allowedPackages = prefs.getStringSet(KEY_ALLOWED_PACKAGES, emptySet()).orEmpty()
