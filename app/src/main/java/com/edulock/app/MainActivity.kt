@@ -1830,8 +1830,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                     val filteredTemplates = LearningTemplates.all.filter { template ->
                         template.category == templateCategory &&
+                            (template.countryCode == "ZZ" || template.countryCode.equals(parentCountryCode, ignoreCase = true)) &&
                             (templateCategory != "Religious Education" ||
-                                (parentStudyTrack != "none" && template.conceptKey.startsWith("faith:" + parentStudyTrack + ":")))
+                                (parentStudyTrack != "none" &&
+                                    template.conceptKey.startsWith("faith:" + parentStudyTrack + ":")))
                     }
                     if (templateCategory == "Religious Education" && parentStudyTrack == "none") {
                         AppUiText("Choose an optional religious-education track in Family settings to see matching question templates.")
@@ -2132,8 +2134,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                     AppUiText("Choose a subject")
                     val assignableSubjects = subjects.filter { subject ->
                         val religionTrack = religionTrackForSubject(subject.title)
-                        religionTrack == null ||
-                            (parentStudyTrack != "none" && religionTrack == parentStudyTrack)
+                        val isCountrySubject = subject.countryCode.equals(parentCountryCode, ignoreCase = true) ||
+                            subject.countryCode.equals("ZZ", ignoreCase = true)
+                        isCountrySubject && (religionTrack == null ||
+                            (parentStudyTrack != "none" && religionTrack == parentStudyTrack))
                     }
                     if (assignableSubjects.isEmpty()) {
                         AppUiText("No matching subjects yet. Open the country-specific learning templates, add a subject, then return here to assign its task.")
