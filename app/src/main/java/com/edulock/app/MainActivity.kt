@@ -38,6 +38,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -247,6 +248,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var childAgeYears by remember { mutableStateOf("8") }
     var childAvatarIcon by remember { mutableStateOf("🦊") }
     var childStudyTrack by remember { mutableStateOf("none") }
+    var childReligionEnabled by remember { mutableStateOf(false) }
     var studyTrackPickerTarget by remember { mutableStateOf("parent") }
     var studyTrackChildId by remember { mutableStateOf("") }
     var childDailyGameLimit by remember { mutableStateOf("20") }
@@ -1454,7 +1456,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Button(onClick = {
                         childName = ""; childLanguage = parentLearningLanguageCode; childDailyCap = "60"
                         childCountryCode = parentCountryCode; childSchoolGrade = "1"; childAgeYears = "8"
-                        childAvatarIcon = "🦊"; childStudyTrack = "none"; childDailyGameLimit = "20"
+                        childAvatarIcon = "🦊"; childStudyTrack = "none"; childReligionEnabled = false; childDailyGameLimit = "20"
                         screen = AppScreen.ADD_CHILD
                     }, modifier = Modifier.fillMaxWidth()) { AppUiText("Add child profile") }
                     if (children.isEmpty()) AppUiText("No child profiles yet. Add a child to create the protected parent-child link.")
@@ -1591,31 +1593,60 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }, modifier = Modifier.fillMaxWidth()) {
                         AppUiText("🌍  Country: ${displayCountryName(childCountryCode)}")
                     }
-                    Field(childSchoolGrade, { childSchoolGrade = it.filter(Char::isDigit).take(2) }, "School grade (0 = Kindergarten, 1–13)", keyboardType = KeyboardType.Number)
-                    Field(childAgeYears, { childAgeYears = it.filter(Char::isDigit).take(2) }, "Child age (3–19 years)", keyboardType = KeyboardType.Number)
-                    Field(childLanguage, { childLanguage = it.trim().take(16) }, "Preferred learning language (en, ur, sd...)")
-                    AppUiText("Religious education is optional for each child. Country-based suggestions do not assume any family's beliefs.")
-                    OutlinedButton(onClick = {
-                        studyTrackPickerTarget = "child"
-                        studyTrackPickerOpen = true
-                    }, modifier = Modifier.fillMaxWidth()) {
-                        AppUiText("🕊 Religious-education subject: " + studyTrackLabel(childStudyTrack))
+                    AppUiText("Choose the child's school standard", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    (0..5).chunked(3).forEach { gradeRow ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            gradeRow.forEach { grade ->
+                                OutlinedButton(
+                                    onClick = { childSchoolGrade = grade.toString() },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    AppUiText((if (childSchoolGrade == grade.toString()) "✓ " else "") +
+                                        if (grade == 0) "Kindergarten" else "Class $grade")
+                                }
+                            }
+                        }
                     }
-                    AppUiText("The question bank filters by country, grade, age and language. When a reviewed local-language set isn't available, EduLock clearly labels the starter-bank fallback.")
+                    AppUiText("Choose Kindergarten or Class 1–5. Lessons should match the child's selected standard and age.")
+                    Field(childAgeYears, { childAgeYears = it.filter(Char::isDigit).take(2) }, "Child age (3–12 years)", keyboardType = KeyboardType.Number)
+                    Field(childLanguage, { childLanguage = it.trim().take(16) }, "Preferred learning language (en, ur, sd...)")
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = childReligionEnabled,
+                            onCheckedChange = { enabled ->
+                                childReligionEnabled = enabled
+                                if (!enabled) childStudyTrack = "none"
+                            }
+                        )
+                        Column(Modifier.weight(1f)) {
+                            AppUiText("Include religious education", fontWeight = FontWeight.SemiBold)
+                            AppUiText("Optional. No religion is selected automatically.")
+                        }
+                    }
+                    if (childReligionEnabled) {
+                        AppUiText("Choose the child's religion to show matching lessons only.", style = MaterialTheme.typography.bodyMedium)
+                        OutlinedButton(onClick = {
+                            studyTrackPickerTarget = "child"
+                            studyTrackPickerOpen = true
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            AppUiText("🕊 Choose religion: " + studyTrackLabel(childStudyTrack))
+                        }
+                    }
+                    AppUiText("Lessons use the child's country, class, age and language. Religious lessons appear only when enabled and selected by the parent.")
                     Field(childDailyCap, { childDailyCap = it.filter(Char::isDigit).take(4) }, "Maximum reward minutes per day (0–1440)", keyboardType = KeyboardType.Number)
                     Field(childDailyGameLimit, { childDailyGameLimit = it.filter(Char::isDigit).take(4) }, "Educational games per day in minutes (0 disables; max 1440)", keyboardType = KeyboardType.Number)
                     Button(onClick = {
                         execute {
                             val grade = childSchoolGrade.toIntOrNull() ?: throw IllegalArgumentException("Enter a grade from 0 to 13.")
-                            val age = childAgeYears.toIntOrNull() ?: throw IllegalArgumentException("Enter an age from 3 to 19.")
-                            require(grade in 0..13) { "Grade must be between Kindergarten (0) and 13." }
-                            require(age in 3..19) { "Age must be between 3 and 19." }
+                            val age = childAgeYears.toIntOrNull() ?: throw IllegalArgumentException("Enter an age from 3 to 12.")
+                            require(grade in 0..5) { "Choose Kindergarten or a class from 1 to 5." }
+                            require(age in 3..12) { "Enter an age from 3 to 12." }
                             val created = repository.addChild(
                                 familyId, childName, childLanguage, childDailyCap.toIntOrNull() ?: 60,
                                 childCountryCode, grade, age, childAvatarIcon,
-                                childDailyGameLimit.toIntOrNull() ?: 20, childStudyTrack
+                                childDailyGameLimit.toIntOrNull() ?: 20, if (childReligionEnabled) childStudyTrack else "none"
                             )
-                            if (childStudyTrack != "none") {
+                            if (childReligionEnabled && childStudyTrack != "none") {
                                 val religiousSubject = repository.findOrCreateSubject(familyId, religiousSubjectTitle(childStudyTrack), childLanguage, childCountryCode)
                                 val starterQuestions = fourDTemplatesForSubject(religiousSubject.title, childLanguage)
                                 repository.ensureTemplateQuestions(religiousSubject.id, starterQuestions)
