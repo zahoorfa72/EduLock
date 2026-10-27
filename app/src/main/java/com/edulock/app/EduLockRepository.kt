@@ -790,7 +790,7 @@ class EduLockRepository(context: Context) {
     suspend fun addQuestion(
         subjectId: String, prompt: String, type: String, options: List<String>, answer: String,
         languageCode: String, conceptKey: String, solution: String = ""
-    ) {
+    ): String {
         requireSession("parent")
         require(prompt.trim().isNotEmpty()) { "Enter the question" }
         require(answer.trim().isNotEmpty() || type == "matching") { "Enter the correct answer" }
@@ -849,6 +849,7 @@ class EduLockRepository(context: Context) {
                 throw IOException("Could not save the parent-only worked solution. Apply the latest EduLock Supabase migration and try again.", e)
             }
         }
+        return questionId
     }
 
     suspend fun uploadQuestionImage(familyId: String, questionId: String, jpegBytes: ByteArray): String {
