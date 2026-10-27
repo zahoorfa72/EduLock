@@ -91,7 +91,8 @@ fun Learning4DLabScreen(
     onCreateQuestion: (LearningModelOption) -> Unit,
     religiousStudyTrack: String = "none",
     gradeLevel: Int = 3,
-    ageYears: Int = 9
+    ageYears: Int = 9,
+    isChildMode: Boolean = false
 ) {
     val allowedFaithModel = when (religiousStudyTrack.lowercase()) {
         "islamic" -> "faith-islamic"
@@ -163,10 +164,17 @@ fun Learning4DLabScreen(
                 if (selected.id == "solar-system") SolarSystemModelPreview()
                 else Learning3DPreview(selected.id)
                 AppUiText(selected.detail, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Button(
-                    onClick = { onCreateQuestion(selected) },
-                    modifier = Modifier.fillMaxWidth()
-                ) { AppUiText("Create a 4D-style question from this model") }
+                if (!isChildMode) {
+                    Button(
+                        onClick = { onCreateQuestion(selected) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { AppUiText("Create a 4D-style question from this model") }
+                } else {
+                    AppUiText(
+                        "Explore the model and practise the questions below. Your parent manages assigned questions.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (selected.id == "solar-system") {
                     OutlinedButton(onClick = onStartSolarQuiz, modifier = Modifier.fillMaxWidth()) {
                         AppUiText("🚀 Start planet identification challenge")
