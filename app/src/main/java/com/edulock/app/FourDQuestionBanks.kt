@@ -151,6 +151,18 @@ object FourDQuestionBanks {
         q("What is symmetry?", "Matching parts across a line or around a centre|Random unrelated marks|A type of glue", "Matching parts across a line or around a centre", "Symmetry describes matching parts arranged around a line or centre."),
         q("Why do artists make a colour palette?", "To plan colours that work together|To erase every shape|To measure time", "To plan colours that work together", "A palette helps artists choose a harmonious or purposeful set of colours.")
     )
+    private val drawing = listOf(
+        q("Which first step helps place a character correctly on a page?", "Light simple shapes|Dark details immediately|Colouring the background first", "Light simple shapes", "Light shapes help plan proportion and placement before details."),
+        q("What is a contour line used to show?", "The visible edge of a form|The sound of a colour|The weight of paper", "The visible edge of a form", "Contour lines describe the edges and important boundaries of a subject."),
+        q("How can you make an object look nearer in a drawing?", "Draw it larger and lower in the scene|Always draw it smaller|Remove all overlap", "Draw it larger and lower in the scene", "Size, placement and overlap are common depth clues."),
+        q("Which tool is useful for gently planning a sketch?", "A pencil|A wet sponge only|A ruler used as paint", "A pencil", "A pencil allows light construction marks that can be refined."),
+        q("What does hatching create?", "Tone using repeated lines|A sound effect|A paper fold", "Tone using repeated lines", "Hatching uses lines to suggest shade and surface form."),
+        q("What is negative space in a drawing?", "The empty area around or between shapes|The darkest pencil only|A type of glue", "The empty area around or between shapes", "Noticing empty spaces helps improve proportions and composition."),
+        q("Why draw a horizon line in a landscape?", "To mark eye level and organise perspective|To show the page edge only|To measure temperature", "To mark eye level and organise perspective", "The horizon line is often related to the viewer's eye level."),
+        q("Which technique can show a shiny sphere?", "A bright highlight with gradual shading|One flat colour only|A jagged outline everywhere", "A bright highlight with gradual shading", "Highlights and smooth tonal changes suggest a reflective rounded surface."),
+        q("What should you do if the first sketch proportions look wrong?", "Compare shapes and adjust lightly|Press harder and hide the lines|Stop observing the subject", "Compare shapes and adjust lightly", "Comparing height, width and angles helps correct a drawing early."),
+        q("How can overlapping shapes suggest depth?", "The front shape hides part of the shape behind it|Every shape must be separate|All outlines must be the same size", "The front shape hides part of the shape behind it", "Occlusion is a strong visual clue that one object is in front of another.")
+    )
     private val english = listOf(
         q("Which word is a noun?", "Garden|Quickly|Bright", "Garden", "A noun names a person, place, thing or idea."),
         q("Which word is a verb in 'The child paints a flower'?", "Paints|Child|Flower", "Paints", "A verb expresses an action or state."),
@@ -311,7 +323,7 @@ object FourDQuestionBanks {
         addAll(bank("Computer Skills", "Computer Skills", "circuit", computer))
         addAll(bank("Health & Safety", "Health & Safety", "cell", health))
         addAll(bank("Art & Design", "Art & Design", "flower", art))
-        addAll(bank("Drawing & Colour", "Drawing & Colour", "flower", art))
+        addAll(bank("Drawing & Colour", "Drawing & Colour", "flower", drawing))
         addAll(bank("English", "English", "book", english))
         addAll(bank("Urdu", "Urdu", "book", urdu, language = "ur", country = "PK"))
         addAll(bank("Sindhi", "Sindhi", "book", sindhi, language = "sd", country = "PK"))
