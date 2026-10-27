@@ -51,6 +51,13 @@ fun Learning4DLabScreen(
     onCreateQuestion: (LearningModelOption) -> Unit
 ) {
     val selected = LearningModelOptions.firstOrNull { it.id == selectedModel } ?: LearningModelOptions.first()
+    val questionBankSubject = if (selected.subject == "Earth Science") "General Science" else selected.subject
+    val bankQuestions = FourDQuestionBanks.all
+        .filter {
+            it.subjectTitle.equals(questionBankSubject, ignoreCase = true) &&
+                it.languageCode.equals("en", ignoreCase = true)
+        }
+        .take(10)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -100,6 +107,46 @@ fun Learning4DLabScreen(
                 if (selected.id == "solar-system") {
                     OutlinedButton(onClick = onStartSolarQuiz, modifier = Modifier.fillMaxWidth()) {
                         AppUiText("🚀 Start planet identification challenge")
+                    }
+                }
+            }
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F5FF))
+        ) {
+            Column(
+                modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+                AppUiText(
+                    "📚 Ready-made question bank",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                AppUiText(
+                    bankQuestions.size.toString() + " starter questions for " + questionBankSubject +
+                        ". These are also added automatically when you open that subject's Questions screen.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                bankQuestions.forEachIndexed { index, template ->
+                    Column(
+                        modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        AppUiText(
+                            (index + 1).toString() + ". " + template.prompt,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (template.options.isNotEmpty()) {
+                            AppUiText(
+                                "Choices: " + template.options.joinToString(" • "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
