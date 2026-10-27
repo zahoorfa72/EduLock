@@ -24,10 +24,13 @@ object ChildDeviceKioskPolicy {
     private const val KEY_POLICY_APPLIED = "lock_task_policy_applied"
 
     fun apply(context: Context, kidsModeEnabled: Boolean, allowedPackages: Set<String>): Boolean {
+        val prefs = context.getSharedPreferences(LOCK_PREFS, Context.MODE_PRIVATE)
         val manager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         if (!manager.isDeviceOwnerApp(context.packageName)) {
-            context.getSharedPreferences(LOCK_PREFS, Context.MODE_PRIVATE).edit()
-                .putBoolean(KEY_POLICY_APPLIED, false).apply()
+            prefs.edit()
+                .putBoolean(KEY_POLICY_APPLIED, false)
+                .putBoolean(KEY_KIOSK_ACTIVE, false)
+                .apply()
             return false
         }
         val admin = ComponentName(context, EduLockDeviceAdminReceiver::class.java)
@@ -108,12 +111,16 @@ object ChildDeviceKioskPolicy {
                 allowlistMatches &&
                 manager.isUninstallBlocked(admin, context.packageName) == kidsModeEnabled &&
                 restrictionsMatch
-            context.getSharedPreferences(LOCK_PREFS, Context.MODE_PRIVATE)
-                .edit().putBoolean(KEY_POLICY_APPLIED, confirmed).apply()
+            prefs.edit()
+                .putBoolean(KEY_POLICY_APPLIED, confirmed)
+                .putBoolean(KEY_KIOSK_ACTIVE, false)
+                .apply()
             confirmed
         } catch (_: Exception) {
-            context.getSharedPreferences(LOCK_PREFS, Context.MODE_PRIVATE)
-                .edit().putBoolean(KEY_POLICY_APPLIED, false).apply()
+            prefs.edit()
+                .putBoolean(KEY_POLICY_APPLIED, false)
+                .putBoolean(KEY_KIOSK_ACTIVE, false)
+                .apply()
             false
         }
     }
