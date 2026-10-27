@@ -792,7 +792,7 @@ class EduLockRepository(context: Context) {
     ) {
         requireSession("parent")
         require(prompt.trim().isNotEmpty()) { "Enter the question" }
-        require(answer.trim().isNotEmpty()) { "Enter the correct answer" }
+        require(answer.trim().isNotEmpty() || type == "matching") { "Enter the correct answer" }
         require(languageCode.matches(Regex("[A-Za-z][A-Za-z0-9-]{1,15}"))) { "Use a language code such as en, ur or sd." }
         require(conceptKey.trim().isNotEmpty()) { "Enter a concept tag. Reuse the same tag for questions that test the same idea." }
         require(type in setOf("multiple_choice", "true_false", "short_answer", "numeric", "matching", "picture")) { "Select a valid question type" }
@@ -807,12 +807,22 @@ class EduLockRepository(context: Context) {
                 "For true/false questions, enter true or false as the correct answer"
             }
         }
+        var storedOptions = options.map { it.trim().take(500) }.filter { it.isNotEmpty() }
+        var storedAnswer = answer.trim().take(1000)
         if (type == "matching") {
-            require(options.size >= 2) { "Add at least two matching pairs, one pair per line." }
-            require(options.all { it.contains("|") && it.substringBefore("|").isNotBlank() && it.substringAfter("|").isNotBlank() }) {
-                "Each matching pair must use left item|right item format."
+            val pairs = options.mapNotNull { raw ->
+                val split = raw.split("|", limit = 2)
+                if (split.size == 2 && split[0].isNotBlank() && split[1].isNotBlank()) {
+                    split[0].trim().take(250) to split[1].trim().take(250)
+                } else null
+            }.distinctBy { it.first }
+            require(pairs.size >= 2 && pairs.size == options.size) {
+                "Add at least two matching pairs, one pair per line in left item|right item format."
             }
-            require(answer.contains("=")) { "List the correct matches as left=right;left=right." }
+            val rightValues = pairs.map { it.second }
+            require(rightValues.distinct().size == rightValues.size) { "Each right-side match must be unique." }
+            storedOptions = pairs.map { "L|" + it.first } + rightValues.shuffled().map { "R|" + it }
+            storedAnswer = pairs.joinToString(";") { (left, right) -> "$left=$right" }.take(1000)
         }
         if (type == "picture") {
             require(answer.isNotBlank()) { "Enter the correct answer or a short description of the picture answer." }
@@ -822,8 +832,8 @@ class EduLockRepository(context: Context) {
                 .put("subject_id", subjectId)
                 .put("prompt", prompt.trim().take(10_000))
                 .put("question_type", type)
-                .put("options", JSONArray(options.map { it.trim().take(500) }.filter { it.isNotEmpty() }))
-                .put("answer_key", JSONObject().put("answer", answer.trim().take(1000)))
+                .put("options", JSONArray(storedOptions))
+                .put("answer_key", JSONObject().put("answer", storedAnswer))
                 .put("language_code", languageCode.trim().lowercase())
                 .put("concept_key", conceptKey.trim().replace(Regex("\\s+"), " ").take(160)))
         val questionId = created.optJSONObject(0)?.optString("id")
