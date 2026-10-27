@@ -14,7 +14,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import com.edulock.app.AppUiText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -68,6 +71,7 @@ fun Learning4DLabScreen(
     onCreateQuestion: (LearningModelOption) -> Unit
 ) {
     val selected = LearningModelOptions.firstOrNull { it.id == selectedModel } ?: LearningModelOptions.first()
+    var chosenAnswers by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     val questionBankSubject = if (selected.subject == "Earth Science") "General Science" else selected.subject
     val requestedQuestionLanguage = when (questionBankSubject) {
         "Urdu" -> "ur"
@@ -166,11 +170,24 @@ fun Learning4DLabScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                         if (template.options.isNotEmpty()) {
-                            AppUiText(
-                                "Choices: " + template.options.joinToString(" • "),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            template.options.forEach { option ->
+                                val chosen = chosenAnswers[template.conceptKey]
+                                OutlinedButton(
+                                    onClick = { chosenAnswers = chosenAnswers + (template.conceptKey to option) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = chosen == null || chosen != template.answer
+                                ) {
+                                    AppUiText((if (chosen == option) "◉ " else "○ ") + option)
+                                }
+                            }
+                            val chosen = chosenAnswers[template.conceptKey]
+                            if (chosen != null) {
+                                AppUiText(
+                                    if (chosen == template.answer) "✨ Correct! " + template.solution else "Not quite—try another choice.",
+                                    color = if (chosen == template.answer) Color(0xFF087E61) else Color(0xFF9A4A16),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     }
                 }
