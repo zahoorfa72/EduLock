@@ -548,14 +548,18 @@ class EduLockRepository(context: Context) {
         return code to result.optInt("expires_in_seconds", 600)
     }
 
-    suspend fun loadSubjects(familyId: String): List<SubjectRow> {
+    suspend fun loadSubjects(familyId: String, countryCode: String? = null): List<SubjectRow> {
         requireSession("parent")
         val rows = restArray("subjects?select=id,family_id,title,language_code,country_code,grade_level,curriculum_name,curriculum_subject_code&family_id=eq.$familyId&order=created_at.desc")
-        return (0 until rows.length()).mapNotNull { i ->
+        val items = (0 until rows.length()).mapNotNull { i ->
             rows.optJSONObject(i)?.let { row ->
                 SubjectRow(row.optString("id"), row.optString("family_id"), row.optString("title"), row.optString("language_code", "en"), row.optString("country_code", "PK"), row.optInt("grade_level", 1), row.optString("curriculum_name", "Parent-created"), row.optString("curriculum_subject_code", ""))
             }
         }
+        val normalizedCountry = countryCode?.trim()?.uppercase(Locale.ROOT)
+            ?.takeIf { it.matches(Regex("[A-Z]{2}")) }
+            ?: return items
+        return items.filter { it.countryCode.equals(normalizedCountry, ignoreCase = true) || it.countryCode.equals("ZZ", ignoreCase = true) }
     }
 
     suspend fun addSubject(familyId: String, title: String, languageCode: String, countryCode: String = "PK", gradeLevel: Int = 1, curriculumName: String = "Parent-created", curriculumSubjectCode: String = ""): SubjectRow {
@@ -575,16 +579,20 @@ class EduLockRepository(context: Context) {
         return SubjectRow(row.getString("id"), row.getString("family_id"), row.getString("title"), row.optString("language_code", "en"), row.optString("country_code", countryCode), row.optInt("grade_level", gradeLevel), row.optString("curriculum_name", curriculumName), row.optString("curriculum_subject_code", curriculumSubjectCode))
     }
 
-    suspend fun findOrCreateSubject(familyId: String, title: String, languageCode: String): SubjectRow {
+    suspend fun findOrCreateSubject(
+        familyId: String, title: String, languageCode: String, countryCode: String = "PK"
+    ): SubjectRow {
         requireSession("parent")
         val normalizedTitle = title.trim()
         require(normalizedTitle.isNotEmpty()) { "Enter a subject name." }
         val normalizedLanguage = languageCode.trim().ifBlank { "en" }
+        val normalizedCountry = countryCode.trim().uppercase(Locale.ROOT).takeIf { it.matches(Regex("[A-Z]{2}")) } ?: "PK"
         val existing = loadSubjects(familyId).firstOrNull {
             it.title.equals(normalizedTitle, ignoreCase = true) &&
-                it.languageCode.equals(normalizedLanguage, ignoreCase = true)
+                it.languageCode.equals(normalizedLanguage, ignoreCase = true) &&
+                it.countryCode.equals(normalizedCountry, ignoreCase = true)
         }
-        return existing ?: addSubject(familyId, normalizedTitle, normalizedLanguage)
+        return existing ?: addSubject(familyId, normalizedTitle, normalizedLanguage, normalizedCountry)
     }
 
     suspend fun addQuestion(
