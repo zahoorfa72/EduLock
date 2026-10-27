@@ -51,6 +51,7 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,6 +81,9 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.time.Instant
 import java.time.LocalDate
 import java.util.Locale
@@ -372,13 +376,56 @@ private fun EduLockApp(repository: EduLockRepository) {
     var childLocationRows by remember { mutableStateOf(emptyList<ChildLocationSnapshot>()) }
     var pendingChildAction by remember { mutableStateOf<Pair<ChildProfile, String>?>(null) }
     var protectionAccessibilityEnabled by remember { mutableStateOf(isAccessibilityServiceEnabled(context)) }
+    var protectionAccessibilityOperational by remember { mutableStateOf(isAccessibilityServiceOperational(context)) }
     var protectionDeviceAdminEnabled by remember { mutableStateOf(isDeviceAdminActive(context)) }
     var protectionManagedEnabled by remember { mutableStateOf(isManagedDeviceProtectionActive(context)) }
+    var childRulesSyncError by remember { mutableStateOf<String?>(null) }
+    var childRulesLastSyncedAt by remember {
+        mutableStateOf(context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
+            .getLong("rules_synced_at", 0L).takeIf { it > 0L })
+    }
 
     fun refreshProtectionStatus() {
         protectionAccessibilityEnabled = isAccessibilityServiceEnabled(context)
+        protectionAccessibilityOperational = isAccessibilityServiceOperational(context)
         protectionDeviceAdminEnabled = isDeviceAdminActive(context)
         protectionManagedEnabled = isManagedDeviceProtectionActive(context)
+    }
+
+    val accessibilitySettingsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        refreshProtectionStatus()
+        notice = when {
+            isAccessibilityServiceOperational(context) ->
+                "Android confirms EduLock's Accessibility service is enabled and responding on this phone."
+            isAccessibilityServiceEnabled(context) ->
+                "Android shows Accessibility enabled, but EduLock has not confirmed a live service heartbeat. Refresh status before relying on blocking."
+            else ->
+                "Accessibility was not enabled. Automatic app restrictions are not active on this phone."
+        }
+    }
+    val deviceAdminSettingsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        refreshProtectionStatus()
+        notice = if (isDeviceAdminActive(context)) {
+            "Android confirms device-administrator permission is enabled. This alone does not provide kiosk or Clear-data protection."
+        } else {
+            "Device-administrator permission was not enabled. EduLock has not applied or reported that protection."
+        }
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                refreshProtectionStatus()
+                val modePrefs = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
+                ChildDeviceKioskPolicy.enterOrExitLockTask(context, modePrefs.getBoolean("kids_mode_enabled", false))
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     fun enableChildLocationSharing() {
@@ -651,9 +698,14 @@ private fun EduLockApp(repository: EduLockRepository) {
         tasks = repository.loadChildTasks(linked.id)
         try {
             earnedToday = repository.refreshChildDeviceRestrictions(linked)
+            childRulesLastSyncedAt = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
+                .getLong("rules_synced_at", System.currentTimeMillis())
+            childRulesSyncError = null
+            ChildDeviceKioskPolicy.enterOrExitLockTask(context, linked.kidsModeEnabled)
             repository.syncAppUsage(linked.id)
         } catch (e: Exception) {
-            notice = "Signed in, but device settings or usage did not sync: " + (e.message ?: "try again")
+            childRulesSyncError = e.message ?: "Supabase did not confirm the child-device rules sync."
+            notice = "Signed in, but device settings or usage did not sync: " + childRulesSyncError
         }
         screen = AppScreen.CHILD_HOME
     }
@@ -795,10 +847,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                         childProfile = currentProfile
                         tasks = repository.loadChildTasks(activeChildId)
                         earnedToday = repository.refreshChildDeviceRestrictions(currentProfile)
+                        childRulesLastSyncedAt = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
+                            .getLong("rules_synced_at", System.currentTimeMillis())
+                        childRulesSyncError = null
+                        ChildDeviceKioskPolicy.enterOrExitLockTask(context, currentProfile.kidsModeEnabled)
                         repository.syncAppUsage(activeChildId)
                     }
-                } catch (_: Exception) {
-                    // Keep the last applied rules while offline; retry on the next cycle.
+                } catch (e: Exception) {
+                    childRulesSyncError = e.message ?: "Supabase did not confirm the child-device rules sync."
+                    // Keep the last confirmed rules while offline and surface the failed refresh.
                 }
             }
         }
@@ -902,14 +959,8 @@ private fun EduLockApp(repository: EduLockRepository) {
         screen = when (screen) {
             AppScreen.DEVICE_SETUP -> AppScreen.DEVICE_SETUP
             AppScreen.VERIFY_OTP -> AppScreen.AUTH
-            AppScreen.PAIR_CHILD -> {
-                repository.signOut()
-                session = null
-                childProfile = null
-                devicePreferences.edit().remove("mode").apply()
-                deviceMode = "unknown"
-                AppScreen.DEVICE_SETUP
-            }
+            // Don't let Android Back from child pairing return to parent sign-in/role selection.
+            AppScreen.PAIR_CHILD -> AppScreen.PAIR_CHILD
             // Android Back must not send a signed-in parent to the sign-in screen.
             AppScreen.PARENT_HOME -> AppScreen.PARENT_HOME
             AppScreen.AUTH -> AppScreen.AUTH
@@ -1567,6 +1618,57 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         " • Age " + child.ageYears,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (child.kidsModeEnabled) Color(0xFFFFE8B8) else Color(0xFFEAF5FF)
+                                    )
+                                ) {
+                                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        AppUiText(
+                                            if (child.kidsModeEnabled) "🔒 Kids Mode: ON" else "🔓 Kids Mode: OFF",
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        AppUiText(
+                                            if (child.kidsModeEnabled)
+                                                "Only apps explicitly enabled by the parent can open. The launcher/navigation and essential phone/permission components remain available. Accessibility must be active on the child phone; true kiosk enforcement additionally requires device-owner setup."
+                                            else
+                                                "Enable Kids Mode to block apps that are not explicitly allowed for this child."
+                                        )
+                                        OutlinedButton(
+                                            onClick = {
+                                                execute {
+                                                    val requested = !child.kidsModeEnabled
+                                                    val existingRules = repository.loadAllowedApps(child.id)
+                                                    val confirmed = repository.updateChildKidsMode(child.id, requested)
+                                                    if (confirmed != requested) {
+                                                        throw IllegalStateException("Supabase did not confirm the requested Kids Mode setting.")
+                                                    }
+                                                    val latest = repository.loadChildren(familyId)
+                                                    val updated = latest.firstOrNull { it.id == child.id }
+                                                        ?: throw IllegalStateException("Supabase did not return this child profile after saving Kids Mode.")
+                                                    if (updated.kidsModeEnabled != requested) {
+                                                        throw IllegalStateException("Supabase returned a different Kids Mode value. No success was reported.")
+                                                    }
+                                                    children = latest
+                                                    selectedChild = updated
+                                                    notice = when {
+                                                        requested && existingRules.none { it.enabled } ->
+                                                            "Kids Mode was saved and verified in Supabase, but no apps are enabled yet. Third-party apps will be blocked after the child phone syncs. Add permitted apps first."
+                                                        requested ->
+                                                            "Kids Mode was saved and verified in Supabase. The child phone applies it after its next successful sync; verify Accessibility and device-owner status on that phone."
+                                                        else ->
+                                                            "Kids Mode was disabled and verified in Supabase. Individual app rules apply again after the next child-device sync."
+                                                    }
+                                                }
+                                            },
+                                            enabled = !busy,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            AppUiText(if (child.kidsModeEnabled) "Turn Kids Mode OFF" else "Enable Kids Mode • block unapproved apps")
+                                        }
+                                    }
+                                }
                                 Field(
                                     childGameLimitEdits[child.id] ?: child.dailyGameLimitMinutes.toString(),
                                     { value -> childGameLimitEdits = childGameLimitEdits + (child.id to value.filter(Char::isDigit).take(4)) },
@@ -2719,7 +2821,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.ALLOWED_APPS -> ScreenFrame("Allowed apps", onBack = { screen = AppScreen.CHILDREN }, notice = notice, busy = busy) {
                     val child = selectedChild
                     AppUiText("Child: " + (child?.displayName ?: "Not selected"))
-                    AppUiText("User-facing apps from the child's phone. Apps start allowed. Disable an app or set a daily limit to restrict it; changes sync while EduLock is open on the child's phone.")
+                    AppUiText(
+                        if (child?.kidsModeEnabled == true)
+                            "Kids Mode is ON for this child. Only apps with an enabled rule are allowed; apps without a rule are blocked after the child phone successfully syncs. The launcher, navigation and essential phone/permission components stay available."
+                        else
+                            "User-facing apps from the child's phone. Apps start allowed in normal mode. Disable an app or set a daily limit to restrict it; changes sync while EduLock is open on the child's phone."
+                    )
                     OutlinedButton(
                         onClick = {
                             execute {
@@ -2754,8 +2861,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                     ) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             AppUiText("App access overview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            AppUiText("$cleanedAppCount apps detected • " + allowedApps.count { it.enabled } + " allowed • " + allowedApps.count { !it.enabled } + " blocked")
-                            AppUiText("Everything starts allowed. Parent controls include enable/disable, daily minute caps and day-by-day weekly access windows in 24-hour time.")
+                            AppUiText("$cleanedAppCount apps detected • " + allowedApps.count { it.enabled } + " enabled allowlist entries • " + allowedApps.count { !it.enabled } + " disabled entries")
+                            AppUiText(
+                                if (child?.kidsModeEnabled == true)
+                                    "Kids Mode is ON: an enabled app rule is required. Individual daily limits and weekday windows still apply to enabled apps."
+                                else
+                                    "Normal mode allows apps unless individually disabled or restricted. Parent controls include daily minute caps and weekday access windows."
+                            )
                         }
                     }
                     OutlinedTextField(
@@ -3014,28 +3126,88 @@ private fun EduLockApp(repository: EduLockRepository) {
                     OutlinedButton(onClick = { openKids3DLab() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🪐 Explore 4D learning models • timed") }
                     OutlinedButton(onClick = { openSolarQuiz() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🚀 Play the 4D Solar System explorer • timed") }
                     SummaryCard("Learning rewards earned today", earnedToday.toString() + " minutes", "Successful tasks add reward minutes. Rewards are tracked separately from app access.")
+                    val kidsModeEnabled = child?.kidsModeEnabled == true
+                    val serviceSettingEnabled = isAccessibilityServiceEnabled(context)
+                    val serviceOperational = isAccessibilityServiceOperational(context)
+                    val managedProtectionActive = isManagedDeviceProtectionActive(context)
+                    val kioskPolicyApplied = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
+                        .getBoolean("lock_task_policy_applied", false)
                     SummaryCard(
                         "App access",
-                        "Available by default",
-                        "Apps stay available unless a parent disables an app or its configured daily limit is reached."
+                        if (kidsModeEnabled) "Kids Mode • allowlist" else "Available by default",
+                        if (kidsModeEnabled)
+                            "Only explicitly enabled apps should open. The launcher/navigation and essential phone/permission components stay available. Other apps are blocked after a successful sync."
+                        else
+                            "Apps stay available unless a parent disables an app or its configured daily limit is reached."
                     )
                     SummaryCard(
                         "App blocking",
-                        if (isAccessibilityServiceEnabled(context)) "Ready" else "Needs setup",
-                        if (isAccessibilityServiceEnabled(context)) "EduLock blocks only apps disabled by the parent or apps that reach their daily limit." else "Enable EduLock in Android Accessibility settings on the child's device to enforce parent-selected app restrictions."
+                        when {
+                            serviceOperational -> "Active • service responding"
+                            serviceSettingEnabled -> "Enabled, not confirmed running"
+                            else -> "Needs setup"
+                        },
+                        when {
+                            serviceOperational && kidsModeEnabled ->
+                                "Android shows EduLock's Accessibility service is running. Kids Mode blocks foreground apps not in the synced allowlist."
+                            serviceOperational ->
+                                "Android shows EduLock's Accessibility service is running. Individual app blocks, limits and schedules can be enforced."
+                            serviceSettingEnabled ->
+                                "The Android toggle is on, but EduLock has not confirmed a recent service heartbeat. Refresh status before relying on app blocking."
+                            else ->
+                                "Automatic blocking is not active. Enable EduLock in Android Accessibility settings on the child's phone."
+                        }
                     )
-                    val managedProtectionActive = isManagedDeviceProtectionActive(context)
+                    if (kidsModeEnabled) {
+                        SummaryCard(
+                            "Kids Mode enforcement",
+                            when {
+                                managedProtectionActive && kioskPolicyApplied -> "Managed kiosk policy confirmed"
+                                serviceOperational -> "Accessibility fallback active"
+                                else -> "NOT ACTIVE • setup required"
+                            },
+                            when {
+                                managedProtectionActive && kioskPolicyApplied ->
+                                    "Android confirmed device-owner restrictions and the lock-task allowlist. The launcher stays available, but only allowlisted apps are permitted in kiosk mode."
+                                serviceOperational ->
+                                    "Accessibility-based blocking is running, but this phone is not confirmed as device owner. It cannot guarantee protection against force-stop, Clear data or system-level escape."
+                                else ->
+                                    "Kids Mode is saved in Supabase, but this phone has not confirmed active enforcement. Enable Accessibility and sync again. Kiosk-level enforcement requires device-owner provisioning."
+                            }
+                        )
+                    }
                     SummaryCard(
                         "Uninstall & clear-data protection",
-                        if (managedProtectionActive) "Managed policy active" else "Limited on this device",
-                        if (managedProtectionActive) "Android device-owner policies are blocking app-management actions, including uninstall and Clear data through Settings." else "Full protection is not active. Device-admin mode alone cannot reliably block Clear data. Stronger protection requires setting up this phone as a managed device before normal use."
+                        if (managedProtectionActive) "Managed app-management policy confirmed" else "Limited on this device",
+                        if (managedProtectionActive)
+                            "Android confirmed device-owner restrictions for uninstall and app-management controls. This status alone does not guarantee Clear-data or factory-reset protection."
+                        else
+                            "Visible device-admin mode alone does not reliably prevent Clear data or factory reset. Stronger protection requires device-owner provisioning before normal use."
                     )
-                    if (isAccessibilityServiceEnabled(context)) {
-                        AppUiText("Device restriction service: enabled on this device.")
+                    if (childRulesSyncError != null) {
+                        SummaryCard("Parental settings sync", "NOT CONFIRMED", childRulesSyncError ?: "Rules sync did not succeed.")
+                    } else if (childRulesLastSyncedAt != null) {
+                        SummaryCard(
+                            "Parental settings sync",
+                            "Confirmed",
+                            "Last successful rules sync: " + java.text.SimpleDateFormat("HH:mm:ss", Locale.ROOT)
+                                .format(java.util.Date(childRulesLastSyncedAt!!)) + ". New parent changes apply after a later successful sync."
+                        )
+                    }
+                    if (serviceOperational) {
+                        AppUiText("Device restriction service: enabled and recently responding on this device.")
                     } else {
-                        AppUiText("Automatic blocking needs your parent's permission and one-time activation in Android Accessibility settings on this device.")
-                        Button(onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }, modifier = Modifier.fillMaxWidth()) {
-                            AppUiText("Enable EduLock app restrictions")
+                        AppUiText(
+                            if (serviceSettingEnabled)
+                                "Accessibility is enabled in Android settings, but the service has not confirmed it is running. Refresh status before relying on blocking."
+                            else
+                                "Automatic blocking needs Android Accessibility permission on this child's device."
+                        )
+                        Button(
+                            onClick = { accessibilitySettingsLauncher.launch(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            AppUiText("Open Accessibility settings")
                         }
                         OutlinedButton(
                             onClick = {
@@ -3064,7 +3236,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     "With a parent's permission, enable Android's visible device-administrator setting. It may add a deactivation step before ordinary uninstall, but does not reliably prevent Clear data or factory reset."
                                 )
                             }
-                            context.startActivity(intent)
+                            deviceAdminSettingsLauncher.launch(intent)
                         }, modifier = Modifier.fillMaxWidth()) {
                             AppUiText("🔒 Enable device administrator")
                         }
@@ -3107,6 +3279,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                             val linked = childProfile ?: throw IllegalStateException("Sign in to your child account again.")
                             tasks = repository.loadChildTasks(linked.id)
                             earnedToday = repository.refreshChildDeviceRestrictions(linked)
+                            childRulesLastSyncedAt = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
+                                .getLong("rules_synced_at", System.currentTimeMillis())
+                            childRulesSyncError = null
+                            ChildDeviceKioskPolicy.enterOrExitLockTask(context, linked.kidsModeEnabled)
                             repository.syncAppUsage(linked.id)
                             screen = AppScreen.CHILD_HOME
                         }
@@ -3157,21 +3333,26 @@ private fun EduLockApp(repository: EduLockRepository) {
                     )
                     SummaryCard(
                         "App blocking overlay",
-                        if (protectionAccessibilityEnabled) "Enabled" else "Needs setup",
-                        if (protectionAccessibilityEnabled)
-                            "The accessibility service is enabled. It can show EduLock's transparent restriction screen over unapproved apps while its rules are active."
-                        else
-                            "Enable EduLock in Android Accessibility settings on the child's device to allow app-level restriction screens."
+                        when {
+                            protectionAccessibilityOperational -> "Active • service responding"
+                            protectionAccessibilityEnabled -> "Setting enabled; service not confirmed"
+                            else -> "Needs setup"
+                        },
+                        when {
+                            protectionAccessibilityOperational -> "Android confirms the Accessibility setting is enabled and EduLock has a recent service heartbeat."
+                            protectionAccessibilityEnabled -> "Android reports the setting enabled, but the running service has not been confirmed."
+                            else -> "Enable EduLock in Android Accessibility settings on the child's device to allow app-level restriction screens."
+                        }
                     )
-                    if (!protectionAccessibilityEnabled) {
+                    if (!protectionAccessibilityEnabled || !protectionAccessibilityOperational) {
                         Button(
                             onClick = {
-                                context.startActivity(
+                                accessibilitySettingsLauncher.launch(
                                     Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 )
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { AppUiText("Enable app blocking in Accessibility") }
+                        ) { AppUiText("Open Accessibility settings") }
                     }
                     SummaryCard(
                         "Device administrator",
@@ -3192,7 +3373,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         "With a parent's permission, enable Android's visible device-administrator setting. It may add a deactivation step before ordinary uninstall, but does not guarantee protection against clearing data or factory reset."
                                     )
                                 }
-                                context.startActivity(intent)
+                                deviceAdminSettingsLauncher.launch(intent)
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) { AppUiText("Enable visible device administrator") }
@@ -3213,17 +3394,24 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                     OutlinedButton(
                         onClick = {
-                            applyManagedDeviceProtection(context)
+                            val requested = applyManagedDeviceProtection(context)
                             refreshProtectionStatus()
-                            notice = if (protectionManagedEnabled)
-                                "Managed-device restrictions are active on this phone."
-                            else
-                                "Status refreshed. EduLock can apply stronger controls only if Android has already provisioned it as device owner."
+                            val manager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                            val confirmed = isManagedDeviceProtectionActive(context)
+                            notice = when {
+                                confirmed -> "Android verified the managed-device app-management restrictions on this phone."
+                                !manager.isDeviceOwnerApp(context.packageName) ->
+                                    "Not applied: Android does not identify EduLock as this phone's device owner. Strong kiosk protection is not active."
+                                requested ->
+                                    "The policy request returned, but Android did not confirm all required restrictions. EduLock is not reporting managed protection as active."
+                                else ->
+                                    "Android rejected or did not confirm the managed-device policy. No successful protection status is reported."
+                            }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { AppUiText("Refresh status and apply supported device-owner rules") }
                     AppUiText(
-                        "Safety note: EduLock displays its blocker only over restricted apps. It does not cover Android Settings or secretly intercept system controls. If a child clears app data, an anonymous pairing session may be lost and the device may need to be paired again.",
+                        "Safety note: Accessibility-based blocking cannot guarantee protection against force-stop, Clear data or factory reset on a normal phone. Kids Mode blocks Settings while the service is running. Device-owner kiosk policy is stronger and must be provisioned before normal use.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -3806,17 +3994,12 @@ private fun directionFor(language: String): LayoutDirection =
  * device-owner status at runtime.
  */
 private fun applyManagedDeviceProtection(context: Context): Boolean {
-    val manager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-    if (!manager.isDeviceOwnerApp(context.packageName)) return false
-    val component = ComponentName(context, EduLockDeviceAdminReceiver::class.java)
-    return try {
-        manager.setUninstallBlocked(component, context.packageName, true)
-        manager.addUserRestriction(component, UserManager.DISALLOW_APPS_CONTROL)
-        manager.addUserRestriction(component, UserManager.DISALLOW_UNINSTALL_APPS)
-        true
-    } catch (_: Exception) {
-        false
-    }
+    val prefs = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
+    return ChildDeviceKioskPolicy.apply(
+        context,
+        prefs.getBoolean("kids_mode_enabled", false),
+        prefs.getStringSet("allowed_packages", emptySet()).orEmpty()
+    )
 }
 
 private fun isManagedDeviceProtectionActive(context: Context): Boolean {
@@ -3843,6 +4026,14 @@ private fun isAccessibilityServiceEnabled(context: Context): Boolean {
     val enabled = Secure.getString(context.contentResolver, Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
     val serviceName = context.packageName + "/" + EduLockAccessibilityService::class.java.name
     return enabled.split(':').any { it.equals(serviceName, ignoreCase = true) }
+}
+
+private fun isAccessibilityServiceOperational(context: Context): Boolean {
+    if (!isAccessibilityServiceEnabled(context)) return false
+    val lastTick = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
+        .getLong("last_service_tick_at", 0L)
+    val age = System.currentTimeMillis() - lastTick
+    return lastTick > 0L && age in 0L..30_000L
 }
 
 class MainActivity : androidx.activity.ComponentActivity() {
