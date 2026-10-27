@@ -404,7 +404,7 @@ class EduLockRepository(context: Context) {
         val country = countryCode.trim().uppercase(Locale.ROOT).takeIf { it.matches(Regex("[A-Z]{2}")) } ?: "PK"
         val learning = learningLanguageCode.trim().lowercase(Locale.ROOT).takeIf { it.matches(Regex("[a-z][a-z0-9-]{1,15}")) } ?: "en"
         val display = displayLanguageCode.trim().lowercase(Locale.ROOT).takeIf { it.matches(Regex("[a-z][a-z0-9-]{1,15}")) } ?: "en"
-        val track = studyTrack.trim().lowercase(Locale.ROOT).takeIf { it in setOf("none", "islamic", "hindu", "christian", "sikh", "buddhist", "jewish", "other") } ?: "none"
+        val track = studyTrack.trim().lowercase(Locale.ROOT).takeIf { it in setOf("none", "islamic", "hindu", "christian", "sikh", "buddhist", "jewish", "jain", "other") } ?: "none"
         val profileName = displayName.trim().ifBlank { "My family" }.take(120)
         val rows = restArray("family_profiles?select=id", "POST",
             JSONObject().put("owner_user_id", session.userId).put("display_name", profileName)
@@ -441,7 +441,7 @@ class EduLockRepository(context: Context) {
             return code
         }
         val track = studyTrack.trim().lowercase(Locale.ROOT)
-        require(track in setOf("none", "islamic", "hindu", "christian", "sikh", "buddhist", "jewish", "other")) { "Choose a study track." }
+        require(track in setOf("none", "islamic", "hindu", "christian", "sikh", "buddhist", "jewish", "jain", "other")) { "Choose a study track." }
         restArray("family_profiles?id=eq.$familyId", "PATCH",
             JSONObject().put("country_code", country).put("learning_language_code", language(learningLanguageCode))
                 .put("study_track", track).put("display_language_code", language(displayLanguageCode)))
