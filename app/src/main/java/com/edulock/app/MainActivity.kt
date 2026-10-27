@@ -2707,9 +2707,39 @@ private fun EduLockApp(repository: EduLockRepository) {
                         onSelectModel = { selected3DModel = it },
                         onStartSolarQuiz = { solarQuizReturnScreen = AppScreen.LEARNING_3D_LAB; screen = AppScreen.SOLAR_SYSTEM_QUIZ },
                         onCreateQuestion = { option ->
-                            selected3DModel = option.id
-                            notice = "Choose a subject, then use the question editor to create a question for this model."
-                            screen = AppScreen.SUBJECTS
+                            execute {
+                                val targetSubject = repository.findOrCreateSubject(familyId, option.subject, "en", parentCountryCode)
+                                selectedSubject = targetSubject
+                                subjects = repository.loadSubjects(familyId, parentCountryCode)
+                                questions = repository.loadQuestions(targetSubject.id)
+                                questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
+                                questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
+                                val starter: Triple<String, List<String>, String> = when (option.id) {
+                                    "solar-system" -> Triple("Which planet has the most conspicuous ring system?", listOf("Mercury", "Saturn", "Earth"), "Saturn")
+                                    "atom" -> Triple("Which particle has a negative electric charge?", listOf("Electron", "Proton", "Neutron"), "Electron")
+                                    "molecule" -> Triple("Which elements form a water molecule?", listOf("Hydrogen and oxygen", "Carbon and oxygen", "Sodium and chlorine"), "Hydrogen and oxygen")
+                                    "geometry" -> Triple("How many square faces does a cube have?", listOf("4", "6", "8"), "6")
+                                    "cell" -> Triple("Which cell structure contains most genetic material?", listOf("Nucleus", "Cell membrane", "Cytoplasm"), "Nucleus")
+                                    "force" -> Triple("What can an unbalanced force change?", listOf("An object's motion", "Its mass always", "The laws of gravity"), "An object's motion")
+                                    "water-cycle" -> Triple("What process changes surface water into vapour?", listOf("Evaporation", "Condensation", "Freezing"), "Evaporation")
+                                    "earth" -> Triple("What causes day and night?", listOf("Earth's rotation", "The Moon turning off the Sun", "Clouds"), "Earth's rotation")
+                                    "circuit" -> Triple("What does a simple circuit need to carry current continuously?", listOf("A closed conducting path and a source", "A broken wire", "Only a plastic path"), "A closed conducting path and a source")
+                                    "magnet" -> Triple("Which magnetic poles attract each other?", listOf("Opposite poles", "Like poles", "No poles"), "Opposite poles")
+                                    "volcano" -> Triple("What is molten rock called after it reaches the surface?", listOf("Lava", "Magma", "Granite"), "Lava")
+                                    "flower" -> Triple("Which flower part often attracts pollinators?", listOf("Petals", "Roots", "Stem only"), "Petals")
+                                    else -> Triple(option.question, listOf("Option A", "Option B", "Option C"), "Option A")
+                                }
+                                questionPrompt = starter.first
+                                questionOptions = starter.second.joinToString(", ")
+                                questionAnswer = starter.third
+                                questionSolution = option.detail
+                                question3DModel = option.id
+                                questionType = "multiple_choice"
+                                questionConceptKey = "learning-lab"
+                                questionLanguage = "en"
+                                screen = AppScreen.ADD_QUESTION
+                                notice = "A draft question is ready with the selected 3D model. Review its answer and save it for your learners."
+                            }
                         }
                     )
                 }
