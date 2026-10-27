@@ -90,6 +90,37 @@ private fun studyTrackLabel(code: String): String = when (code) {
     else -> "Not selected"
 }
 
+private fun religiousStudyOptionsForCountry(countryCode: String): List<Pair<String, String>> {
+    val noTrack = "none" to "No religious-education track"
+    val allTracks = listOf(
+        "islamic" to "Islam",
+        "hindu" to "Hinduism",
+        "christian" to "Christianity",
+        "sikh" to "Sikhism",
+        "buddhist" to "Buddhism",
+        "jain" to "Jainism",
+        "jewish" to "Judaism",
+        "other" to "Other / parent-created"
+    )
+    val country = countryCode.uppercase(Locale.ROOT)
+    val locallyRelevantOrder = when (country) {
+        "PK" -> listOf("islamic", "hindu", "christian", "sikh", "buddhist", "jain", "jewish", "other")
+        "IN" -> listOf("hindu", "islamic", "sikh", "christian", "buddhist", "jain", "jewish", "other")
+        "BD" -> listOf("islamic", "hindu", "buddhist", "christian", "other")
+        "LK" -> listOf("buddhist", "hindu", "islamic", "christian", "other")
+        "NP" -> listOf("hindu", "buddhist", "islamic", "christian", "other")
+        "ID" -> listOf("islamic", "christian", "hindu", "buddhist", "other")
+        "MY" -> listOf("islamic", "buddhist", "hindu", "christian", "sikh", "other")
+        "SA", "AE", "QA", "OM", "KW", "BH" -> listOf("islamic", "christian", "hindu", "buddhist", "other")
+        "US", "GB", "CA", "AU", "NZ" -> listOf("christian", "islamic", "hindu", "sikh", "buddhist", "jewish", "jain", "other")
+        else -> allTracks.map { it.first }
+    }
+    val ordered = locallyRelevantOrder.mapNotNull { key -> allTracks.firstOrNull { it.first == key } }
+    val remaining = allTracks.filterNot { item -> ordered.any { it.first == item.first } }
+    // The local order is a helpful starting point, not a statement about a family's beliefs.
+    return listOf(noTrack) + ordered + remaining
+}
+
 private fun religionTrackForSubject(title: String): String? = when {
     title.contains("Islamic Studies", ignoreCase = true) -> "islamic"
     title.contains("Hindu Studies", ignoreCase = true) -> "hindu"
@@ -923,41 +954,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 text = {
                     Column(Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState())) {
                         AppUiText("Optional. Choose the learning track you want EduLock to use; it does not infer a family's religion from its country.")
-                        val trackOptions = when (parentCountryCode) {
-                            "PK" -> listOf(
-                                "none" to "No religious-education track",
-                                "islamic" to "Islam",
-                                "hindu" to "Hinduism",
-                                "christian" to "Christianity",
-                                "sikh" to "Sikhism",
-                                "buddhist" to "Buddhism",
-                                "jain" to "Jainism",
-                                "jewish" to "Judaism",
-                                "other" to "Other / parent-created"
-                            )
-                            "IN" -> listOf(
-                                "none" to "No religious-education track",
-                                "hindu" to "Hinduism",
-                                "islamic" to "Islam",
-                                "sikh" to "Sikhism",
-                                "jain" to "Jainism",
-                                "buddhist" to "Buddhism",
-                                "christian" to "Christianity",
-                                "jewish" to "Judaism",
-                                "other" to "Other / parent-created"
-                            )
-                            else -> listOf(
-                                "none" to "No religious-education track",
-                                "islamic" to "Islam",
-                                "hindu" to "Hinduism",
-                                "christian" to "Christianity",
-                                "sikh" to "Sikhism",
-                                "buddhist" to "Buddhism",
-                                "jewish" to "Judaism",
-                                "jain" to "Jainism",
-                                "other" to "Other / parent-created"
-                            )
-                        }
+                        val trackOptions = religiousStudyOptionsForCountry(parentCountryCode)
                         trackOptions.forEach { (code, label) ->
                             TextButton(onClick = {
                                 parentStudyTrack = code
