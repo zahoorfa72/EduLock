@@ -204,21 +204,6 @@ data class ChildLocationSnapshot(
     val sharingEnabled: Boolean,
     val batteryPercent: Int?
 )
-data class TaskAnswer(
-    val questionId: String,
-    val answer: String,
-    val languageCode: String = ""
-)
-
-data class TaskSubmissionResult(
-    val attemptId: String?,
-    val scorePercent: Int,
-    val passed: Boolean,
-    val awardedMinutes: Int,
-    val dailyUsedMinutesAfter: Int,
-    val dailyCapMinutes: Int
-)
-
 data class AttemptRow(
     val id: String,
     val childId: String,
@@ -1058,32 +1043,31 @@ class EduLockRepository(context: Context) {
      * optional language selections. The function validates the linked child/task and
      * creates attempt/reward ledger rows atomically.
      */
-    suspend fun submitTask(taskId: String, answers: List<TaskAnswer>): TaskSubmissionResult {
+    suspend fun submitTask(
+        taskId: String,
+        answers: Map<String, String>,
+        answerLanguages: Map<String, String> = emptyMap()
+    ): TaskResult {
         requireSession("child")
         require(taskId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid task." }
         require(answers.isNotEmpty() && answers.size <= 500) { "Answer every question before submitting." }
-        val seen = mutableSetOf<String>()
         val payload = JSONArray()
-        answers.forEach { answer ->
-            require(answer.questionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid question." }
-            require(seen.add(answer.questionId)) { "Each question may be answered only once." }
-            require(answer.answer.length <= 10000) { "An answer is too long." }
-            val row = JSONObject()
-                .put("question_id", answer.questionId)
-                .put("answer", answer.answer)
-            if (answer.languageCode.isNotBlank()) row.put("language_code", answer.languageCode.take(16))
+        answers.forEach { (questionId, answerText) ->
+            require(questionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid question." }
+            require(answerText.length <= 10000) { "An answer is too long." }
+            val row = JSONObject().put("question_id", questionId).put("answer", answerText)
+            answerLanguages[questionId]?.takeIf { it.isNotBlank() }?.let { row.put("language_code", it.take(16)) }
             payload.put(row)
         }
         val response = requestFunction(
             "submit-task-attempt",
             JSONObject().put("task_id", taskId).put("answers", payload)
         )
-        return TaskSubmissionResult(
-            attemptId = response.optString("attempt_id").takeIf { it.isNotBlank() && it != "null" },
+        return TaskResult(
             scorePercent = response.optInt("score_percent", 0).coerceIn(0, 100),
             passed = response.optBoolean("passed", false),
             awardedMinutes = response.optInt("awarded_minutes", 0).coerceIn(0, 1440),
-            dailyUsedMinutesAfter = response.optInt("daily_used_minutes_after", 0).coerceAtLeast(0),
+            dailyUsedMinutes = response.optInt("daily_used_minutes_after", response.optInt("daily_used_minutes", 0)).coerceAtLeast(0),
             dailyCapMinutes = response.optInt("daily_cap_minutes", 0).coerceIn(0, 1440)
         )
     }
