@@ -204,6 +204,21 @@ data class ChildLocationSnapshot(
     val sharingEnabled: Boolean,
     val batteryPercent: Int?
 )
+data class TaskAnswer(
+    val questionId: String,
+    val answer: String,
+    val languageCode: String = ""
+)
+
+data class TaskSubmissionResult(
+    val attemptId: String?,
+    val scorePercent: Int,
+    val passed: Boolean,
+    val awardedMinutes: Int,
+    val dailyUsedMinutesAfter: Int,
+    val dailyCapMinutes: Int
+)
+
 data class AttemptRow(
     val id: String,
     val childId: String,
