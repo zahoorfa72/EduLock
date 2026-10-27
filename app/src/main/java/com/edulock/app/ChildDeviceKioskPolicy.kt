@@ -25,9 +25,15 @@ object ChildDeviceKioskPolicy {
         }
         val admin = ComponentName(context, EduLockDeviceAdminReceiver::class.java)
         return try {
-            manager.setUninstallBlocked(admin, context.packageName, true)
-            manager.addUserRestriction(admin, UserManager.DISALLOW_APPS_CONTROL)
-            manager.addUserRestriction(admin, UserManager.DISALLOW_UNINSTALL_APPS)
+            if (kidsModeEnabled) {
+                manager.setUninstallBlocked(admin, context.packageName, true)
+                manager.addUserRestriction(admin, UserManager.DISALLOW_APPS_CONTROL)
+                manager.addUserRestriction(admin, UserManager.DISALLOW_UNINSTALL_APPS)
+            } else {
+                manager.setUninstallBlocked(admin, context.packageName, false)
+                manager.clearUserRestriction(admin, UserManager.DISALLOW_APPS_CONTROL)
+                manager.clearUserRestriction(admin, UserManager.DISALLOW_UNINSTALL_APPS)
+            }
             val homePackage = resolveHomePackage(context)
             val candidates = linkedSetOf(context.packageName)
             if (homePackage.isNotBlank()) candidates += homePackage
@@ -54,9 +60,18 @@ object ChildDeviceKioskPolicy {
                 } else DevicePolicyManager.LOCK_TASK_FEATURE_NONE
                 manager.setLockTaskFeatures(admin, features)
             }
+            val userManager = context.getSystemService(Context.USER_SERVICE) as UserManager
+            val restrictionsMatch = if (kidsModeEnabled) {
+                userManager.hasUserRestriction(UserManager.DISALLOW_APPS_CONTROL) &&
+                    userManager.hasUserRestriction(UserManager.DISALLOW_UNINSTALL_APPS)
+            } else {
+                !userManager.hasUserRestriction(UserManager.DISALLOW_APPS_CONTROL) &&
+                    !userManager.hasUserRestriction(UserManager.DISALLOW_UNINSTALL_APPS)
+            }
             val confirmed = manager.isDeviceOwnerApp(context.packageName) &&
                 context.packageName in manager.getLockTaskPackages(admin) &&
-                manager.isUninstallBlocked(admin, context.packageName)
+                manager.isUninstallBlocked(admin, context.packageName) == kidsModeEnabled &&
+                restrictionsMatch
             context.getSharedPreferences(LOCK_PREFS, Context.MODE_PRIVATE)
                 .edit().putBoolean(KEY_POLICY_APPLIED, confirmed).apply()
             confirmed

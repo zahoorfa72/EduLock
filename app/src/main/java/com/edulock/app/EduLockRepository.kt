@@ -1077,8 +1077,11 @@ class EduLockRepository(context: Context) {
                 .put("display_name", name).put("last_seen_at", timestamp))
         }
         // One PostgREST upsert avoids hundreds of sequential network requests on child startup.
-        restArray("child_installed_apps?on_conflict=child_id,package_name", "POST", payload,
+        val uploaded = restArray("child_installed_apps?on_conflict=child_id,package_name", "POST", payload,
             prefer = "resolution=merge-duplicates,return=representation")
+        if (uploaded.length() < normalized.size) {
+            throw IOException("Supabase accepted only ${uploaded.length()} of ${normalized.size} installed apps. The inventory will retry on the next sync.")
+        }
         inventoryPrefs.edit().putString(hashKey, fingerprint).apply()
     }
     suspend fun loadInstalledApps(childId: String): List<ChildInstalledApp> {
@@ -1103,10 +1106,16 @@ class EduLockRepository(context: Context) {
             val id = existing.optJSONObject(0)?.optString("id")
             if (!id.isNullOrBlank()) {
                 restArray("allowed_apps?id=eq.$id", "PATCH", JSONObject().put("enabled", true).put("daily_limit_minutes", limitMinutes))
-                return
+            } else {
+                throw IOException("Supabase returned an invalid app-rule id. The rule was not reported as saved.")
             }
+        } else {
+            addAllowedApp(childId, app.packageName, app.displayName, limitMinutes)
         }
-        addAllowedApp(childId, app.packageName, app.displayName, limitMinutes)
+        val confirmed = loadAllowedApps(childId).firstOrNull { it.packageName == app.packageName }
+        if (confirmed == null || !confirmed.enabled || confirmed.dailyLimitMinutes != limitMinutes) {
+            throw IOException("Supabase did not confirm that ${app.displayName} is enabled with a $limitMinutes-minute limit.")
+        }
     }
 
     suspend fun loadAllowedApps(childId: String): List<AllowedApp> {
@@ -1129,6 +1138,7 @@ class EduLockRepository(context: Context) {
 
     suspend fun addAllowedApp(childId: String, packageName: String, displayName: String, dailyLimitMinutes: Int) {
         requireSession("parent")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
         require(dailyLimitMinutes in 1..1440) { "Daily app limit must be between 1 and 1440 minutes." }
         val normalizedPackage = packageName.trim()
         require(normalizedPackage.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+"))) {
@@ -1139,17 +1149,33 @@ class EduLockRepository(context: Context) {
             JSONObject().put("child_id", childId).put("package_name", normalizedPackage)
                 .put("display_name", displayName.trim().take(120)).put("enabled", true)
                 .put("daily_limit_minutes", dailyLimitMinutes))
+        val confirmed = loadAllowedApps(childId).firstOrNull { it.packageName == normalizedPackage }
+        if (confirmed == null || !confirmed.enabled || confirmed.dailyLimitMinutes != dailyLimitMinutes) {
+            throw IOException("Supabase did not confirm that $displayName was added as an enabled app.")
+        }
     }
 
     suspend fun updateAllowedAppLimit(appId: String, dailyLimitMinutes: Int) {
         requireSession("parent")
+        require(appId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid app rule." }
         require(dailyLimitMinutes in 1..1440) { "Daily app limit must be between 1 and 1440 minutes." }
         restArray("allowed_apps?id=eq.$appId", "PATCH", JSONObject().put("daily_limit_minutes", dailyLimitMinutes))
+        val row = restArray("allowed_apps?select=id,daily_limit_minutes&id=eq.$appId&limit=1").optJSONObject(0)
+            ?: throw IOException("Supabase did not confirm the app daily limit was saved.")
+        if (row.optInt("daily_limit_minutes", -1) != dailyLimitMinutes) {
+            throw IOException("Supabase returned a different app daily limit. No success was reported.")
+        }
     }
 
     suspend fun updateAllowedAppEnabled(appId: String, enabled: Boolean) {
         requireSession("parent")
+        require(appId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid app rule." }
         restArray("allowed_apps?id=eq.$appId", "PATCH", JSONObject().put("enabled", enabled))
+        val row = restArray("allowed_apps?select=id,enabled&id=eq.$appId&limit=1").optJSONObject(0)
+            ?: throw IOException("Supabase did not confirm the app access change.")
+        if (row.optBoolean("enabled", !enabled) != enabled) {
+            throw IOException("Supabase returned a different app access setting. No success was reported.")
+        }
     }
 
     suspend fun updateAllowedAppWeeklySchedule(appId: String, schedule: AppWeeklySchedule) {
@@ -1164,11 +1190,28 @@ class EduLockRepository(context: Context) {
             if (window.optBoolean("enabled")) require(start != end) { "Start and end time must differ for an enabled day." }
         }
         restArray("allowed_apps?id=eq.$appId", "PATCH", JSONObject().put("weekly_schedule", json))
+        val saved = restArray("allowed_apps?select=id,weekly_schedule&id=eq.$appId&limit=1").optJSONObject(0)
+            ?: throw IOException("Supabase did not confirm the weekly timetable was saved.")
+        val storedSchedule = saved.optJSONObject("weekly_schedule")
+            ?: throw IOException("Supabase returned no weekly timetable after saving.")
+        for (day in AppWeeklySchedule.DAY_KEYS) {
+            val expected = json.optJSONObject(day) ?: throw IllegalArgumentException("Set a valid schedule for every day.")
+            val actual = storedSchedule.optJSONObject(day)
+            if (actual == null ||
+                actual.optBoolean("enabled") != expected.optBoolean("enabled") ||
+                actual.optString("start") != expected.optString("start") ||
+                actual.optString("end") != expected.optString("end")) {
+                throw IOException("Supabase returned a different weekly timetable. No success was reported.")
+            }
+        }
     }
 
     suspend fun deleteAllowedApp(appId: String) {
         requireSession("parent")
+        require(appId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid app rule." }
         send("rest/v1/allowed_apps?id=eq.$appId", "DELETE", null, authenticated = true, profile = true)
+        val stillExists = restArray("allowed_apps?select=id&id=eq.$appId&limit=1").length() > 0
+        if (stillExists) throw IOException("Supabase did not confirm removal of this app rule.")
     }
 
     suspend fun refreshChildDeviceRestrictions(child: ChildProfile): Int {
