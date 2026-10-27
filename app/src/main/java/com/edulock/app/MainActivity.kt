@@ -712,6 +712,8 @@ private fun EduLockApp(repository: EduLockRepository) {
             AppScreen.PLAY_TASK, AppScreen.TASK_RESULT -> AppScreen.CHILD_HOME
             AppScreen.SOLAR_SYSTEM_QUIZ -> solarQuizReturnScreen
             AppScreen.KIDS_GAMES -> AppScreen.CHILD_HOME
+            AppScreen.LEARNING_3D_LAB -> AppScreen.PARENT_HOME
+            AppScreen.DRAWING_STUDIO -> if (childProfile != null) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME
         }
         notice = null
     }
@@ -1104,6 +1106,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     OutlinedButton(onClick = { selectedSubject = null; templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES }, modifier = Modifier.fillMaxWidth()) { Text("🧪 Learning templates for all subjects") }
                     OutlinedButton(onClick = { selected3DModel = "solar-system"; screen = AppScreen.LEARNING_3D_LAB }, modifier = Modifier.fillMaxWidth()) { Text("🌌 3D Learning Lab • all models") }
                     OutlinedButton(onClick = { screen = AppScreen.DRAWING_STUDIO }, modifier = Modifier.fillMaxWidth()) { Text("🎨 Drawing & Colour Studio") }
+                    OutlinedButton(onClick = { familySettingsOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("⚙ Family settings • country, religion & app language") }
                     Button(onClick = { selectedChild = null; selectedSubject = null; screen = AppScreen.ASSIGN_TASK }, modifier = Modifier.fillMaxWidth()) { Text("Assign learning task & reward") }
                     OutlinedButton(onClick = { screen = AppScreen.REPORTS; execute { attempts = repository.loadAttempts(); conceptProgress = repository.loadConceptProgress() } }, modifier = Modifier.fillMaxWidth()) { Text("🏆  Learning progress reports") }
                     OutlinedButton(onClick = {
@@ -2254,6 +2257,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                     }
                     Button(onClick = { openKidsGames() }, modifier = Modifier.fillMaxWidth()) { Text("🎮  Learning Games • daily time limit") }
+                    OutlinedButton(onClick = { screen = AppScreen.DRAWING_STUDIO }, modifier = Modifier.fillMaxWidth()) { Text("🎨 Draw & colour") }
                     OutlinedButton(onClick = { openSolarQuiz() }, modifier = Modifier.fillMaxWidth()) { Text("🚀 Play the 3D Solar System planet quiz • timed") }
                     SummaryCard("Learning rewards earned today", earnedToday.toString() + " minutes", "Successful tasks add reward minutes. Rewards are tracked separately from app access.")
                     SummaryCard(
@@ -2700,8 +2704,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                     )
                 }
 
-                AppScreen.DRAWING_STUDIO -> ScreenFrame("Drawing & Colour Studio", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
-                    DrawingStudioScreen(onBack = { screen = AppScreen.PARENT_HOME })
+                AppScreen.DRAWING_STUDIO -> ScreenFrame("Drawing & Colour Studio", onBack = { screen = if (childProfile != null) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
+                    DrawingStudioScreen(onBack = { screen = if (childProfile != null) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME })
                 }
 
                 AppScreen.KIDS_GAMES -> ScreenFrame("Kids' learning arcade", onBack = { screen = AppScreen.CHILD_HOME }, notice = notice, busy = busy) {
