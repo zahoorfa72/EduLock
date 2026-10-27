@@ -244,7 +244,7 @@ class EduLockRepository(context: Context) {
         val token = sessionFrom(json, accountRole)
         val identities = user?.optJSONArray("identities")
         if (token == null && identities != null && identities.length() == 0) {
-            throw IOException("This email is already registered. Switch to Sign in and use your existing password, or use your account recovery option.")
+            throw IOException("This email is already registered. Switch to Sign in and enter your existing password.")
         }
         if (token != null) {
             sessionStore.save(token)
