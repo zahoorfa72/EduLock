@@ -581,4 +581,40 @@ object FourDQuestionBanks {
             addAll(bank("Religious Education", subject, "book", seeds, conceptPrefix = "4d:book:faith:$track"))
         }
     }
+    fun forLearningContext(
+        subjectTitle: String,
+        languageCode: String,
+        gradeLevel: Int,
+        ageYears: Int
+    ): List<ParentLearningTemplate> {
+        val title = subjectTitle.trim()
+        val matching = all.filter { it.subjectTitle.equals(title, ignoreCase = true) }
+        val requested = matching.filter { it.languageCode.equals(languageCode.trim(), ignoreCase = true) }
+        val localized = requested.ifEmpty { matching.filter { it.languageCode.equals("en", ignoreCase = true) } }
+        if (localized.isEmpty()) return emptyList()
+
+        // Kindergarten/Class 1–2 and young learners receive concrete early-primary prompts.
+        if (gradeLevel <= 2 || ageYears <= 7) {
+            val seeds = earlyGradeSeeds(title)
+            if (seeds.isNotEmpty()) {
+                val first = localized.first()
+                val subjectModel = first.conceptKey.removePrefix("4d:").substringBefore(":")
+                val track = listOf("Islamic Studies" to "islamic", "Hindu Studies" to "hindu",
+                    "Christian Studies" to "christian", "Sikh Studies" to "sikh",
+                    "Buddhist Studies" to "buddhist", "Jewish Studies" to "jewish",
+                    "Jain Studies" to "jain", "World Religions & Ethics" to "other")
+                    .firstOrNull { it.first.equals(title, ignoreCase = true) }?.second
+                return if (track != null) {
+                    bank("Religious Education", title, subjectModel, seeds,
+                        language = first.languageCode, country = first.countryCode,
+                        conceptPrefix = "4d:book:faith:$track")
+                } else {
+                    bank(first.category, title, subjectModel, seeds,
+                        language = first.languageCode, country = first.countryCode)
+                }
+            }
+        }
+        return localized
+    }
+
 }
