@@ -1076,7 +1076,7 @@ class EduLockRepository(context: Context) {
     suspend fun loadAttempts(): List<AttemptRow> {
         requireSession("parent")
         val rows = restArray(
-            "attempts?select=id,task_id,child_id,score_percent,passed,awarded_minutes,created_at&order=created_at.desc&limit=1000"
+            "attempts?select=id,task_id,child_id,score_percent,passed,awarded_minutes,completed_at&order=completed_at.desc&limit=1000"
         )
         return (0 until rows.length()).mapNotNull { index ->
             val row = rows.optJSONObject(index) ?: return@mapNotNull null
@@ -1087,7 +1087,7 @@ class EduLockRepository(context: Context) {
                 scorePercent = row.optInt("score_percent", 0).coerceIn(0, 100),
                 passed = row.optBoolean("passed", false),
                 awardedMinutes = row.optInt("awarded_minutes", 0).coerceAtLeast(0),
-                completedAt = row.optString("created_at").takeIf { it.isNotBlank() && it != "null" } ?: ""
+                completedAt = row.optString("completed_at").takeIf { it.isNotBlank() && it != "null" } ?: ""
             )
         }
     }
