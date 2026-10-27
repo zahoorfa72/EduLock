@@ -78,6 +78,17 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.Locale
 
+private fun studyTrackLabel(code: String): String = when (code) {
+    "islamic" -> "Islam"
+    "hindu" -> "Hinduism"
+    "christian" -> "Christianity"
+    "sikh" -> "Sikhism"
+    "buddhist" -> "Buddhism"
+    "jewish" -> "Judaism"
+    "other" -> "Other"
+    else -> "Not selected"
+}
+
 private enum class AppScreen {
     DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ, KIDS_GAMES, LEARNING_3D_LAB, DRAWING_STUDIO,
     SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
