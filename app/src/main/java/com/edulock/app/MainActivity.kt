@@ -2553,6 +2553,23 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                 }
 
+                AppScreen.LEARNING_3D_LAB -> ScreenFrame("3D Learning Lab", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
+                    Learning3DLabScreen(
+                        selectedModel = selected3DModel,
+                        onSelectModel = { selected3DModel = it },
+                        onStartSolarQuiz = { solarQuizReturnScreen = AppScreen.LEARNING_3D_LAB; screen = AppScreen.SOLAR_SYSTEM_QUIZ },
+                        onCreateQuestion = { option ->
+                            selected3DModel = option.id
+                            notice = "Choose a subject, then use the question editor to create a question for this model."
+                            screen = AppScreen.SUBJECTS
+                        }
+                    )
+                }
+
+                AppScreen.DRAWING_STUDIO -> ScreenFrame("Drawing & Colour Studio", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
+                    DrawingStudioScreen(onBack = { screen = AppScreen.PARENT_HOME })
+                }
+
                 AppScreen.KIDS_GAMES -> ScreenFrame("Kids' learning arcade", onBack = { screen = AppScreen.CHILD_HOME }, notice = notice, busy = busy) {
                     KidsGamesScreen(
                         childName = childProfile?.displayName ?: "learner",
