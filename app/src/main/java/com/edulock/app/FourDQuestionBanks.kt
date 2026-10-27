@@ -14,7 +14,8 @@ object FourDQuestionBanks {
             languageCode = language, questionType = "multiple_choice", prompt = item.prompt, options = item.options,
             answer = item.answer,
             conceptKey = conceptPrefix?.let { "$it:${index + 1}" } ?: "4d:$model:${slug(subject)}-${index + 1}",
-            solution = item.explanation
+            solution = item.explanation,
+            countryCode = country
         )
     }
 
