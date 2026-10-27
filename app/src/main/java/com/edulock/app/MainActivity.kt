@@ -354,7 +354,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var taskTitle by remember { mutableStateOf("") }
     var taskQuestionCount by remember { mutableStateOf("5") }
     var taskPassPercent by remember { mutableStateOf("70") }
-    var taskRewardMinutes by remember { mutableStateOf("15") }
+    var taskRewardMinutes by remember { mutableStateOf("3") }
     var taskDailyCapMinutes by remember { mutableStateOf("60") }
     var taskRewardPackageName by remember { mutableStateOf("") }
     var appPackage by remember { mutableStateOf("") }
@@ -2602,8 +2602,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Field(taskTitle, { taskTitle = it }, "Task title")
                     Field(taskQuestionCount, { taskQuestionCount = it.filter(Char::isDigit).take(3) }, "Questions in task (1–500)", keyboardType = KeyboardType.Number)
                     Field(taskPassPercent, { taskPassPercent = it.filter(Char::isDigit).take(3) }, "Passing score percent (0–100)", keyboardType = KeyboardType.Number)
-                    Field(taskRewardMinutes, { taskRewardMinutes = it.filter(Char::isDigit).take(4) }, "Maximum reward minutes for a perfect score (0–1440)", keyboardType = KeyboardType.Number)
-                    AppUiText("Each correct answer earns a proportional share of this maximum, even if the child does not pass. Supabase enforces daily caps.")
+                    Field(taskRewardMinutes, { taskRewardMinutes = it.filter(Char::isDigit).take(4) }, "Reward minutes per correct answer (0–1440)", keyboardType = KeyboardType.Number)
+                    AppUiText("Each correct answer earns this many minutes, even if the child does not pass. Rewards go to general mobile time or the selected app, within daily caps.")
                     Field(taskDailyCapMinutes, { taskDailyCapMinutes = it.filter(Char::isDigit).take(4) }, "Task daily reward cap (0–1440)", keyboardType = KeyboardType.Number)
                     AppUiText("Where should correct-answer reward time apply?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     OutlinedButton(onClick = { taskRewardPackageName = "" }, modifier = Modifier.fillMaxWidth()) {
