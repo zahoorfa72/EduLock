@@ -67,6 +67,7 @@ p{font-size:13px;color:#d6defb;line-height:1.4;margin:5px 0 9px}
 input{width:100%;height:42px;border-radius:11px;border:1px solid #6375b2;background:#080e2b;color:white;padding:0 12px;font-size:16px;outline:none}
 button{border:0;border-radius:12px;background:linear-gradient(100deg,#5848ef,#3a70ed);color:white;font-weight:750;font-size:14px;padding:12px 14px;min-height:42px;width:100%;margin-top:8px}
 button:disabled{opacity:.4}
+.controls{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}.controls button{width:auto;flex:1 1 28%;margin-top:0;padding:9px 6px;min-width:80px;font-size:11px;border:1px solid #536fb5;background:linear-gradient(140deg,#2a3d79,#18284e)}.controls button[aria-pressed="true"]{background:linear-gradient(140deg,#087e78,#175e87);border-color:#8af0e2}
 .status{min-height:23px;font-size:12px;color:#b9f2df;margin-top:7px;line-height:1.4}
 .score{font-size:12px;color:#c4d3ff;text-align:right}
 @media(min-width:520px){.scene{height:${if (quizMode) "360px" else "250px"}}}
@@ -78,7 +79,14 @@ button:disabled{opacity:.4}
     <canvas id="scene" aria-label="Interactive 3D style solar system"></canvas>
     <div class="ring" id="selectionRing"></div>
   </div>
-  <div class="caption" id="sceneCaption">A live, interactive planetary model. Tap a planet to select it.</div>
+  <div class="controls" id="viewControls">
+    <button id="zoomOut" type="button">− Zoom out</button>
+    <button id="zoomIn" type="button">+ Zoom in</button>
+    <button id="explodeSystem" type="button" aria-pressed="false">🧩 Explode orbits</button>
+    <button id="turnSystem" type="button">⟳ 360°</button>
+    <button id="resetSystem" type="button">Reset view</button>
+  </div>
+  <div class="caption" id="sceneCaption">Interactive 4D-style planetary model. Drag to rotate; tap any planet for facts.</div>
   <div class="panel" id="game" style="display:${if (quizMode) "block" else "none"}">
     <div class="eyebrow" id="round">Planet challenge</div>
     <h3 id="clue">Find the planet</h3>
@@ -111,12 +119,13 @@ const checkBtn=document.getElementById('check'), nextBtn=document.getElementById
 const statusEl=document.getElementById('status'), scoreEl=document.getElementById('score');
 let gl=canvas.getContext('webgl',{antialias:true,alpha:false}), ctx=null;
 let selected=null,asked=[],target=null,correct=0,total=0,answered=false,complete=false;
+let viewZoom=1,viewRotationX=-0.12,viewRotationY=0,viewExploded=false,dragging=false,lastTouchX=0,lastTouchY=0;
 let aspectScale=1,lastPositions=[],sphereProgram=null,orbitProgram=null,sphereBuffer=null,sphereIndexBuffer=null,ringBuffer=null,orbitBuffers=[],indexCount=0;
 function compile(type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s)||'shader error');return s;}
 function makeProgram(vs,fs){const p=gl.createProgram();gl.attachShader(p,compile(gl.VERTEX_SHADER,vs));gl.attachShader(p,compile(gl.FRAGMENT_SHADER,fs));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p)||'link error');return p;}
-const planetVS='attribute vec3 aPosition;attribute vec3 aNormal;uniform vec3 uCenter;uniform float uRadius;uniform float uRotation;uniform float uAspectScale;varying vec3 vNormal;varying vec3 vWorld;void main(){float c=cos(uRotation),s=sin(uRotation);vec3 p=vec3(aPosition.x*c+aPosition.z*s,aPosition.y,-aPosition.x*s+aPosition.z*c);vec3 world=uCenter+p*uRadius;float depth=max(2.0,8.0-world.z);gl_Position=vec4(world.x*1.65*uAspectScale/depth,world.y*2.0/depth,-world.z/9.0,1.0);vNormal=normalize(vec3(aNormal.x*c+aNormal.z*s,aNormal.y,-aNormal.x*s+aNormal.z*c));vWorld=world;}';
+const planetVS='attribute vec3 aPosition;attribute vec3 aNormal;uniform vec3 uCenter;uniform float uRadius;uniform float uRotation;uniform float uAspectScale;uniform float uViewX;uniform float uViewY;uniform float uZoom;varying vec3 vNormal;varying vec3 vWorld;void main(){float c=cos(uRotation),s=sin(uRotation);vec3 p=vec3(aPosition.x*c+aPosition.z*s,aPosition.y,-aPosition.x*s+aPosition.z*c);vec3 world=(uCenter+p*uRadius)*uZoom;float cy=cos(uViewY),sy=sin(uViewY),cx=cos(uViewX),sx=sin(uViewX);world=vec3(world.x*cy+world.z*sy,world.x*sx*sy+world.y*cx-world.z*sx*cy,-world.x*cx*sy+world.y*sx+world.z*cx*cy);float depth=max(2.0,8.0-world.z);gl_Position=vec4(world.x*1.65*uAspectScale/depth,world.y*2.0/depth,-world.z/9.0,1.0);vNormal=normalize(vec3(aNormal.x*c+aNormal.z*s,aNormal.y,-aNormal.x*s+aNormal.z*c));vWorld=world;}';
 const planetFS='precision mediump float;uniform vec3 uColor;uniform float uSun;varying vec3 vNormal;varying vec3 vWorld;void main(){vec3 N=normalize(vNormal);vec3 L=normalize(vec3(-vWorld.x,-vWorld.y,4.5-vWorld.z));float d=max(dot(N,L),0.0);float rim=pow(1.0-max(dot(N,vec3(0.0,0.0,1.0)),0.0),2.0);vec3 c=uColor*(0.22+0.86*d)+uColor*uSun*0.48+vec3(0.05,0.10,0.24)*rim*0.3;gl_FragColor=vec4(c,1.0);}';
-const lineVS='attribute vec3 aPosition;uniform float uAspectScale;void main(){float d=max(2.0,8.0-aPosition.z);gl_Position=vec4(aPosition.x*1.65*uAspectScale/d,aPosition.y*2.0/d,-aPosition.z/9.0,1.0);}';
+const lineVS='attribute vec3 aPosition;uniform float uAspectScale;uniform float uViewX;uniform float uViewY;uniform float uZoom;uniform float uExplode;void main(){vec3 world=aPosition*uZoom*uExplode;float cy=cos(uViewY),sy=sin(uViewY),cx=cos(uViewX),sx=sin(uViewX);world=vec3(world.x*cy+world.z*sy,world.x*sx*sy+world.y*cx-world.z*sx*cy,-world.x*cx*sy+world.y*sx+world.z*cx*cy);float d=max(2.0,8.0-world.z);gl_Position=vec4(world.x*1.65*uAspectScale/d,world.y*2.0/d,-world.z/9.0,1.0);}';
 const lineFS='precision mediump float;uniform vec4 uLineColor;void main(){gl_FragColor=uLineColor;}';
 function makeSphere(){
  const data=[],indices=[],lat=20,lon=28;
