@@ -18,7 +18,9 @@ data class ParentLearningTemplate(
     val solution: String,
     val materials: List<String> = emptyList(),
     val steps: List<String> = emptyList(),
-    val safety: String = ""
+    val safety: String = "",
+    // ZZ means a general starter; country-tagged examples are only shown for that selected country.
+    val countryCode: String = "ZZ"
 )
 
 object LearningTemplates {
@@ -759,6 +761,69 @@ ParentLearningTemplate(
             options = listOf("A weekly day of rest", "A planet", "A colour-mixing technique"), answer = "A weekly day of rest",
             conceptKey = "faith:jewish:shabbat",
             solution = "Shabbat is the weekly Jewish day of rest and observance."
+        ),
+        ParentLearningTemplate(
+            title = "Pakistan: Eid al-Fitr", category = "Religious Education", subjectTitle = "Islamic Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Which Muslim festival marks the end of Ramadan?",
+            options = listOf("Eid al-Fitr", "Vaisakhi", "Diwali"), answer = "Eid al-Fitr",
+            conceptKey = "faith:islamic:pk-eid-al-fitr",
+            solution = "Eid al-Fitr marks the end of Ramadan. This is a starter question; families should match it to the child's school syllabus.",
+            countryCode = "PK"
+        ),
+        ParentLearningTemplate(
+            title = "Pakistan: Zakat", category = "Religious Education", subjectTitle = "Islamic Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "In Islamic teaching, what is Zakat primarily associated with?",
+            options = listOf("Giving a required form of charity", "A planet's orbit", "A colour wheel"), answer = "Giving a required form of charity",
+            conceptKey = "faith:islamic:pk-zakat",
+            solution = "Zakat is a form of obligatory charity in Islam. Teachers may explain age-appropriate details and eligibility.",
+            countryCode = "PK"
+        ),
+        ParentLearningTemplate(
+            title = "Pakistan: Diwali among Hindu communities", category = "Religious Education", subjectTitle = "Hindu Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Which Hindu festival is widely known as the festival of lights?",
+            options = listOf("Diwali", "Vesak", "Shabbat"), answer = "Diwali",
+            conceptKey = "faith:hindu:pk-diwali",
+            solution = "Diwali is widely known as the festival of lights and is observed by Hindu communities in Pakistan and elsewhere.",
+            countryCode = "PK"
+        ),
+        ParentLearningTemplate(
+            title = "India: Vaisakhi and Sikh tradition", category = "Religious Education", subjectTitle = "Sikh Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Which festival is especially important in Sikh history and is also associated with the spring harvest in Punjab?",
+            options = listOf("Vaisakhi", "Shabbat", "Eid al-Fitr"), answer = "Vaisakhi",
+            conceptKey = "faith:sikh:in-vaisakhi",
+            solution = "Vaisakhi has important significance in Sikh history and is also connected with the harvest in Punjab.",
+            countryCode = "IN"
+        ),
+        ParentLearningTemplate(
+            title = "India: Jain Paryushan", category = "Religious Education", subjectTitle = "Jain Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Which principle is central to Jain teaching and is often expressed as non-violence?",
+            options = listOf("Ahimsa", "Orbit", "Evaporation"), answer = "Ahimsa",
+            conceptKey = "faith:jain:in-ahimsa",
+            solution = "Ahimsa, or non-violence/non-harm, is central to Jain ethics. This item is a general starter, not an official syllabus question.",
+            countryCode = "IN"
+        ),
+        ParentLearningTemplate(
+            title = "India: Hindu Diwali", category = "Religious Education", subjectTitle = "Hindu Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Which festival is often called the festival of lights in Hindu traditions?",
+            options = listOf("Diwali", "Vaisakhi", "Ramadan"), answer = "Diwali",
+            conceptKey = "faith:hindu:in-diwali",
+            solution = "Diwali is widely known as the festival of lights; practices vary across communities.",
+            countryCode = "IN"
+        ),
+        ParentLearningTemplate(
+            title = "India: Eid al-Fitr", category = "Religious Education", subjectTitle = "Islamic Studies",
+            languageCode = "en", questionType = "multiple_choice",
+            prompt = "Which festival marks the end of Ramadan for Muslims?",
+            options = listOf("Eid al-Fitr", "Diwali", "Vaisakhi"), answer = "Eid al-Fitr",
+            conceptKey = "faith:islamic:in-eid-al-fitr",
+            solution = "Eid al-Fitr marks the end of Ramadan and is celebrated by Muslim communities in India and around the world.",
+            countryCode = "IN"
         ),
         ParentLearningTemplate(
             title = "Jain studies: ahimsa", category = "Religious Education", subjectTitle = "Jain Studies",
