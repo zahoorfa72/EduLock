@@ -432,7 +432,7 @@ private fun learning3DHtml(modelType: String): String {
 .beaker-label{position:absolute;left:50%;top:100%;white-space:nowrap;transform:translateX(-50%) translateZ(18px);font-size:9px;font-weight:850;color:#effaff;background:#1b2d59c9;border:1px solid #658fc3;border-radius:5px;padding:2px 5px}
 .mix-symbol,.mix-arrow{position:absolute;top:48%;left:27%;font-size:22px;font-weight:900;color:#c8eaff;text-shadow:0 0 10px #6edaff;transform:translateZ(40px)}.mix-arrow{left:61%;font-size:25px;color:#86ffe3;animation:arrowPulse 1.3s ease-in-out infinite}
 .gas-bubble{position:absolute;left:32%;bottom:35px;width:8px;height:8px;border-radius:50%;background:radial-gradient(circle at 28% 24%,white,#9ff8ff 58%,#329cdb);box-shadow:0 0 7px #9ff}.bubble-b{left:55%;width:6px;height:6px;animation-delay:-.7s}.bubble-c{left:68%;width:9px;height:9px;animation-delay:-1.1s}
-.chemistry-lab:not(.gas-reaction) .gas-bubble{opacity:0}.chemistry-lab.gas-reaction .gas-bubble{animation:gasRise 1.4s ease-in infinite}.chemistry-lab.indicator-reaction .liquid-a{background:linear-gradient(180deg,#ffc3f2,#d55fe5 72%,#7036a7)}.chemistry-lab.indicator-reaction .liquid-b{background:linear-gradient(180deg,#d9c6ff,#9273e6 72%,#4a3a9d)}.reaction-glow{position:absolute;left:70%;top:21%;width:50px;height:64px;border-radius:50%;background:#7af7ff33;filter:blur(12px);opacity:.5;animation:reactionGlow 2s ease-in-out infinite}
+.chemistry-lab:not(.gas-reaction) .gas-bubble{opacity:0}.chemistry-lab.gas-reaction .gas-bubble{animation:gasRise 1.4s ease-in infinite}.chemistry-lab.combining .beaker-a{animation:beakerNudge .65s ease-in-out 2}.chemistry-lab.combining .beaker-b{animation:beakerNudge .65s ease-in-out 2 reverse}.chemistry-lab.combining .beaker-result{filter:brightness(1.2);transform:rotateY(-12deg) translateZ(45px) scale(1.08)}@keyframes beakerNudge{50%{margin-left:10px;filter:brightness(1.25)}}.chemistry-lab.indicator-reaction .liquid-a{background:linear-gradient(180deg,#ffc3f2,#d55fe5 72%,#7036a7)}.chemistry-lab.indicator-reaction .liquid-b{background:linear-gradient(180deg,#d9c6ff,#9273e6 72%,#4a3a9d)}.reaction-glow{position:absolute;left:70%;top:21%;width:50px;height:64px;border-radius:50%;background:#7af7ff33;filter:blur(12px);opacity:.5;animation:reactionGlow 2s ease-in-out infinite}
 .mix-symbol{left:27%}.reaction-controls{margin-top:5px}.reaction-controls button{flex:1 1 30%;min-width:82px;font-size:10px}.reaction-note{font-size:10px;color:#b9ceff;padding:4px 2px}
 .indicator-liquid{height:40px;background:linear-gradient(#8af4ce,#28a781 75%,#15644e);animation:indicatorShift 3s ease-in-out infinite alternate}.indicator-drop{position:absolute;top:2%;width:10px;height:18px;border-radius:70% 25% 70% 70%;background:linear-gradient(#ffb0ec,#c14eec);transform:rotate(22deg) translateZ(50px);animation:dropFall 1.7s ease-in infinite}.drop-a{left:40%}.drop-b{left:58%;animation-delay:-.9s}.indicator-glow{position:absolute;left:42%;top:30%;width:55px;height:55px;border-radius:50%;background:#f8b5ff32;filter:blur(10px);animation:reactionGlow 2s infinite}
 .gas-chamber{position:absolute;left:50%;top:49%;width:170px;height:134px;transform:translate(-50%,-50%);border:2px solid #b1edff77;border-radius:14px;background:linear-gradient(145deg,#b5eaff17,#7f9bff0a);transform-style:preserve-3d;box-shadow:inset 0 0 25px #87cfff23,12px 17px 20px #0005}.chamber-edge{position:absolute;inset:6px;border:1px solid #a6eaff44;transform:translateZ(-24px) rotateY(6deg)}
@@ -574,11 +574,60 @@ if(chemistryLab){
     if(note)note.textContent='No real chemicals are mixed. The bubbles and colour change are computer-generated.';
   });
   document.getElementById('reset-beakers').addEventListener('click',()=>{
-    chemistryLab.classList.remove('indicator-reaction','gas-reaction');
+    chemistryLab.classList.remove('indicator-reaction','gas-reaction','combining');
     chemistryLab.querySelector('.label-a').textContent='A';chemistryLab.querySelector('.label-b').textContent='B';
     chemistryLab.querySelector('.liquid-result').style.background='';
-    labNote('Virtual chemistry lab reset','Choose a reaction to see the simulated result.');
+    chemistryLab.querySelectorAll('.beaker-a,.beaker-b').forEach(el=>{el.style.transform='';el.style.zIndex='';});
+    labNote('Virtual chemistry lab reset','Drag one beaker toward the other to combine them, or choose a reaction button.');
     if(note)note.textContent='Virtual chemicals only • No real chemicals are mixed.';
+  });
+
+  // Let children drag the two virtual reactant beakers together. Dropping one near
+  // the other triggers a safe visual simulation; it never requests or controls real chemicals.
+  const reactants=[chemistryLab.querySelector('.beaker-a'),chemistryLab.querySelector('.beaker-b')];
+  reactants.forEach(beaker=>{
+    if(!beaker)return;
+    beaker.style.touchAction='none';
+    beaker.style.cursor='grab';
+    let drag=null;
+    beaker.addEventListener('pointerdown',e=>{
+      e.preventDefault();e.stopPropagation();
+      const rect=beaker.getBoundingClientRect();
+      drag={pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,rect,baseTransform:getComputedStyle(beaker).transform};
+      beaker.style.zIndex='8';beaker.style.cursor='grabbing';
+      try{beaker.setPointerCapture(e.pointerId)}catch(_){}
+    });
+    beaker.addEventListener('pointermove',e=>{
+      if(!drag||drag.pointerId!==e.pointerId)return;
+      e.preventDefault();e.stopPropagation();
+      const dx=e.clientX-drag.startX,dy=e.clientY-drag.startY;
+      beaker.style.transform='translate3d('+dx+'px,'+dy+'px,56px) '+drag.baseTransform;
+    });
+    const finishDrag=e=>{
+      if(!drag||drag.pointerId!==e.pointerId)return;
+      e.preventDefault();e.stopPropagation();
+      const other=reactants.find(el=>el&&el!==beaker);
+      const moved=beaker.getBoundingClientRect();
+      const otherRect=other?other.getBoundingClientRect():null;
+      const movedX=moved.left+moved.width/2,movedY=moved.top+moved.height/2;
+      const otherX=otherRect?otherRect.left+otherRect.width/2:Infinity;
+      const otherY=otherRect?otherRect.top+otherRect.height/2:Infinity;
+      const distance=Math.hypot(movedX-otherX,movedY-otherY);
+      beaker.style.transform='';
+      beaker.style.zIndex='';
+      beaker.style.cursor='grab';
+      drag=null;
+      if(distance<92){
+        chemistryLab.classList.add('combining');
+        document.getElementById('mix-gas').click();
+        labNote('Reactants combined','You brought the two virtual liquids together. The product vessel changes colour and simulated bubbles show a possible reaction result.');
+      } else {
+        labNote('Beaker moved','Try dragging beaker A and beaker B close together to start the virtual reaction.');
+      }
+      try{if(beaker.hasPointerCapture(e.pointerId))beaker.releasePointerCapture(e.pointerId)}catch(_){}
+    };
+    beaker.addEventListener('pointerup',finishDrag);
+    beaker.addEventListener('pointercancel',finishDrag);
   });
 }
 })();</script>
