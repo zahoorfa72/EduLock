@@ -1902,7 +1902,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         subjects.none { subject ->
                             subject.title.equals(suggestion.title, ignoreCase = true) &&
                                 subject.languageCode.equals(suggestion.languageCode, ignoreCase = true) &&
-                                subject.countryCode.equals(parentCountryCode, ignoreCase = true)
+                                (subject.countryCode.equals(parentCountryCode, ignoreCase = true) || subject.countryCode.equals("ZZ", ignoreCase = true))
                         }
                     }
                     suggestions.forEach { suggestion ->
@@ -1994,12 +1994,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 }
                             }
                     }
+                    val templateStudyTrack = selectedChild?.studyTrack?.takeIf { it != "none" } ?: parentStudyTrack
                     val countryTemplates = LearningTemplates.all.filter { template ->
                         template.category == templateCategory &&
                             (template.countryCode == "ZZ" || template.countryCode.equals(parentCountryCode, ignoreCase = true)) &&
                             (templateCategory != "Religious Education" ||
-                                (parentStudyTrack != "none" &&
-                                    religionTrackForSubject(template.subjectTitle) == parentStudyTrack))
+                                (templateStudyTrack != "none" &&
+                                    religionTrackForSubject(template.subjectTitle) == templateStudyTrack))
                     }
                     val languageTemplates = countryTemplates.filter {
                         it.languageCode.equals(parentLearningLanguageCode, ignoreCase = true)
@@ -2319,7 +2320,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.ASSIGN_TASK -> ScreenFrame("Assign task & reward", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
                     AppUiText("Choose the child")
                     children.forEach { child ->
-                        OutlinedButton(onClick = { selectedChild = child }, modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(onClick = {
+                            selectedChild = child
+                            selectedSubject = null
+                            execute { subjects = repository.loadSubjects(familyId, child.countryCode) }
+                        }, modifier = Modifier.fillMaxWidth()) {
                             AppUiText((if (selectedChild?.id == child.id) "✓ " else "") + child.displayName)
                         }
                     }
