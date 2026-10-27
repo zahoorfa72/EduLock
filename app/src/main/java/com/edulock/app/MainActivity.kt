@@ -297,6 +297,21 @@ private fun EduLockApp(repository: EduLockRepository) {
         weeklyScheduleEdits = weeklyScheduleEdits + (appId to AppWeeklySchedule(current.days + (dayKey to update(oldWindow))))
     }
 
+    fun openKidsGames() {
+        val learner = childProfile
+        if (learner == null) {
+            notice = "Pair a child profile before starting games."
+            return
+        }
+        val prefs = context.getSharedPreferences("edulock_kids_games", Context.MODE_PRIVATE)
+        val day = LocalDate.now().toString()
+        val usedKey = "used_ms_" + learner.id + "_" + day
+        val usedSeconds = (prefs.getLong(usedKey, 0L) / 1000L).toInt()
+        kidsGameSecondsRemaining = (learner.dailyGameLimitMinutes * 60 - usedSeconds).coerceAtLeast(0)
+        screen = AppScreen.KIDS_GAMES
+        notice = null
+    }
+
     fun execute(action: suspend () -> Unit) {
         scope.launch {
             busy = true
@@ -476,6 +491,29 @@ private fun EduLockApp(repository: EduLockRepository) {
         if (resendSeconds > 0) { delay(1000); resendSeconds -= 1 }
     }
 
+    // Educational games have a separate daily cap. Time is recorded locally while the
+    // arcade screen is open, so entering an in-app game cannot bypass the parent's allowance.
+    LaunchedEffect(screen, childProfile?.id) {
+        val learner = childProfile
+        if (screen == AppScreen.KIDS_GAMES && learner != null) {
+            val prefs = context.getSharedPreferences("edulock_kids_games", Context.MODE_PRIVATE)
+            while (screen == AppScreen.KIDS_GAMES && childProfile?.id == learner.id) {
+                delay(1000)
+                val day = LocalDate.now().toString()
+                val usedKey = "used_ms_" + learner.id + "_" + day
+                val usedMillis = prefs.getLong(usedKey, 0L) + 1000L
+                prefs.edit().putLong(usedKey, usedMillis).apply()
+                val remaining = (learner.dailyGameLimitMinutes * 60L - usedMillis / 1000L).toInt().coerceAtLeast(0)
+                kidsGameSecondsRemaining = remaining
+                if (remaining <= 0) {
+                    screen = AppScreen.CHILD_HOME
+                    notice = "Today's educational game time is finished. Ask your parent to change the daily allowance."
+                    break
+                }
+            }
+        }
+    }
+
     LaunchedEffect(screen, childProfile?.id) {
         val activeChildId = childProfile?.id
         if (screen == AppScreen.CHILD_HOME && !activeChildId.isNullOrBlank()) {
@@ -484,9 +522,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                 try {
                     val linked = childProfile
                     if (linked != null && linked.id == activeChildId) {
-                        // Refresh tasks and parental rules; new parent-assigned curriculum tasks appear without sign-out.
+                        // Refresh tasks, profile limits and parental rules; updated game allowances apply without sign-out.
+                        val currentProfile = repository.loadCurrentChild() ?: linked
+                        childProfile = currentProfile
                         tasks = repository.loadChildTasks(activeChildId)
-                        earnedToday = repository.refreshChildDeviceRestrictions(linked)
+                        earnedToday = repository.refreshChildDeviceRestrictions(currentProfile)
                         repository.syncAppUsage(activeChildId)
                     }
                 } catch (_: Exception) {
@@ -2044,8 +2084,17 @@ private fun EduLockApp(repository: EduLockRepository) {
 
                 AppScreen.CHILD_HOME -> ScreenFrame("Your learning space", notice = notice, busy = busy) {
                     val child = childProfile
-                    Text("Hello, " + (child?.displayName ?: "learner") + "!")
-                    Button(onClick = { solarQuizReturnScreen = AppScreen.CHILD_HOME; screen = AppScreen.SOLAR_SYSTEM_QUIZ }, modifier = Modifier.fillMaxWidth()) { Text("🚀 Play the 3D Solar System planet quiz") }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.size(58.dp).background(Brush.linearGradient(listOf(Color(0xFFEEE9FF), Color(0xFFDDF8F1))), RoundedCornerShape(20.dp)), contentAlignment = Alignment.Center) {
+                            Text(child?.avatarIcon ?: "🦊", fontSize = 32.sp)
+                        }
+                        Column {
+                            Text("Hello, " + (child?.displayName ?: "learner") + "!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                            Text("Ready for today's adventure?", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Button(onClick = { openKidsGames() }, modifier = Modifier.fillMaxWidth()) { Text("🎮  Learning Games • daily time limit") }
+                    OutlinedButton(onClick = { solarQuizReturnScreen = AppScreen.CHILD_HOME; screen = AppScreen.SOLAR_SYSTEM_QUIZ }, modifier = Modifier.fillMaxWidth()) { Text("🚀 Play the 3D Solar System planet quiz") }
                     SummaryCard("Learning rewards earned today", earnedToday.toString() + " minutes", "Successful tasks add reward minutes. Rewards are tracked separately from app access.")
                     SummaryCard(
                         "App access",
@@ -2476,6 +2525,16 @@ private fun EduLockApp(repository: EduLockRepository) {
                     } else {
                         Text("No question is available. Return to your task list and sync again.")
                     }
+                }
+
+                AppScreen.KIDS_GAMES -> ScreenFrame("Kids' learning arcade", onBack = { screen = AppScreen.CHILD_HOME }, notice = notice, busy = busy) {
+                    KidsGamesScreen(
+                        childName = childProfile?.displayName ?: "learner",
+                        avatarIcon = childProfile?.avatarIcon ?: "🦊",
+                        remainingSeconds = kidsGameSecondsRemaining,
+                        dailyLimitMinutes = childProfile?.dailyGameLimitMinutes ?: 0,
+                        onBack = { screen = AppScreen.CHILD_HOME }
+                    )
                 }
 
                 AppScreen.SOLAR_SYSTEM_QUIZ -> ScreenFrame("3D Solar System Quiz", onBack = { screen = solarQuizReturnScreen }, notice = notice, busy = busy) {
