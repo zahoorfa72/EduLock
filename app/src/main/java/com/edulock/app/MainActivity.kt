@@ -90,6 +90,17 @@ private fun studyTrackLabel(code: String): String = when (code) {
     else -> "Not selected"
 }
 
+private fun religionTrackForSubject(title: String): String? = when {
+    title.contains("Islamic Studies", ignoreCase = true) -> "islamic"
+    title.contains("Hindu Studies", ignoreCase = true) -> "hindu"
+    title.contains("Christian Studies", ignoreCase = true) -> "christian"
+    title.contains("Sikh Studies", ignoreCase = true) -> "sikh"
+    title.contains("Buddhist Studies", ignoreCase = true) -> "buddhist"
+    title.contains("Jewish Studies", ignoreCase = true) -> "jewish"
+    title.contains("Jain Studies", ignoreCase = true) -> "jain"
+    else -> null
+}
+
 private enum class AppScreen {
     DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ, KIDS_GAMES, LEARNING_3D_LAB, DRAWING_STUDIO,
     SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
@@ -2073,8 +2084,26 @@ private fun EduLockApp(repository: EduLockRepository) {
                             AppUiText((if (selectedChild?.id == child.id) "✓ " else "") + child.displayName)
                         }
                     }
+                    AppUiText(
+                        "Country curriculum: " + displayCountryName(parentCountryCode) +
+                            " • Religious education: " + studyTrackLabel(parentStudyTrack),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                     AppUiText("Choose a subject")
-                    subjects.forEach { subject ->
+                    val assignableSubjects = subjects.filter { subject ->
+                        val religionTrack = religionTrackForSubject(subject.title)
+                        religionTrack == null ||
+                            (parentStudyTrack != "none" && religionTrack == parentStudyTrack)
+                    }
+                    if (assignableSubjects.isEmpty()) {
+                        AppUiText("No matching subjects yet. Open Learning templates, choose this country's available subjects and your selected religious-education track, then add the templates to a subject.")
+                        OutlinedButton(
+                            onClick = { templateCategory = "Religious Education"; screen = AppScreen.LEARNING_TEMPLATES },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { AppUiText("🕊️ Open country and religion learning templates") }
+                    }
+                    assignableSubjects.forEach { subject ->
                         OutlinedButton(onClick = { selectedSubject = subject }, modifier = Modifier.fillMaxWidth()) {
                             AppUiText((if (selectedSubject?.id == subject.id) "✓ " else "") + subject.title + " (" + subject.languageCode + ")")
                         }
@@ -2101,7 +2130,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             taskTitle = ""
                             notice = "Task assigned to " + child.displayName + ". Rewards are issued only after server-side grading."
                         }
-                    }, enabled = !busy && children.isNotEmpty() && subjects.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { AppUiText("Assign task") }
+                    }, enabled = !busy && children.isNotEmpty() && subjects.isNotEmpty() && assignableSubjects.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { AppUiText("Assign task") }
                 }
 
                 AppScreen.REPORTS -> ScreenFrame("Progress reports", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
