@@ -1008,7 +1008,7 @@ private fun EduLockApp(repository: EduLockRepository) {
         }
         if (languagePickerOpen) {
             val languageOptions = remember(languageSearch, languagePickerTarget) {
-                val supportedUiLanguages = listOf("en", "ur", "sd", "hi")
+                val supportedUiLanguages = listOf("en", "ur", "sd", "hi", "ar", "bn", "zh", "fr", "de", "gu", "id", "it", "ja", "kn", "ko", "ml", "mr", "ne", "pa", "pt", "ru", "es", "sw", "ta", "te", "th", "tr", "vi")
                 val optionCodes = if (languagePickerTarget == "display") supportedUiLanguages else Locale.getISOLanguages().distinct()
                 optionCodes.map { code ->
                     val languageLocale = Locale.forLanguageTag(code)
