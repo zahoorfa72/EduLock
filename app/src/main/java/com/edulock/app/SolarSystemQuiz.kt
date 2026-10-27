@@ -57,7 +57,7 @@ private fun solarSystemHtml(quizMode: Boolean): String = """
 *{box-sizing:border-box}html,body{margin:0;padding:0;background:#04081e;color:#f4f7ff;font-family:system-ui,-apple-system,sans-serif}
 body{background:radial-gradient(ellipse at 50% 45%,#17214c 0%,#090e2c 48%,#030617 100%)}
 .shell{padding:10px 10px 14px}.scene{height:${if (quizMode) "300px" else "238px"};position:relative;overflow:hidden;border-radius:18px;border:1px solid #303d70;background:radial-gradient(ellipse at center,#131f49,#05091f 78%)}
-canvas{width:100%;height:100%;display:block;touch-action:manipulation}
+canvas{width:100%;height:100%;display:block;touch-action:manipulation;touch-action:none}
 .ring{position:absolute;width:30px;height:30px;border:2px solid #ffe783;border-radius:50%;box-shadow:0 0 12px #ffe783;transform:translate(-50%,-50%);pointer-events:none;display:none}
 .caption{font-size:12px;color:#b8c7f9;margin:7px 2px 0}
 .panel{margin-top:9px;padding:12px;border-radius:15px;background:rgba(26,36,80,.92);border:1px solid #334271}
