@@ -51,17 +51,7 @@ object ChildDeviceKioskPolicy {
             if (!kidsModeEnabled && homePackage.isNotBlank()) candidates += homePackage
             if (kidsModeEnabled) {
                 candidates += allowedPackages.filter { it != homePackage }
-                candidates += setOf(
-                    "com.android.systemui",
-                    "com.android.permissioncontroller",
-                    "com.google.android.permissioncontroller",
-                    "com.android.phone",
-                    "com.android.server.telecom",
-                    "com.android.incallui",
-                    "com.android.dialer",
-                    "com.google.android.dialer",
-                    "com.samsung.android.dialer"
-                )
+                candidates += KIDS_MODE_SYSTEM_PACKAGES.filter { it != homePackage }
             }
             val installed = candidates.filter { isInstalled(context, it) }.distinct()
             if (context.packageName !in installed) throw IllegalStateException("EduLock is missing from the kiosk allowlist.")
@@ -88,17 +78,9 @@ object ChildDeviceKioskPolicy {
             }
             val actualAllowlist = manager.getLockTaskPackages(admin).toSet()
             val homeExcluded = !kidsModeEnabled || homePackage.isBlank() || homePackage !in actualAllowlist
-            val requiredSystemPackages = if (kidsModeEnabled) setOf(
-                "com.android.systemui",
-                "com.android.permissioncontroller",
-                "com.google.android.permissioncontroller",
-                "com.android.phone",
-                "com.android.server.telecom",
-                "com.android.incallui",
-                "com.android.dialer",
-                "com.google.android.dialer",
-                "com.samsung.android.dialer"
-            ).filter { isInstalled(context, it) }.toSet() else emptySet()
+            val requiredSystemPackages = if (kidsModeEnabled)
+                KIDS_MODE_SYSTEM_PACKAGES.filter { isInstalled(context, it) }.toSet()
+            else emptySet()
             val allowlistMatches = if (kidsModeEnabled) {
                 context.packageName in actualAllowlist &&
                     actualAllowlist == installed.toSet() &&
@@ -165,6 +147,39 @@ object ChildDeviceKioskPolicy {
     }
 
     private const val KEY_KIOSK_ACTIVE = "lock_task_kiosk_active"
+
+    /**
+     * Shared safe packages for both kiosk allowlisting and the Accessibility fallback.
+     * Optional/OEM-specific packages are included only when actually installed.
+     */
+    val KIDS_MODE_SYSTEM_PACKAGES: Set<String> = setOf(
+        "com.android.systemui",
+        "com.android.permissioncontroller",
+        "com.google.android.permissioncontroller",
+        "com.android.packageinstaller",
+        "com.google.android.packageinstaller",
+        "com.android.phone",
+        "com.android.server.telecom",
+        "com.android.incallui",
+        "com.android.dialer",
+        "com.google.android.dialer",
+        "com.samsung.android.dialer",
+        "com.google.android.gms",
+        "com.google.android.gsf",
+        "com.android.providers.downloads",
+        "com.android.updater",
+        "com.google.android.configupdater",
+        "com.google.android.modulemetadata",
+        "com.google.android.packageinstaller",
+        "com.miui.securitycenter",
+        "com.miui.updater",
+        "com.samsung.android.fotaagent",
+        "com.sec.android.soagent",
+        "com.oplus.ota",
+        "com.coloros.ota",
+        "com.huawei.android.hwouc",
+        "com.huawei.android.firmwareupgrade"
+    )
 
     private fun resolveHomePackage(context: Context): String = try {
         context.packageManager.resolveActivity(
