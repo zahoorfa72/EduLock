@@ -148,6 +148,13 @@ private fun EduLockApp(repository: EduLockRepository) {
     var languageSearch by remember { mutableStateOf("") }
     var countryPickerTarget by remember { mutableStateOf("child") }
     var countrySearch by remember { mutableStateOf("") }
+    var parentCountryCode by remember { mutableStateOf("PK") }
+    var parentLearningLanguageCode by remember { mutableStateOf("ur") }
+    var parentStudyTrack by remember { mutableStateOf("none") }
+    var parentDisplayLanguageCode by remember { mutableStateOf("en") }
+    var languagePickerTarget by remember { mutableStateOf("curriculum") }
+    var studyTrackPickerOpen by remember { mutableStateOf(false) }
+    var familySettingsOpen by remember { mutableStateOf(false) }
     var curriculumCountryCode by remember { mutableStateOf("PK") }
     var curriculumGradeLevel by remember { mutableStateOf("1") }
     var curriculumAgeYears by remember { mutableStateOf("8") }
