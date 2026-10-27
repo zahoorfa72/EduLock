@@ -1963,16 +1963,34 @@ private fun EduLockApp(repository: EduLockRepository) {
                     busy = busy
                 ) {
                     AppUiText(
-                        "Ready-to-use question templates for core school subjects. Practical science activities include worked solutions, steps and safety notes.",
+                        "Ready-to-use 4D question templates matched to the selected child's country, preferred language and optional religious-study track. Parents can change these preferences in the child profile.",
                         style = MaterialTheme.typography.bodyMedium
                     )
+                    if (children.isNotEmpty()) {
+                        AppUiText("Choose the child this template bank should match", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        children.forEach { child ->
+                            OutlinedButton(onClick = {
+                                selectedChild = child
+                                if (templateCategory == "Religious Education" && child.studyTrack == "none") {
+                                    notice = "This child has no religious-study track selected. Set one from Child profiles to show religion-specific questions."
+                                } else notice = "Template suggestions now use " + child.displayName + "'s country, language and study track."
+                            }, modifier = Modifier.fillMaxWidth()) {
+                                AppUiText((if (selectedChild?.id == child.id) "✓ " else "") +
+                                    child.avatarIcon + " " + child.displayName + " • " +
+                                    displayCountryName(child.countryCode) + " • " + studyTrackLabel(child.studyTrack))
+                            }
+                        }
+                    }
+                    val templateCountryCode = selectedChild?.countryCode ?: parentCountryCode
+                    val templateLanguageCode = selectedChild?.preferredLanguage ?: parentLearningLanguageCode
+                    val templateStudyTrack = selectedChild?.studyTrack ?: parentStudyTrack
                     OutlinedButton(
                         onClick = { selected3DModel = "solar-system"; screen = AppScreen.LEARNING_3D_LAB },
                         enabled = !busy,
                         modifier = Modifier.fillMaxWidth()
                     ) { AppUiText("🌌 Preview all interactive 4D learning models") }
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        learningTemplateCategories(parentCountryCode)
+                        learningTemplateCategories(templateCountryCode)
                             .chunked(2).forEach { categories ->
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     categories.forEach { category ->
@@ -1985,16 +2003,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 }
                             }
                     }
-                    val templateStudyTrack = selectedChild?.studyTrack?.takeIf { it != "none" } ?: parentStudyTrack
                     val countryTemplates = LearningTemplates.all.filter { template ->
                         template.category == templateCategory &&
-                            (template.countryCode == "ZZ" || template.countryCode.equals(parentCountryCode, ignoreCase = true)) &&
+                            (template.countryCode == "ZZ" || template.countryCode.equals(templateCountryCode, ignoreCase = true)) &&
                             (templateCategory != "Religious Education" ||
                                 (templateStudyTrack != "none" &&
                                     religionTrackForSubject(template.subjectTitle) == templateStudyTrack))
                     }
                     val languageTemplates = countryTemplates.filter {
-                        it.languageCode.equals(parentLearningLanguageCode, ignoreCase = true)
+                        it.languageCode.equals(templateLanguageCode, ignoreCase = true)
                     }
                     val localLanguageCategories = setOf("Urdu", "Sindhi", "Hindi")
                     val filteredTemplates = when {
@@ -2002,12 +2019,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                         languageTemplates.isNotEmpty() -> languageTemplates
                         else -> countryTemplates.filter { it.languageCode.equals("en", ignoreCase = true) }
                     }
-                    if (templateCategory == "Religious Education" && parentStudyTrack == "none") {
-                        AppUiText("Choose an optional religious-education track in App settings to see matching questions for " + displayCountryName(parentCountryCode) + ".")
+                    if (templateCategory == "Religious Education" && templateStudyTrack == "none") {
+                        AppUiText("Choose a religious-education track in this child's profile to see matching questions for " + displayCountryName(templateCountryCode) + ".")
                     } else if (countryTemplates.isEmpty()) {
-                        AppUiText("No templates are available for this subject in " + displayCountryName(parentCountryCode) + " yet. You can create your own questions.")
-                    } else if (parentLearningLanguageCode != "en" && languageTemplates.isEmpty() && templateCategory !in localLanguageCategories) {
-                        AppUiText("No " + languageLabel(parentLearningLanguageCode) + " templates are available in this category yet. English starter templates are shown until translated ones are added.")
+                        AppUiText("No templates are available for this subject in " + displayCountryName(templateCountryCode) + " yet. You can create your own questions.")
+                    } else if (templateLanguageCode != "en" && languageTemplates.isEmpty() && templateCategory !in localLanguageCategories) {
+                        AppUiText("No " + languageLabel(templateLanguageCode) + " templates are available in this category yet. English starter templates are shown until translated ones are added.")
                     } else if (filteredTemplates.isEmpty()) {
                         AppUiText("No templates are available for this category yet. Parents can create their own questions.")
                     }
@@ -2061,9 +2078,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 familyId,
                                                 template.subjectTitle,
                                                 template.languageCode,
-                                                parentCountryCode
+                                                templateCountryCode
                                             )
-                                            subjects = repository.loadSubjects(familyId, parentCountryCode)
+                                            subjects = repository.loadSubjects(familyId, templateCountryCode)
                                             selectedSubject = targetSubject
                                             questions = repository.loadQuestions(targetSubject.id)
                                             questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
