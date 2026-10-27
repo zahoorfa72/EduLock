@@ -816,6 +816,63 @@ private fun EduLockApp(repository: EduLockRepository) {
                 }
             )
         }
+        if (studyTrackPickerOpen) {
+            AlertDialog(
+                onDismissRequest = { studyTrackPickerOpen = false },
+                title = { Text("Choose a religious-education curriculum") },
+                text = {
+                    Column(Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState())) {
+                        Text("Optional. Choose the learning track you want EduLock to use; it does not infer a family's religion from its country.")
+                        listOf(
+                            "none" to "No religious-education track",
+                            "islamic" to "Islam",
+                            "hindu" to "Hinduism",
+                            "christian" to "Christianity",
+                            "sikh" to "Sikhism",
+                            "buddhist" to "Buddhism",
+                            "jewish" to "Judaism",
+                            "other" to "Other / parent-created"
+                        ).forEach { (code, label) ->
+                            TextButton(onClick = {
+                                parentStudyTrack = code
+                                studyTrackPickerOpen = false
+                                if (familyId.isNotBlank() && session?.accountRole == "parent") execute {
+                                    repository.updateParentLearningSettings(familyId, parentCountryCode, parentLearningLanguageCode, parentStudyTrack, parentDisplayLanguageCode)
+                                    notice = "Learning track saved. You can select its subject templates from Learning Templates."
+                                }
+                            }, modifier = Modifier.fillMaxWidth()) { Text((if (parentStudyTrack == code) "✓ " else "") + label, modifier = Modifier.fillMaxWidth()) }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { studyTrackPickerOpen = false }) { Text("Close") } }
+            )
+        }
+        if (familySettingsOpen) {
+            AlertDialog(
+                onDismissRequest = { familySettingsOpen = false },
+                title = { Text("Family learning settings") },
+                text = {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("These preferences determine the curriculum country, lesson language, optional religious-education templates and interface language.")
+                        OutlinedButton(onClick = { familySettingsOpen = false; countryPickerTarget = "parent"; countrySearch = ""; countryPickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text("🌍 Country: " + displayCountryName(parentCountryCode))
+                        }
+                        OutlinedButton(onClick = { familySettingsOpen = false; languagePickerTarget = "parent-learning"; languageSearch = ""; languagePickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text("📚 Lesson language: " + languageLabel(parentLearningLanguageCode))
+                        }
+                        OutlinedButton(onClick = { familySettingsOpen = false; studyTrackPickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text("🕊 Religious education: " + studyTrackLabel(parentStudyTrack))
+                        }
+                        OutlinedButton(onClick = { familySettingsOpen = false; languagePickerTarget = "display"; languageSearch = ""; languagePickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text("🌐 App display language: " + languageLabel(parentDisplayLanguageCode))
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { familySettingsOpen = false }) { Text("Done") }
+                }
+            )
+        }
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
