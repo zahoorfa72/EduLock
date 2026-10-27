@@ -1159,8 +1159,8 @@ private fun EduLockApp(repository: EduLockRepository) {
 
                 AppScreen.CHILDREN -> ScreenFrame("Child profiles", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
                     Button(onClick = {
-                        childName = ""; childLanguage = "en"; childDailyCap = "60"
-                        childCountryCode = "PK"; childSchoolGrade = "1"; childAgeYears = "8"
+                        childName = ""; childLanguage = parentLearningLanguageCode; childDailyCap = "60"
+                        childCountryCode = parentCountryCode; childSchoolGrade = "1"; childAgeYears = "8"
                         childAvatarIcon = "🦊"; childDailyGameLimit = "20"
                         screen = AppScreen.ADD_CHILD
                     }, modifier = Modifier.fillMaxWidth()) { AppUiText("Add child profile") }
