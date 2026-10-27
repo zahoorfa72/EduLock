@@ -795,7 +795,7 @@ class EduLockRepository(context: Context) {
         require(answer.trim().isNotEmpty()) { "Enter the correct answer" }
         require(languageCode.matches(Regex("[A-Za-z][A-Za-z0-9-]{1,15}"))) { "Use a language code such as en, ur or sd." }
         require(conceptKey.trim().isNotEmpty()) { "Enter a concept tag. Reuse the same tag for questions that test the same idea." }
-        require(type in setOf("multiple_choice", "true_false", "short_answer", "numeric")) { "Select a valid question type" }
+        require(type in setOf("multiple_choice", "true_false", "short_answer", "numeric", "matching", "picture")) { "Select a valid question type" }
         if (type == "multiple_choice") {
             require(options.size >= 2) { "Add at least two answer options" }
             require(options.any { it.trim().equals(answer.trim(), ignoreCase = true) }) {
@@ -806,6 +806,16 @@ class EduLockRepository(context: Context) {
             require(answer.trim().equals("true", true) || answer.trim().equals("false", true)) {
                 "For true/false questions, enter true or false as the correct answer"
             }
+        }
+        if (type == "matching") {
+            require(options.size >= 2) { "Add at least two matching pairs, one pair per line." }
+            require(options.all { it.contains("|") && it.substringBefore("|").isNotBlank() && it.substringAfter("|").isNotBlank() }) {
+                "Each matching pair must use left item|right item format."
+            }
+            require(answer.contains("=")) { "List the correct matches as left=right;left=right." }
+        }
+        if (type == "picture") {
+            require(answer.isNotBlank()) { "Enter the correct answer or a short description of the picture answer." }
         }
         val created = restArray("questions?select=id", "POST",
             JSONObject()
