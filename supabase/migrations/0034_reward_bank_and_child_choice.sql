@@ -2,6 +2,10 @@
 -- on an app the parent has approved. Existing fixed app/group rewards remain supported.
 begin;
 
+-- New child profiles use default-deny app protection. Existing child profiles keep
+-- their stored value and are not silently switched into lockdown.
+alter table edulock.children alter column kids_mode_enabled set default true;
+
 alter table edulock.tasks
   add column if not exists reward_to_bank boolean not null default false;
 alter table edulock.tasks
