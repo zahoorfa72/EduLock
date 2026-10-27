@@ -1079,7 +1079,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 title = { AppUiText("Family learning settings") },
                 text = {
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AppUiText("These preferences determine the curriculum country, lesson language, optional religious-education templates and interface language.")
+                        AppUiText("These preferences determine the curriculum country, lesson language and interface language. Religious education is chosen separately for each child.")
                         OutlinedButton(onClick = { familySettingsOpen = false; countryPickerTarget = "parent"; countrySearch = ""; countryPickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
                             AppUiText("🌍 Country: " + displayCountryName(parentCountryCode))
                         }
@@ -3213,7 +3213,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 questionSolution = option.detail
                                 question3DModel = option.id
                                 questionType = "multiple_choice"
-                                questionConceptKey = "3d:" + option.id + ":learning-lab"
+                                questionConceptKey = "learning-lab"
                                 questionLanguage = "en"
                                 screen = AppScreen.ADD_QUESTION
                                 notice = "A draft question is ready with the selected interactive 4D model. Review its answer and save it for your learners."
