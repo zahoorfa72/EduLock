@@ -1290,7 +1290,7 @@ private fun EduLockApp(repository: EduLockRepository) {
 
                 AppScreen.APP_SETTINGS -> ScreenFrame("App settings", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
                     AppUiText("Everything in one place", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
-                    AppUiText("Choose the curriculum country, learning language and optional religious-study track. You can change these settings at any time.")
+                    AppUiText("Choose the curriculum country, learning language and app language. Religious-education subjects are chosen separately for each child profile.")
                     AppUiText("Family learning preferences", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1305,18 +1305,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 onClick = { languagePickerTarget = "parent-learning"; languageSearch = ""; languagePickerOpen = true }
                             )
                         }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            DashboardIconTile(
-                                icon = "🕊️", title = "Religious education", subtitle = studyTrackLabel(parentStudyTrack),
-                                modifier = Modifier.weight(1f), accent = Color(0xFF9A6ACA),
-                                onClick = { studyTrackPickerTarget = "parent"; studyTrackPickerOpen = true }
-                            )
-                            DashboardIconTile(
-                                icon = "🌐", title = "App language", subtitle = languageLabel(parentDisplayLanguageCode),
-                                modifier = Modifier.weight(1f), accent = Color(0xFFDA6195),
-                                onClick = { languagePickerTarget = "display"; languageSearch = ""; languagePickerOpen = true }
-                            )
-                        }
+                        DashboardIconTile(
+                            icon = "🌐", title = "App language", subtitle = languageLabel(parentDisplayLanguageCode),
+                            accent = Color(0xFFDA6195),
+                            onClick = { languagePickerTarget = "display"; languageSearch = ""; languagePickerOpen = true }
+                        )
                     }
                     AppUiText("App & child controls", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1995,7 +1988,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                     val templateCountryCode = selectedChild?.countryCode ?: parentCountryCode
                     val templateLanguageCode = selectedChild?.preferredLanguage ?: parentLearningLanguageCode
-                    val templateStudyTrack = selectedChild?.studyTrack ?: parentStudyTrack
+                    val templateStudyTrack = selectedChild?.studyTrack ?: "none"
                     OutlinedButton(
                         onClick = { selected3DModel = "solar-system"; screen = AppScreen.LEARNING_3D_LAB },
                         enabled = !busy,
@@ -2373,12 +2366,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                         AppUiText("No matching subjects yet. Open the country-specific learning templates, add a subject, then return here to assign its task.")
                         OutlinedButton(
                             onClick = {
-                                templateCategory = if (parentStudyTrack == "none") "Mathematics" else "Religious Education"
+                                templateCategory = if (selectedChildTrack == "none") "Mathematics" else "Religious Education"
                                 screen = AppScreen.LEARNING_TEMPLATES
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            AppUiText(if (parentStudyTrack == "none") "🗂️ Open country curriculum templates" else "🕊️ Open matching religious-study templates")
+                            AppUiText(if (selectedChildTrack == "none") "🗂️ Open country curriculum templates" else "🕊️ Open matching religious-study templates")
                         }
                     }
                     assignableSubjects.forEach { subject ->
