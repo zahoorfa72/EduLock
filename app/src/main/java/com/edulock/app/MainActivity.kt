@@ -741,6 +741,7 @@ private fun EduLockApp(repository: EduLockRepository) {
         large = RoundedCornerShape(29.dp)
     )
     MaterialTheme(colorScheme = eduLockColors, shapes = eduLockShapes) {
+        CompositionLocalProvider(LocalLayoutDirection provides directionFor(parentDisplayLanguageCode)) {
         if (countryPickerOpen) {
             val countryOptions = remember(countrySearch) {
                 Locale.getISOCountries().map { code ->
@@ -2790,6 +2791,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Button(onClick = { screen = AppScreen.CHILD_HOME }, modifier = Modifier.fillMaxWidth()) { AppUiText("Back to my tasks") }
                 }
             }
+        }
         }
     }
 }
