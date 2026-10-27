@@ -223,7 +223,12 @@ class EduLockAccessibilityService : AccessibilityService() {
             // kiosk enforcement still requires device-owner Lock Task mode.
             val taskId = taskIdForPackage(packageName)
             if (blockedForAppTime || blockedForEarnedTime || blockedForSchedule) {
-                if (taskId != null) prefs.edit().putString(KEY_PENDING_TASK_ID, taskId).apply()
+                if (taskId != null) {
+                    prefs.edit()
+                        .putString(KEY_PENDING_TASK_ID, taskId)
+                        .putString("pending_reward_package", packageName)
+                        .apply()
+                }
             }
             redirectToEduLockIfNeeded(packageName)
         } else {
@@ -348,7 +353,10 @@ class EduLockAccessibilityService : AccessibilityService() {
                 val launch = packageManager.getLaunchIntentForPackage(applicationContext.packageName)
                 if (launch != null) {
                     taskIdForPackage(blockedPackageName)?.let { targetTaskId ->
-                        lockPrefs().edit().putString(KEY_PENDING_TASK_ID, targetTaskId).apply()
+                        lockPrefs().edit()
+                            .putString(KEY_PENDING_TASK_ID, targetTaskId)
+                            .putString("pending_reward_package", blockedPackageName)
+                            .apply()
                     }
                     launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     startActivity(launch)
