@@ -311,7 +311,7 @@ ParentLearningTemplate(
             solution = "Using light energy, green plants use carbon dioxide and water to make sugars and release oxygen."
         ),
         ParentLearningTemplate(
-            title = "3D Solar System: find the Red Planet",
+            title = "4D Solar System: find the Red Planet",
             category = "General Science",
             subjectTitle = "General Science",
             languageCode = "en",
@@ -456,182 +456,182 @@ ParentLearningTemplate(
         )
     ) + listOf(
 ParentLearningTemplate(
-            title = "3D atom: locate the electron", category = "Chemistry", subjectTitle = "Chemistry",
+            title = "4D atom: locate the electron", category = "Chemistry", subjectTitle = "Chemistry",
             languageCode = "en", questionType = "multiple_choice",
-            prompt = "Explore the 3D atom. Which negatively charged particle moves around the nucleus?",
+            prompt = "Explore the 4D atom. Which negatively charged particle moves around the nucleus?",
             options = listOf("Electron", "Proton", "Neutron"), answer = "Electron",
-            conceptKey = "3d:atom:atomic-structure",
+            conceptKey = "4d:atom:atomic-structure",
             solution = "Electrons carry negative charge and occupy regions around an atom's nucleus."
         ),
         ParentLearningTemplate(
-            title = "3D water molecule", category = "Chemistry", subjectTitle = "Chemistry",
+            title = "4D water molecule", category = "Chemistry", subjectTitle = "Chemistry",
             languageCode = "en", questionType = "multiple_choice",
-            prompt = "Look at the 3D water molecule. Which elements make up water?",
+            prompt = "Look at the 4D water molecule. Which elements make up water?",
             options = listOf("Hydrogen and oxygen", "Carbon and oxygen", "Sodium and chlorine"), answer = "Hydrogen and oxygen",
-            conceptKey = "3d:molecule:water-molecule",
+            conceptKey = "4d:molecule:water-molecule",
             solution = "A water molecule contains two hydrogen atoms bonded to one oxygen atom (H₂O)."
         ),
         ParentLearningTemplate(
-            title = "3D geometric solids", category = "Mathematics", subjectTitle = "Mathematics",
+            title = "4D geometric solids", category = "Mathematics", subjectTitle = "Mathematics",
             languageCode = "en", questionType = "multiple_choice",
-            prompt = "Rotate the 3D solid. How many flat square faces does a cube have?",
+            prompt = "Rotate the 4D solid. How many flat square faces does a cube have?",
             options = listOf("4", "6", "8"), answer = "6",
-            conceptKey = "3d:geometry:cube-faces",
+            conceptKey = "4d:geometry:cube-faces",
             solution = "A cube has six equal square faces, twelve edges and eight vertices."
         ),
         ParentLearningTemplate(
-            title = "3D force and motion", category = "Physics", subjectTitle = "Physics",
+            title = "4D force and motion", category = "Physics", subjectTitle = "Physics",
             languageCode = "en", questionType = "multiple_choice",
             prompt = "Watch the moving ball and force arrows. What can an unbalanced force do to an object?",
             options = listOf("Change its motion", "Always remove its mass", "Stop all gravity"), answer = "Change its motion",
-            conceptKey = "3d:force:unbalanced-force",
+            conceptKey = "4d:force:unbalanced-force",
             solution = "A net force can change an object's speed, direction or both."
         ),
         ParentLearningTemplate(
-            title = "3D animal cell", category = "Biology", subjectTitle = "Biology",
+            title = "4D animal cell", category = "Biology", subjectTitle = "Biology",
             languageCode = "en", questionType = "multiple_choice",
-            prompt = "Explore the 3D animal cell. Which structure holds most of the cell's genetic material?",
+            prompt = "Explore the 4D animal cell. Which structure holds most of the cell's genetic material?",
             options = listOf("Nucleus", "Cell membrane", "Cytoplasm"), answer = "Nucleus",
-            conceptKey = "3d:cell:nucleus",
+            conceptKey = "4d:cell:nucleus",
             solution = "The nucleus stores most genetic material in a typical animal cell."
         ),
         ParentLearningTemplate(
-            title = "3D Earth and atmosphere", category = "Geography", subjectTitle = "Geography",
+            title = "4D Earth and atmosphere", category = "Geography", subjectTitle = "Geography",
             languageCode = "en", questionType = "multiple_choice",
             prompt = "Explore the rotating Earth. What causes day and night?",
             options = listOf("Earth's rotation", "Earth stopping in space", "The Moon turning off the Sun"), answer = "Earth's rotation",
-            conceptKey = "3d:earth:day-and-night",
+            conceptKey = "4d:earth:day-and-night",
             solution = "Earth rotates on its axis, so a location faces toward the Sun during day and away from it during night."
         ),
         ParentLearningTemplate(
-            title = "3D water cycle", category = "Environmental Science", subjectTitle = "Environmental Science",
+            title = "4D water cycle", category = "Environmental Science", subjectTitle = "Environmental Science",
             languageCode = "en", questionType = "multiple_choice",
             prompt = "Watch the animated water cycle. What process changes surface liquid water into vapour?",
             options = listOf("Evaporation", "Condensation", "Freezing"), answer = "Evaporation",
-            conceptKey = "3d:water-cycle:evaporation",
+            conceptKey = "4d:water-cycle:evaporation",
             solution = "Sunlight supplies energy for evaporation. Vapour can later cool and condense into droplets."
         ),
         ParentLearningTemplate(
-            title = "3D electric circuit", category = "Computer Skills", subjectTitle = "Computer Skills",
+            title = "4D electric circuit", category = "Computer Skills", subjectTitle = "Computer Skills",
             languageCode = "en", questionType = "multiple_choice",
             prompt = "Follow the animated circuit. What is needed for current to flow continuously in a simple circuit?",
             options = listOf("A closed conducting path and a power source", "A broken wire only", "A plastic path with no source"),
             answer = "A closed conducting path and a power source",
-            conceptKey = "3d:circuit:closed-circuit",
+            conceptKey = "4d:circuit:closed-circuit",
             solution = "A closed conducting path and a source of electrical energy allow current to flow."
         ),
         ParentLearningTemplate(
-            title = "3D planetary rings", category = "Astronomy", subjectTitle = "Astronomy",
+            title = "4D planetary rings", category = "Astronomy", subjectTitle = "Astronomy",
             languageCode = "en", questionType = "multiple_choice",
             prompt = "Explore the orbital model. Which planet has the most conspicuous ring system?",
             options = listOf("Saturn", "Mercury", "Earth"), answer = "Saturn",
-            conceptKey = "3d:solar-system:planetary-rings",
+            conceptKey = "4d:solar-system:planetary-rings",
             solution = "Saturn's broad, bright ring system is prominent, though other giant planets also have rings."
         ),
         ParentLearningTemplate(
-            title = "3D colour and shape composition", category = "Art & Design", subjectTitle = "Art & Design",
+            title = "4D colour and shape composition", category = "Art & Design", subjectTitle = "Art & Design",
             languageCode = "en", questionType = "multiple_choice",
-            prompt = "Rotate the 3D shapes. Which set contains traditional primary colours in basic paint instruction?",
+            prompt = "Rotate the 4D shapes. Which set contains traditional primary colours in basic paint instruction?",
             options = listOf("Red, yellow and blue", "Green, orange and purple", "Black, grey and white"), answer = "Red, yellow and blue",
-            conceptKey = "3d:geometry:primary-colours",
+            conceptKey = "4d:geometry:primary-colours",
             solution = "Basic colour instruction often uses red, yellow and blue as primary paint colours; models differ by medium."
         ),
         ParentLearningTemplate(
-            title = "3D breathing and lungs", category = "Health & Safety", subjectTitle = "Health & Safety",
+            title = "4D breathing and lungs", category = "Health & Safety", subjectTitle = "Health & Safety",
             languageCode = "en", questionType = "multiple_choice",
             prompt = "Explore the body model. Which organs exchange oxygen and carbon dioxide during breathing?",
             options = listOf("Lungs", "Stomach", "Kidneys"), answer = "Lungs",
-            conceptKey = "3d:cell:respiratory-system",
+            conceptKey = "4d:cell:respiratory-system",
             solution = "Gas exchange takes place in the alveoli of the lungs."
         )
     ) + listOf(
 ParentLearningTemplate(
-            title = "3D atom: locate the electron", category = "Chemistry", subjectTitle = "Chemistry",
+            title = "4D atom: locate the electron", category = "Chemistry", subjectTitle = "Chemistry",
             languageCode = "en", questionType = "multiple_choice",
-            prompt = "Explore the 3D atom. Which negatively charged particle moves around the nucleus?",
+            prompt = "Explore the 4D atom. Which negatively charged particle moves around the nucleus?",
             options = listOf("Electron", "Proton", "Neutron"), answer = "Electron",
-            conceptKey = "3d:atom:atomic-structure",
+            conceptKey = "4d:atom:atomic-structure",
             solution = "Electrons carry negative charge and occupy regions around an atom's nucleus."
         ),
         ParentLearningTemplate(
-            title = "3D water molecule", category = "Chemistry", subjectTitle = "Chemistry",
+            title = "4D water molecule", category = "Chemistry", subjectTitle = "Chemistry",
             languageCode = "en", questionType = "multiple_choice",
-            prompt = "Look at the 3D water molecule. Which elements make up water?",
+            prompt = "Look at the 4D water molecule. Which elements make up water?",
             options = listOf("Hydrogen and oxygen", "Carbon and oxygen", "Sodium and chlorine"), answer = "Hydrogen and oxygen",
-            conceptKey = "3d:molecule:water-molecule",
+            conceptKey = "4d:molecule:water-molecule",
             solution = "A water molecule contains two hydrogen atoms bonded to one oxygen atom (H₂O)."
         ),
         ParentLearningTemplate(
-            title = "3D geometric solids", category = "Mathematics", subjectTitle = "Mathematics",
+            title = "4D geometric solids", category = "Mathematics", subjectTitle = "Mathematics",
             languageCode = "en", questionType = "multiple_choice",
-            prompt = "Rotate the 3D solid. How many flat square faces does a cube have?",
+            prompt = "Rotate the 4D solid. How many flat square faces does a cube have?",
             options = listOf("4", "6", "8"), answer = "6",
-            conceptKey = "3d:geometry:cube-faces",
+            conceptKey = "4d:geometry:cube-faces",
             solution = "A cube has six equal square faces, twelve edges and eight vertices."
         ),
         ParentLearningTemplate(
-            title = "3D force and motion", category = "Physics", subjectTitle = "Physics",
+            title = "4D force and motion", category = "Physics", subjectTitle = "Physics",
             languageCode = "en", questionType = "multiple_choice",
             prompt = "Watch the moving ball and force arrows. What can an unbalanced force do to an object?",
             options = listOf("Change its motion", "Always remove its mass", "Stop all gravity"), answer = "Change its motion",
-            conceptKey = "3d:force:unbalanced-force",
+            conceptKey = "4d:force:unbalanced-force",
             solution = "A net force can change an object's speed, direction or both."
         ),
         ParentLearningTemplate(
-            title = "3D animal cell", category = "Biology", subjectTitle = "Biology",
+            title = "4D animal cell", category = "Biology", subjectTitle = "Biology",
             languageCode = "en", questionType = "multiple_choice",
-            prompt = "Explore the 3D animal cell. Which structure holds most of the cell's genetic material?",
+            prompt = "Explore the 4D animal cell. Which structure holds most of the cell's genetic material?",
             options = listOf("Nucleus", "Cell membrane", "Cytoplasm"), answer = "Nucleus",
-            conceptKey = "3d:cell:nucleus",
+            conceptKey = "4d:cell:nucleus",
             solution = "The nucleus stores most genetic material in a typical animal cell."
         ),
         ParentLearningTemplate(
-            title = "3D Earth and atmosphere", category = "Geography", subjectTitle = "Geography",
+            title = "4D Earth and atmosphere", category = "Geography", subjectTitle = "Geography",
             languageCode = "en", questionType = "multiple_choice",
             prompt = "Explore the rotating Earth. What causes day and night?",
             options = listOf("Earth's rotation", "Earth stopping in space", "The Moon turning off the Sun"), answer = "Earth's rotation",
-            conceptKey = "3d:earth:day-and-night",
+            conceptKey = "4d:earth:day-and-night",
             solution = "Earth rotates on its axis, so a location faces toward the Sun during day and away from it during night."
         ),
         ParentLearningTemplate(
-            title = "3D water cycle", category = "Environmental Science", subjectTitle = "Environmental Science",
+            title = "4D water cycle", category = "Environmental Science", subjectTitle = "Environmental Science",
             languageCode = "en", questionType = "multiple_choice",
             prompt = "Watch the animated water cycle. What process changes surface liquid water into vapour?",
             options = listOf("Evaporation", "Condensation", "Freezing"), answer = "Evaporation",
-            conceptKey = "3d:water-cycle:evaporation",
+            conceptKey = "4d:water-cycle:evaporation",
             solution = "Sunlight supplies energy for evaporation. Vapour can later cool and condense into droplets."
         ),
         ParentLearningTemplate(
-            title = "3D electric circuit", category = "Computer Skills", subjectTitle = "Computer Skills",
+            title = "4D electric circuit", category = "Computer Skills", subjectTitle = "Computer Skills",
             languageCode = "en", questionType = "multiple_choice",
             prompt = "Follow the animated circuit. What is needed for current to flow continuously in a simple circuit?",
             options = listOf("A closed conducting path and a power source", "A broken wire only", "A plastic path with no source"),
             answer = "A closed conducting path and a power source",
-            conceptKey = "3d:circuit:closed-circuit",
+            conceptKey = "4d:circuit:closed-circuit",
             solution = "A closed conducting path and a source of electrical energy allow current to flow."
         ),
         ParentLearningTemplate(
-            title = "3D planetary rings", category = "Astronomy", subjectTitle = "Astronomy",
+            title = "4D planetary rings", category = "Astronomy", subjectTitle = "Astronomy",
             languageCode = "en", questionType = "multiple_choice",
             prompt = "Explore the orbital model. Which planet has the most conspicuous ring system?",
             options = listOf("Saturn", "Mercury", "Earth"), answer = "Saturn",
-            conceptKey = "3d:solar-system:planetary-rings",
+            conceptKey = "4d:solar-system:planetary-rings",
             solution = "Saturn's broad, bright ring system is prominent, though other giant planets also have rings."
         ),
         ParentLearningTemplate(
-            title = "3D colour and shape composition", category = "Art & Design", subjectTitle = "Art & Design",
+            title = "4D colour and shape composition", category = "Art & Design", subjectTitle = "Art & Design",
             languageCode = "en", questionType = "multiple_choice",
-            prompt = "Rotate the 3D shapes. Which set contains traditional primary colours in basic paint instruction?",
+            prompt = "Rotate the 4D shapes. Which set contains traditional primary colours in basic paint instruction?",
             options = listOf("Red, yellow and blue", "Green, orange and purple", "Black, grey and white"), answer = "Red, yellow and blue",
-            conceptKey = "3d:geometry:primary-colours",
+            conceptKey = "4d:geometry:primary-colours",
             solution = "Basic colour instruction often uses red, yellow and blue as primary paint colours; models differ by medium."
         ),
         ParentLearningTemplate(
-            title = "3D breathing and lungs", category = "Health & Safety", subjectTitle = "Health & Safety",
+            title = "4D breathing and lungs", category = "Health & Safety", subjectTitle = "Health & Safety",
             languageCode = "en", questionType = "multiple_choice",
             prompt = "Explore the body model. Which organs exchange oxygen and carbon dioxide during breathing?",
             options = listOf("Lungs", "Stomach", "Kidneys"), answer = "Lungs",
-            conceptKey = "3d:cell:respiratory-system",
+            conceptKey = "4d:cell:respiratory-system",
             solution = "Gas exchange takes place in the alveoli of the lungs."
         ),
         ParentLearningTemplate(
