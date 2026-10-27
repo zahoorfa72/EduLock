@@ -116,25 +116,25 @@ fun KidsGamesScreen(
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Box(Modifier.size(52.dp).background(Brush.linearGradient(listOf(Color(0xFF5B4CE8), Color(0xFF00A99D))), RoundedCornerShape(18.dp)), contentAlignment = Alignment.Center) {
-                        Text(avatarIcon, fontSize = 29.sp)
+                        AppUiText(avatarIcon, fontSize = 29.sp)
                     }
                     Column {
-                        Text("Welcome, $childName!", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleLarge, color = Color(0xFF29245F))
-                        Text("Learn while you play 🌈", color = Color(0xFF626987))
+                        AppUiText("Welcome, $childName!", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleLarge, color = Color(0xFF29245F))
+                        AppUiText("Learn while you play 🌈", color = Color(0xFF626987))
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Today's game time", fontWeight = FontWeight.Bold)
+                    AppUiText("Today's game time", fontWeight = FontWeight.Bold)
                     val minutes = remainingSeconds / 60
                     val seconds = remainingSeconds % 60
-                    Text(String.format(java.util.Locale.ROOT, "%02d:%02d", minutes, seconds), color = if (timedOut) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+                    AppUiText(String.format(java.util.Locale.ROOT, "%02d:%02d", minutes, seconds), color = if (timedOut) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
                 }
                 val total = (dailyLimitMinutes * 60).coerceAtLeast(1)
                 LinearProgressIndicator(
                     progress = { (remainingSeconds.toFloat() / total.toFloat()).coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth()
                 )
-                Text(
+                AppUiText(
                     if (timedOut) "Your game time has finished. Ask a parent to allow more time."
                     else "Games use your parent's daily allowance: $dailyLimitMinutes minutes. Learning tasks and your 3D Solar System are separate.",
                     color = if (timedOut) MaterialTheme.colorScheme.error else Color(0xFF626987),
@@ -143,7 +143,7 @@ fun KidsGamesScreen(
             }
         }
 
-        Text("Choose a mini-game", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+        AppUiText("Choose a mini-game", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
         choices.chunked(2).forEach { rowChoices ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 rowChoices.forEach { item ->
@@ -154,8 +154,8 @@ fun KidsGamesScreen(
                         modifier = Modifier.weight(1f)
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text(item.second, fontSize = 25.sp)
-                            Text(item.third, fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold)
+                            AppUiText(item.second, fontSize = 25.sp)
+                            AppUiText(item.third, fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold)
                         }
                     }
                 }
@@ -170,8 +170,8 @@ fun KidsGamesScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("🏆 Score: $score / $played", color = Color(0xFF087E75), fontWeight = FontWeight.Bold)
-                    Text(question!!.prompt, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                    AppUiText("🏆 Score: $score / $played", color = Color(0xFF087E75), fontWeight = FontWeight.Bold)
+                    AppUiText(question!!.prompt, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                     question!!.options.forEach { option ->
                         Button(
                             onClick = {
@@ -188,23 +188,23 @@ fun KidsGamesScreen(
                             },
                             enabled = !timedOut && selectedAnswer == null,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text(option) }
+                        ) { AppUiText(option) }
                     }
                     if (feedback.isNotBlank()) {
-                        Text(feedback, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        AppUiText(feedback, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         OutlinedButton(
                             onClick = { if (!timedOut) { question = arcadeQuestion(mode); selectedAnswer = null; feedback = "" } },
                             enabled = !timedOut,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Next challenge ✨") }
+                        ) { AppUiText("Next challenge ✨") }
                     }
                 }
             }
         } else {
-            Text("Pick a game to start a short challenge. Correct answers teach a concept and build your score.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AppUiText("Pick a game to start a short challenge. Correct answers teach a concept and build your score.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         Spacer(Modifier.padding(2.dp))
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to learning") }
+        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { AppUiText("Back to learning") }
     }
 }
