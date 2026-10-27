@@ -246,7 +246,7 @@ class EduLockAccessibilityService : AccessibilityService() {
                 val launch = packageManager.getLaunchIntentForPackage(applicationContext.packageName)
                 if (launch != null) {
                     taskIdForPackage(blockedPackageName)?.let { targetTaskId ->
-                        lockPrefs().edit().putString("pending_task_id", targetTaskId).apply()
+                        lockPrefs().edit().putString(KEY_PENDING_TASK_ID, targetTaskId).apply()
                     }
                     launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     startActivity(launch)
@@ -354,6 +354,7 @@ class EduLockAccessibilityService : AccessibilityService() {
             packageName.startsWith("com.android.providers.")
     private companion object {
         const val LOCK_PREFS = "edulock_lock_state"
+        const val KEY_PENDING_TASK_ID = "pending_task_id"
         const val KEY_LAST_SERVICE_TICK_AT = "last_service_tick_at"
         const val KEY_LAST_BLOCKER_SUCCESS_AT = "last_blocker_success_at"
         const val KEY_LAST_BLOCKER_ERROR = "last_blocker_error"
