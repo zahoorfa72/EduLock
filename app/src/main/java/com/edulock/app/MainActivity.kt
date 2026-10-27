@@ -3449,7 +3449,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     if (solarQuizReturnScreen == AppScreen.CHILD_HOME) {
                         AppUiText("Your educational game time left today: " + (kidsGameSecondsRemaining / 60) + " min " + (kidsGameSecondsRemaining % 60) + " sec.")
                     }
-                    val learnerForLab = childProfile ?: selectedChild
+                    val learnerForLab = childProfile ?: selectedChild ?: children.singleOrNull()
                     Learning4DLabScreen(
                         selectedModel = selected3DModel,
                         onSelectModel = { selected3DModel = it },
@@ -3481,6 +3481,23 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     "magnet" -> Triple("Which magnetic poles attract each other?", listOf("Opposite poles", "Like poles", "No poles"), "Opposite poles")
                                     "volcano" -> Triple("What is molten rock called after it reaches the surface?", listOf("Lava", "Magma", "Granite"), "Lava")
                                     "flower" -> Triple("Which flower part often attracts pollinators?", listOf("Petals", "Roots", "Stem only"), "Petals")
+                                    "social-studies" -> Triple("How do maps help us understand a community?", listOf("They show places and relationships", "They measure a person's temperature", "They replace all local knowledge"), "They show places and relationships")
+                                    "computer-skills" -> Triple("Which password is generally safer?", listOf("A long, unique passphrase", "123456", "Your first name only"), "A long, unique passphrase")
+                                    "health-safety" -> Triple("Which habit helps reduce the spread of germs?", listOf("Wash hands with soap", "Share used tissues", "Touch food with dirty hands"), "Wash hands with soap")
+                                    "art-design" -> Triple("What can highlights and shadows do in a drawing?", listOf("Suggest a three-dimensional form", "Turn a shape into a sound", "Measure an object's age"), "Suggest a three-dimensional form")
+                                    "drawing-colour" -> Triple("What can overlapping shapes show in a drawing?", listOf("Depth and which object is in front", "The sound of a colour", "The weight of paper"), "Depth and which object is in front")
+                                    "english" -> Triple("Which word is a verb?", listOf("Run", "Garden", "Blue"), "Run")
+                                    "urdu" -> Triple("جملے میں فعل کس چیز کو ظاہر کرتا ہے؟", listOf("کام یا عمل", "صرف رنگ", "صرف جگہ"), "کام یا عمل")
+                                    "sindhi" -> Triple("جملو ۾ فعل ڇا ظاهر ڪري ٿو؟", listOf("ڪم يا عمل", "صرف رنگ", "صرف جاءِ"), "ڪم يا عمل")
+                                    "hindi" -> Triple("वाक्य में क्रिया क्या बताती है?", listOf("काम या कार्य", "केवल रंग", "केवल जगह"), "काम या कार्य")
+                                    "faith-islamic" -> Triple("Which value is encouraged in many Islamic teachings?", listOf("Charity and care for others", "Dishonesty", "Wastefulness"), "Charity and care for others")
+                                    "faith-hindu" -> Triple("Which festival is widely known as the festival of lights?", listOf("Diwali", "Vesak", "Vaisakhi"), "Diwali")
+                                    "faith-christian" -> Triple("What does Easter commemorate in Christian belief?", listOf("The resurrection of Jesus", "The start of the school year", "A planet's orbit"), "The resurrection of Jesus")
+                                    "faith-sikh" -> Triple("What does seva mean in Sikh tradition?", listOf("Selfless service", "A planet", "A colour"), "Selfless service")
+                                    "faith-buddhist" -> Triple("What is mindfulness?", listOf("Paying attention to present experience", "Ignoring everything", "A type of fuel"), "Paying attention to present experience")
+                                    "faith-jewish" -> Triple("What is Shabbat in Jewish tradition?", listOf("A weekly day of rest and observance", "A planet", "A drawing tool"), "A weekly day of rest and observance")
+                                    "faith-jain" -> Triple("What does ahimsa mean in Jain traditions?", listOf("Avoiding harm", "Being cruel", "Wasting things"), "Avoiding harm")
+                                    "faith-world" -> Triple("Why should we learn about different traditions?", listOf("To understand and respect people", "To mock them", "To assume everyone is the same"), "To understand and respect people")
                                     "chemistry-lab" -> Triple("In a virtual chemistry lab, what can a simulated indicator colour change suggest?", listOf("A change in solution properties", "That all chemicals are safe", "That temperature is zero"), "A change in solution properties")
                                     "nucleus" -> Triple("Where are protons and neutrons located in an atom?", listOf("Nucleus", "Outer electron region", "Outside the atom only"), "Nucleus")
                                     "proton" -> Triple("What electric charge does a proton have?", listOf("Positive", "Negative", "No net charge"), "Positive")
