@@ -213,11 +213,13 @@ private fun suggestedSubjectsForCountry(countryCode: String): List<SubjectSugges
     return (common + local).distinctBy { it.title.lowercase(Locale.ROOT) + ":" + it.languageCode }
 }
 
-private fun fourDTemplatesForSubject(subjectTitle: String, languageCode: String): List<ParentLearningTemplate> {
-    val matchingSubject = FourDQuestionBanks.all.filter { it.subjectTitle.equals(subjectTitle.trim(), ignoreCase = true) }
-    val localized = matchingSubject.filter { it.languageCode.equals(languageCode.trim(), ignoreCase = true) }
-    return localized.ifEmpty { matchingSubject.filter { it.languageCode.equals("en", ignoreCase = true) } }
-}
+private fun fourDTemplatesForSubject(
+    subjectTitle: String,
+    languageCode: String,
+    gradeLevel: Int = 3,
+    ageYears: Int = (gradeLevel + 5).coerceIn(3, 19)
+): List<ParentLearningTemplate> =
+    FourDQuestionBanks.forLearningContext(subjectTitle, languageCode, gradeLevel, ageYears)
 
 private fun learningTemplateCategories(countryCode: String): List<String> {
     val common = listOf(
@@ -1119,7 +1121,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             repository.updateChildStudyTrack(childId, code)
                                             if (code != "none") {
                                                 val religiousSubject = repository.findOrCreateSubject(familyId, religiousSubjectTitle(code), existingChild.preferredLanguage, existingChild.countryCode)
-                                            val starterQuestions = fourDTemplatesForSubject(religiousSubject.title, existingChild.preferredLanguage)
+                                            val starterQuestions = fourDTemplatesForSubject(religiousSubject.title, existingChild.preferredLanguage, existingChild.schoolGrade, existingChild.ageYears)
                                             repository.ensureTemplateQuestions(religiousSubject.id, starterQuestions)
                                             }
                                             children = repository.loadChildren(familyId)
@@ -1731,7 +1733,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             )
                             if (childReligionEnabled && childStudyTrack != "none") {
                                 val religiousSubject = repository.findOrCreateSubject(familyId, religiousSubjectTitle(childStudyTrack), childLanguage, childCountryCode)
-                                val starterQuestions = fourDTemplatesForSubject(religiousSubject.title, childLanguage)
+                                val starterQuestions = fourDTemplatesForSubject(religiousSubject.title, childLanguage, grade, age)
                                 repository.ensureTemplateQuestions(religiousSubject.id, starterQuestions)
                             }
                             children = repository.loadChildren(familyId)
@@ -2030,7 +2032,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                             OutlinedButton(onClick = {
                                 execute {
                                     val suggestedSubject = repository.findOrCreateSubject(familyId, suggestion.title, suggestion.languageCode, parentCountryCode)
-                                    val starterQuestions = fourDTemplatesForSubject(suggestedSubject.title, suggestion.languageCode)
+                                    val starterQuestions = fourDTemplatesForSubject(
+                                        suggestedSubject.title, suggestion.languageCode,
+                                        selectedChild?.schoolGrade ?: suggestedSubject.gradeLevel,
+                                        selectedChild?.ageYears ?: (suggestedSubject.gradeLevel + 5).coerceIn(3, 19)
+                                    )
                                     val addedQuestionCount = repository.ensureTemplateQuestions(suggestedSubject.id, starterQuestions)
                                     subjects = repository.loadSubjects(familyId, parentCountryCode)
                                     notice = if (suggestion.studyTrack == null) {
@@ -2044,8 +2050,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
 
                     AppUiText("Your subjects", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    if (subjects.isEmpty()) AppUiText("No subjects yet. Add a suggestion above or create your own subject.")
-                    subjects.forEach { subject ->
+                    val visibleSubjects = subjects.filter { subject ->
+                        val track = religionTrackForSubject(subject.title)
+                        track == null || children.any { child -> child.studyTrack == track }
+                    }
+                    if (visibleSubjects.isEmpty()) AppUiText("No subjects yet. Add a suggestion above or create your own subject.")
+                    visibleSubjects.forEach { subject ->
                         Card(
                             modifier = Modifier.fillMaxWidth().clickable {
                                 selectedSubject = subject
@@ -2055,7 +2065,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     // Repair existing subjects created before the full starter bank was seeded.
                                     val addedStarterCount = repository.ensureTemplateQuestions(
                                         subject.id,
-                                        fourDTemplatesForSubject(subject.title, subject.languageCode)
+                                        fourDTemplatesForSubject(
+                                            subject.title, subject.languageCode, subject.gradeLevel,
+                                            selectedChild?.ageYears ?: (subject.gradeLevel + 5).coerceIn(3, 19)
+                                        )
                                     )
                                     questions = repository.loadQuestions(subject.id)
                                     questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
@@ -2126,6 +2139,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     ) { AppUiText("🌌 Preview all interactive 4D learning models") }
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         learningTemplateCategories(templateCountryCode)
+                            .filter { it != "Religious Education" || templateStudyTrack != "none" }
                             .chunked(2).forEach { categories ->
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     categories.forEach { category ->
@@ -2309,7 +2323,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                             } else {
                                 repository.updateSubject(currentSubjectId, subjectTitle, subjectLanguage, subjectCountryCode, grade)
                             }
-                            val starterQuestions = fourDTemplatesForSubject(savedSubject.title, savedSubject.languageCode)
+                            val starterQuestions = fourDTemplatesForSubject(
+                                savedSubject.title, savedSubject.languageCode, grade,
+                                selectedChild?.ageYears ?: (grade + 5).coerceIn(3, 19)
+                            )
                             val addedQuestionCount = repository.ensureTemplateQuestions(savedSubject.id, starterQuestions)
                             notice = if (currentSubjectId == null) {
                                 "Subject saved with " + addedQuestionCount + " 4D starter questions."
@@ -3432,9 +3449,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                     if (solarQuizReturnScreen == AppScreen.CHILD_HOME) {
                         AppUiText("Your educational game time left today: " + (kidsGameSecondsRemaining / 60) + " min " + (kidsGameSecondsRemaining % 60) + " sec.")
                     }
+                    val learnerForLab = childProfile ?: selectedChild
                     Learning4DLabScreen(
                         selectedModel = selected3DModel,
                         onSelectModel = { selected3DModel = it },
+                        religiousStudyTrack = learnerForLab?.studyTrack ?: "none",
+                        gradeLevel = learnerForLab?.schoolGrade ?: 3,
+                        ageYears = learnerForLab?.ageYears ?: 9,
                         onStartSolarQuiz = {
                             solarQuizReturnScreen = if (solarQuizReturnScreen == AppScreen.CHILD_HOME) AppScreen.CHILD_HOME else AppScreen.LEARNING_3D_LAB
                             screen = AppScreen.SOLAR_SYSTEM_QUIZ
