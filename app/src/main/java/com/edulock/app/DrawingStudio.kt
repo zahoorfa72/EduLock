@@ -56,15 +56,15 @@ fun DrawingStudioScreen(onBack: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF0F7))) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("🎨 Drawing & Colour Studio", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color(0xFF66315A))
-                Text("Draw with your finger, explore colours and practise shapes. Your artwork stays on this screen unless you save or share it yourself.", color = Color(0xFF784E70))
+                AppUiText("🎨 Drawing & Colour Studio", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color(0xFF66315A))
+                AppUiText("Draw with your finger, explore colours and practise shapes. Your artwork stays on this screen unless you save or share it yourself.", color = Color(0xFF784E70))
             }
         }
-        Text("Choose a drawing challenge", fontWeight = FontWeight.Bold)
+        AppUiText("Choose a drawing challenge", fontWeight = FontWeight.Bold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("Free draw", "Sun & sky", "House", "Flower").forEach { item ->
                 OutlinedButton(onClick = { guide = item }, modifier = Modifier.weight(1f)) {
-                    Text(if (guide == item) "✓ $item" else item)
+                    AppUiText(if (guide == item) "✓ $item" else item)
                 }
             }
         }
@@ -92,7 +92,7 @@ fun DrawingStudioScreen(onBack: () -> Unit) {
                 if (currentPoints.isNotEmpty()) drawStroke(currentPoints, selectedColor, strokeWidth)
             }
         }
-        Text("Pick a colour", fontWeight = FontWeight.Bold)
+        AppUiText("Pick a colour", fontWeight = FontWeight.Bold)
         palette.chunked(5).forEach { rowColors ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 rowColors.forEach { color ->
@@ -101,21 +101,21 @@ fun DrawingStudioScreen(onBack: () -> Unit) {
                         modifier = Modifier.weight(1f).height(42.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text(if (selectedColor == color) "✓" else "●", color = color, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
+                        AppUiText(if (selectedColor == color) "✓" else "●", color = color, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { strokeWidth = 4f }, modifier = Modifier.weight(1f)) { Text(if (strokeWidth == 4f) "✓ Fine pen" else "Fine pen") }
-            OutlinedButton(onClick = { strokeWidth = 8f }, modifier = Modifier.weight(1f)) { Text(if (strokeWidth == 8f) "✓ Brush" else "Brush") }
-            OutlinedButton(onClick = { strokeWidth = 15f }, modifier = Modifier.weight(1f)) { Text(if (strokeWidth == 15f) "✓ Thick" else "Thick") }
+            OutlinedButton(onClick = { strokeWidth = 4f }, modifier = Modifier.weight(1f)) { AppUiText(if (strokeWidth == 4f) "✓ Fine pen" else "Fine pen") }
+            OutlinedButton(onClick = { strokeWidth = 8f }, modifier = Modifier.weight(1f)) { AppUiText(if (strokeWidth == 8f) "✓ Brush" else "Brush") }
+            OutlinedButton(onClick = { strokeWidth = 15f }, modifier = Modifier.weight(1f)) { AppUiText(if (strokeWidth == 15f) "✓ Thick" else "Thick") }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { if (strokes.isNotEmpty()) strokes.removeAt(strokes.lastIndex) }, modifier = Modifier.weight(1f)) { Text("Undo") }
-            OutlinedButton(onClick = { strokes.clear(); currentPoints = emptyList() }, modifier = Modifier.weight(1f)) { Text("Clear page") }
+            OutlinedButton(onClick = { if (strokes.isNotEmpty()) strokes.removeAt(strokes.lastIndex) }, modifier = Modifier.weight(1f)) { AppUiText("Undo") }
+            OutlinedButton(onClick = { strokes.clear(); currentPoints = emptyList() }, modifier = Modifier.weight(1f)) { AppUiText("Clear page") }
         }
-        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Done drawing") }
+        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { AppUiText("Done drawing") }
     }
 }
 
