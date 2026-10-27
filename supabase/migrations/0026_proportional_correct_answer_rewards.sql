@@ -1,5 +1,8 @@
 -- Correct answers earn proportional screen time, while retaining the existing server-side daily caps.
 -- Existing tasks need no data migration: reward_minutes is now the maximum for a perfect score.
+-- Parents may optionally direct earned minutes to one installed app; NULL means general screen time.
+alter table edulock.tasks add column if not exists reward_package_name text;
+alter table edulock.screen_time_ledger add column if not exists target_package_name text;
 create or replace function edulock.grade_and_award_task(
   p_user_id uuid, p_task_id uuid, p_answers jsonb
 ) returns jsonb
@@ -94,8 +97,8 @@ begin
     returning id into v_attempt_id;
 
   if v_award > 0 then
-    insert into edulock.screen_time_ledger(child_id, source_attempt_id, minutes_delta, reason)
-      values (v_child.id, v_attempt_id, v_award, 'Task reward: ' || v_task.title);
+    insert into edulock.screen_time_ledger(child_id, source_attempt_id, minutes_delta, reason, target_package_name)
+      values (v_child.id, v_attempt_id, v_award, 'Correct-answer reward: ' || v_task.title, v_task.reward_package_name);
   end if;
 
   return jsonb_build_object(
