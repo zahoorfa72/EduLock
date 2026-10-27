@@ -3370,14 +3370,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 AppUiText(installed.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
                                 AppUiText(installed.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 if (existingRule == null) {
-                                    var limitText = installedAppLimitEdits[installed.packageName] ?: "1440"
+                                    var limitText = installedAppLimitEdits[installed.packageName] ?: ""
                                     Field(limitText, { value ->
                                         installedAppLimitEdits = installedAppLimitEdits + (installed.packageName to value.filter(Char::isDigit).take(4))
-                                    }, "Daily limit in minutes (1–1440; 1440 = no practical cap)", keyboardType = KeyboardType.Number)
+                                    }, "Daily limit in minutes (1–1440)", keyboardType = KeyboardType.Number)
                                     Button(
                                         onClick = {
                                             execute {
-                                                val limit = (installedAppLimitEdits[installed.packageName] ?: "1440").toIntOrNull()
+                                                val limit = (installedAppLimitEdits[installed.packageName] ?: "").toIntOrNull()
                                                     ?: throw IllegalArgumentException("Enter a daily limit from 1 to 1440 minutes.")
                                                 require(limit in 1..1440) { "Daily limit must be between 1 and 1440 minutes." }
                                                 val selected = child ?: throw IllegalStateException("Select a child profile first.")
