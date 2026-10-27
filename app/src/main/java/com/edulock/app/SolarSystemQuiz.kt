@@ -514,7 +514,26 @@ const detailMap={
 '.page-right':['Right page','Touch the page to reveal facts from this 4D learning book.'],
 '.spine':['Book spine','The spine holds the book together along its bound edge.'],
 '.bookmark':['Bookmark','A bookmark helps a reader find a place again.'],
-'.book-title':['Learning topic','This model represents an interactive subject guide with questions and explanations.']
+'.book-title':['Learning topic','This model represents an interactive subject guide with questions and explanations.'],
+'.topic-core':['Main model part','This component represents the central idea being explored. Its shape, depth and animation vary by question topic.'],
+'.topic-node':['Interactive model component','This raised component can represent a part, stage or object in the selected learning topic. Tap other parts to compare them.'],
+'.topic-ring':['Orbit or cycle','The rotating ring represents a cycle, path or relationship in this model.'],
+'.topic-particle':['Moving particle','This moving particle illustrates a process or changing state.'],
+'.friction-block':['Sliding block','The block moves across a textured track. Friction can oppose sliding between surfaces.'],
+'.meter-mass':['Test mass','The hanging mass stretches the virtual spring to illustrate force measurement.'],
+'.cart-body':['Moving cart','A net force can change the cart’s speed or direction.'],
+'.energy-ball':['Raised ball','The ball gains gravitational potential energy as its height increases.'],
+'.beaker':['Virtual beaker','This container is part of a safe computer-generated chemistry simulation; no real chemicals are being mixed.'],
+'.liquid':['Simulated solution','The liquid colour and level are animated examples, not a real chemical test result.'],
+'.gas-bubble':['Gas bubble','These computer-generated bubbles represent gas being released in a simulated reaction.'],
+'.element-tile':['Element tile','This tile represents a chemical element organised in the periodic table.'],
+'.nucleus-particle':['Nuclear particle','This sphere illustrates a particle in the atomic nucleus. Colours are schematic, not to scale.'],
+'.vib-atom':['Vibrating atom','This atom moves relative to its neighbours to illustrate molecular vibration.'],
+'.vib-bond':['Molecular bond','A bond connects atoms in a molecule; the motion shown is a simplified classroom model.'],
+'.solid-sphere':['Sphere','A sphere is a round 3D solid with a continuous curved surface and no flat faces.'],
+'.solid-cylinder':['Cylinder','A cylinder has two flat circular ends joined by a curved side.'],
+'.solid-cone':['Cone','A cone narrows from a circular base to an apex.'],
+'.cuboid-face':['Cuboid face','A cuboid has six rectangular faces, twelve edges and eight vertices.'] 
 };
 Object.keys(detailMap).forEach(selector=>stage.querySelectorAll(selector).forEach(el=>{
   el.style.cursor='pointer';el.setAttribute('role','button');el.setAttribute('tabindex','0');
