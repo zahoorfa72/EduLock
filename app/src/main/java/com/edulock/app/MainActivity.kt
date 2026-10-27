@@ -415,6 +415,8 @@ private fun EduLockApp(repository: EduLockRepository) {
         parentLearningLanguageCode = prefs.learningLanguageCode
         parentStudyTrack = prefs.studyTrack
         parentDisplayLanguageCode = prefs.displayLanguageCode
+        context.getSharedPreferences("edulock_display_language", Context.MODE_PRIVATE)
+            .edit().putString("language", parentDisplayLanguageCode).apply()
         children = repository.loadChildren(familyId)
         subjects = repository.loadSubjects(familyId, parentCountryCode)
     }
@@ -487,6 +489,8 @@ private fun EduLockApp(repository: EduLockRepository) {
             parentLearningLanguageCode = prefs.learningLanguageCode
             parentStudyTrack = prefs.studyTrack
             parentDisplayLanguageCode = prefs.displayLanguageCode
+            context.getSharedPreferences("edulock_display_language", Context.MODE_PRIVATE)
+                .edit().putString("language", parentDisplayLanguageCode).apply()
             children = repository.loadChildren(familyId)
             subjects = repository.loadSubjects(familyId, parentCountryCode)
             LocationWatchdogWorker.schedule(context)
@@ -789,10 +793,18 @@ private fun EduLockApp(repository: EduLockRepository) {
             )
         }
         if (languagePickerOpen) {
-            val languageOptions = remember(languageSearch) {
-                Locale.getISOLanguages().distinct().map { code ->
+            val languageOptions = remember(languageSearch, languagePickerTarget) {
+                val supportedUiLanguages = listOf("en", "ur", "sd", "hi")
+                val optionCodes = if (languagePickerTarget == "display") supportedUiLanguages else Locale.getISOLanguages().distinct()
+                optionCodes.map { code ->
                     val languageLocale = Locale.forLanguageTag(code)
-                    code to languageLocale.getDisplayLanguage(Locale.ENGLISH).ifBlank { code }
+                    code to when (code) {
+                        "ur" -> "اردو"
+                        "sd" -> "سنڌي"
+                        "hi" -> "हिन्दी"
+                        "en" -> "English"
+                        else -> languageLocale.getDisplayLanguage(Locale.ENGLISH).ifBlank { code }
+                    }
                 }.filter { (code, name) ->
                     name.contains(languageSearch, ignoreCase = true) ||
                         code.contains(languageSearch, ignoreCase = true)
@@ -800,7 +812,7 @@ private fun EduLockApp(repository: EduLockRepository) {
             }
             AlertDialog(
                 onDismissRequest = { languagePickerOpen = false },
-                title = { AppUiText("Choose a learning language") },
+                title = { AppUiText(if (languagePickerTarget == "display") "Choose app display language" else "Choose a learning language") },
                 text = {
                     Column(
                         modifier = Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState()),
@@ -820,6 +832,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         }
                                         "display" -> {
                                             parentDisplayLanguageCode = code.lowercase(Locale.ROOT)
+                                            context.getSharedPreferences("edulock_display_language", Context.MODE_PRIVATE)
+                                                .edit().putString("language", parentDisplayLanguageCode).apply()
                                             if (familyId.isNotBlank() && session?.accountRole == "parent") execute {
                                                 repository.updateParentLearningSettings(familyId, parentCountryCode, parentLearningLanguageCode, parentStudyTrack, parentDisplayLanguageCode)
                                                 notice = "App display-language preference saved."
