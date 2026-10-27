@@ -2740,8 +2740,18 @@ private fun EduLockApp(repository: EduLockRepository) {
                             OutlinedButton(onClick = { questionType = "short_answer" }) { AppUiText(if (questionType == "short_answer") "✓ Short" else "Short") }
                             OutlinedButton(onClick = { questionType = "numeric" }) { AppUiText(if (questionType == "numeric") "✓ Numeric" else "Numeric") }
                         }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(onClick = { questionType = "matching" }) { AppUiText(if (questionType == "matching") "✓ Matching" else "Matching") }
+                            OutlinedButton(onClick = { questionType = "picture" }) { AppUiText(if (questionType == "picture") "✓ Picture" else "Picture") }
+                        }
                         if (questionType == "multiple_choice") {
                             Field(questionOptions, { questionOptions = it }, "Options (one per line)")
+                        } else if (questionType == "matching") {
+                            Field(questionOptions, { questionOptions = it }, "Matching pairs (one per line: left|right)")
+                            AppUiText("Correct answer format: left=right;left=right. Example: cat=meow;dog=bark.")
+                        } else if (questionType == "picture") {
+                            Field(questionOptions, { questionOptions = it }, "Optional picture labels / choices (one per line)")
+                            AppUiText("Picture upload to the private question-images bucket is not connected yet.")
                         } else if (questionType == "true_false") {
                             AppUiText("Save the canonical answer as true or false. A translation can use localized labels and accepted answers.")
                         }
