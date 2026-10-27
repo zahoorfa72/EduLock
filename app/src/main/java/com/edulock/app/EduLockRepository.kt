@@ -639,6 +639,32 @@ class EduLockRepository(context: Context) {
         return existing ?: addSubject(familyId, normalizedTitle, normalizedLanguage, normalizedCountry)
     }
 
+    suspend fun ensureTemplateQuestions(subjectId: String, templates: List<ParentLearningTemplate>): Int {
+        requireSession("parent")
+        require(subjectId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid subject." }
+        if (templates.isEmpty()) return 0
+        val existingConcepts = loadQuestions(subjectId).map { it.conceptKey }.toMutableSet()
+        var created = 0
+        templates.distinctBy { it.conceptKey }.forEach { template ->
+            val key = template.conceptKey.trim()
+            if (key.isNotEmpty() && key !in existingConcepts) {
+                addQuestion(
+                    subjectId = subjectId,
+                    prompt = template.prompt,
+                    type = template.questionType,
+                    options = template.options,
+                    answer = template.answer,
+                    languageCode = template.languageCode,
+                    conceptKey = key,
+                    solution = template.solution
+                )
+                existingConcepts.add(key)
+                created++
+            }
+        }
+        return created
+    }
+
     suspend fun addQuestion(
         subjectId: String, prompt: String, type: String, options: List<String>, answer: String,
         languageCode: String, conceptKey: String, solution: String = ""
