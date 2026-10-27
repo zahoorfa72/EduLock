@@ -1242,7 +1242,13 @@ class EduLockRepository(context: Context) {
         val earned = generalEarned.coerceIn(0, child.dailyCapMinutes)
         val appEarnedRules = appEarned.map { (packageName, minutes) -> "$packageName=$minutes" }.toSet()
         val prefs = appContext.getSharedPreferences(LOCK_PREFS, Context.MODE_PRIVATE)
-        prefs.edit()
+        // The Accessibility blocker uses this validated task ID only as a launch hint.
+        // The task itself is loaded through the authenticated child session before display.
+        val pendingTask = prefs.getString("pending_task_id", null)
+        val activeTaskIds = loadChildTasks(child.id).map { it.id }.toSet()
+        val launchPrefs = prefs.edit()
+        if (pendingTask != null && pendingTask !in activeTaskIds) launchPrefs.remove("pending_task_id")
+        launchPrefs
             .putBoolean("child_active", true)
             .putString("child_id", child.id)
             .putBoolean("kids_mode_enabled", lockdownMode)
