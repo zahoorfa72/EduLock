@@ -1103,7 +1103,7 @@ class EduLockRepository(context: Context) {
                 scorePercent = row.optInt("score_percent", 0).coerceIn(0, 100),
                 passed = row.optBoolean("passed", false),
                 awardedMinutes = row.optInt("awarded_minutes", 0).coerceAtLeast(0),
-                createdAt = row.optString("created_at").takeIf { it.isNotBlank() && it != "null" }
+                completedAt = row.optString("created_at").takeIf { it.isNotBlank() && it != "null" } ?: ""
             )
         }
     }
