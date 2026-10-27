@@ -38,7 +38,8 @@ data class ChildProfile(
     val ageYears: Int = 8,
     val avatarIcon: String = "🦊",
     val dailyGameLimitMinutes: Int = 20,
-    val studyTrack: String = "none"
+    val studyTrack: String = "none",
+    val kidsModeEnabled: Boolean = false
 )
 
 data class SubjectRow(
@@ -450,7 +451,7 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadChildren(familyId: String): List<ChildProfile> {
         requireSession("parent")
-        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes,study_track&family_id=eq.$familyId&order=created_at.desc")
+        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes,study_track,kids_mode_enabled&family_id=eq.$familyId&order=created_at.desc")
         return (0 until rows.length()).mapNotNull { i -> rows.optJSONObject(i)?.toChildProfile() }
     }
 
@@ -473,7 +474,7 @@ class EduLockRepository(context: Context) {
         require(normalizedStudyTrack in setOf("none", "islamic", "hindu", "christian", "sikh", "buddhist", "jewish", "jain", "other")) {
             "Choose a valid child religious-education option."
         }
-        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes,study_track", "POST",
+        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes,study_track,kids_mode_enabled", "POST",
             JSONObject()
                 .put("family_id", familyId)
                 .put("display_name", name.trim().take(120))
@@ -524,6 +525,24 @@ class EduLockRepository(context: Context) {
         require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
         require(dailyGameLimitMinutes in 0..1440) { "Daily educational game time must be from 0 to 1440 minutes." }
         restArray("children?id=eq.$childId", "PATCH", JSONObject().put("daily_game_limit_minutes", dailyGameLimitMinutes))
+        val verified = restArray("children?select=id,daily_game_limit_minutes&id=eq.$childId&limit=1").optJSONObject(0)
+            ?: throw IOException("Supabase did not confirm the child's game-time limit was saved.")
+        if (verified.optInt("daily_game_limit_minutes", -1) != dailyGameLimitMinutes) {
+            throw IOException("Supabase did not confirm the requested game-time limit. No success was reported.")
+        }
+    }
+
+    suspend fun updateChildKidsMode(childId: String, enabled: Boolean): Boolean {
+        requireSession("parent")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        restArray("children?id=eq.$childId", "PATCH", JSONObject().put("kids_mode_enabled", enabled))
+        val verified = restArray("children?select=id,kids_mode_enabled&id=eq.$childId&limit=1").optJSONObject(0)
+            ?: throw IOException("Supabase did not confirm the child's Kids Mode setting was saved.")
+        val confirmed = verified.optBoolean("kids_mode_enabled", false)
+        if (confirmed != enabled) {
+            throw IOException("Supabase returned a different Kids Mode setting. The change was not confirmed.")
+        }
+        return confirmed
     }
 
     suspend fun updateChildCurriculum(
@@ -543,7 +562,7 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadCurrentChild(): ChildProfile? {
         val session = requireSession("child")
-        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes,study_track&child_user_id=eq.${session.userId}&limit=1")
+        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes,study_track,kids_mode_enabled&child_user_id=eq.${session.userId}&limit=1")
         return rows.optJSONObject(0)?.toChildProfile()
     }
 
@@ -1155,7 +1174,8 @@ class EduLockRepository(context: Context) {
     suspend fun refreshChildDeviceRestrictions(child: ChildProfile): Int {
         requireSession("child")
         val appRules = loadAllowedApps(child.id)
-        // Allow every app by default; only explicit parent restrictions block access.
+        val lockdownMode = child.kidsModeEnabled
+        // In Kids Mode, only explicitly enabled apps belong on the allowlist.
         val allowed = appRules.filter { it.enabled }.map { it.packageName }.toMutableSet()
         allowed += "com.edulock.app"
         val blocked = appRules.filter { !it.enabled }.map { it.packageName }.toSet()
@@ -1182,6 +1202,7 @@ class EduLockRepository(context: Context) {
         prefs.edit()
             .putBoolean("child_active", true)
             .putString("child_id", child.id)
+            .putBoolean("kids_mode_enabled", lockdownMode)
             .putStringSet("allowed_packages", allowed)
             .putStringSet("blocked_packages", blocked)
             .putStringSet("app_daily_limits", appLimits)
@@ -1190,7 +1211,10 @@ class EduLockRepository(context: Context) {
             .putInt("earned_minutes_today", earned)
             .putInt("daily_cap_minutes", child.dailyCapMinutes)
             .putString("budget_day", LocalDate.now(ZoneOffset.UTC).toString())
+            .putLong("rules_synced_at", System.currentTimeMillis())
             .apply()
+        val managedPolicyApplied = ChildDeviceKioskPolicy.apply(appContext, lockdownMode, allowed)
+        prefs.edit().putBoolean("lock_task_policy_applied", managedPolicyApplied).apply()
         return earned
     }
     suspend fun syncAppUsage(childId: String) {
@@ -1487,7 +1511,8 @@ class EduLockRepository(context: Context) {
         dailyGameLimitMinutes = optInt("daily_game_limit_minutes", 20).coerceIn(0, 1440),
         studyTrack = optString("study_track", "none").lowercase(Locale.ROOT).takeIf {
             it in setOf("none", "islamic", "hindu", "christian", "sikh", "buddhist", "jewish", "jain", "other")
-        } ?: "none"
+        } ?: "none",
+        kidsModeEnabled = optBoolean("kids_mode_enabled", false)
     )
 
     private fun JSONObject.toTaskRow() = TaskRow(

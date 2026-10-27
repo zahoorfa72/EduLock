@@ -34,6 +34,7 @@ class EduLockAccessibilityService : AccessibilityService() {
     private val ticker = object : Runnable {
         override fun run() {
             val now = System.currentTimeMillis()
+            lockPrefs().edit().putLong(KEY_LAST_SERVICE_TICK_AT, now).apply()
             accountForegroundUsage(now)
             val current = lastPackage
             if (current.isNotBlank()) applyRestriction(current)
@@ -49,6 +50,7 @@ class EduLockAccessibilityService : AccessibilityService() {
         if (prefs.getString(KEY_DAY, null) != today) resetDailyUsage(prefs, today)
         lastPackage = ""
         lastEventAt = System.currentTimeMillis()
+        prefs.edit().putLong(KEY_LAST_SERVICE_TICK_AT, lastEventAt).apply()
         handler.removeCallbacks(ticker)
         handler.post(ticker)
     }
@@ -72,6 +74,7 @@ class EduLockAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         handler.removeCallbacks(ticker)
+        lockPrefs().edit().putLong(KEY_LAST_SERVICE_TICK_AT, 0L).apply()
         hideBlocker()
         super.onDestroy()
     }
@@ -104,11 +107,14 @@ class EduLockAccessibilityService : AccessibilityService() {
 
     private fun applyRestriction(packageName: String) {
         val prefs = lockPrefs()
+        val kidsModeEnabled = prefs.getBoolean(KEY_KIDS_MODE_ENABLED, false)
         if (!prefs.getBoolean(KEY_CHILD_ACTIVE, false) || packageName == applicationContext.packageName ||
-            packageName in essentialPackages() || isInternalSystemPackage(packageName)) {
+            packageName in essentialPackages(kidsModeEnabled) || isInternalSystemPackage(packageName)) {
             hideBlocker()
             return
         }
+        val allowedPackages = prefs.getStringSet(KEY_ALLOWED_PACKAGES, emptySet()).orEmpty()
+        val blockedByKidsMode = kidsModeEnabled && packageName !in allowedPackages
         val explicitlyBlocked = prefs.getStringSet(KEY_BLOCKED_PACKAGES, emptySet()).orEmpty().contains(packageName)
         val appLimitMinutes = prefs.getStringSet(KEY_APP_DAILY_LIMITS, emptySet()).orEmpty()
             .firstOrNull { it.startsWith("$packageName=") }
@@ -128,8 +134,9 @@ class EduLockAccessibilityService : AccessibilityService() {
         val blockedForEarnedTime = earnedMinutes > 0 &&
             totalUsed >= earnedMinutes * MILLIS_PER_MINUTE && appEarnedMinutes == 0
         val blockedForSchedule = !isWithinWeeklySchedule(packageName)
-        if (explicitlyBlocked || blockedForAppTime || blockedForEarnedTime || blockedForSchedule) {
+        if (blockedByKidsMode || explicitlyBlocked || blockedForAppTime || blockedForEarnedTime || blockedForSchedule) {
             val message = when {
+                blockedByKidsMode -> "Kids Mode is on. Ask your parent to allow this app in EduLock."
                 explicitlyBlocked -> "This app has been disabled by your parent."
                 blockedForAppTime -> "Your daily limit for this app has been reached."
                 blockedForEarnedTime -> "Your earned screen time has been used. Complete learning tasks to earn more time."
@@ -246,21 +253,36 @@ class EduLockAccessibilityService : AccessibilityService() {
     private fun utcDay() = LocalDate.now(ZoneOffset.UTC).toString()
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
-    private fun essentialPackages(): Set<String> = setOf(
-        "com.android.settings",
-        "com.android.systemui",
-        "com.android.internal.systemui.navbar.threebutton",
-        "com.android.permissioncontroller",
-        "com.google.android.permissioncontroller",
-        "com.android.packageinstaller",
-        "com.google.android.packageinstaller",
-        "com.android.launcher3",
-        "com.google.android.apps.nexuslauncher",
-        "com.miui.home",
-        "com.samsung.android.oneui.home",
-        "com.oplus.launcher",
-        "com.huawei.android.launcher"
-    )
+    private fun essentialPackages(kidsModeEnabled: Boolean): Set<String> {
+        // Preserve launcher, navigation, calls and permission components. Do not exempt Settings
+        // during Kids Mode because that would let a child switch off the restriction service.
+        val core = setOf(
+            "com.android.systemui",
+            "com.android.internal.systemui.navbar.threebutton",
+            "com.android.permissioncontroller",
+            "com.google.android.permissioncontroller",
+            "com.android.launcher3",
+            "com.google.android.apps.nexuslauncher",
+            "com.miui.home",
+            "com.samsung.android.oneui.home",
+            "com.oplus.launcher",
+            "com.huawei.android.launcher",
+            "com.sec.android.app.launcher",
+            "com.sonymobile.home",
+            "com.oneplus.launcher",
+            "com.android.phone",
+            "com.android.server.telecom",
+            "com.android.incallui",
+            "com.android.dialer",
+            "com.google.android.dialer",
+            "com.samsung.android.dialer"
+        )
+        return if (kidsModeEnabled) core else core + setOf(
+            "com.android.settings",
+            "com.android.packageinstaller",
+            "com.google.android.packageinstaller"
+        )
+    }
 
     private fun isInternalSystemPackage(packageName: String): Boolean =
         packageName.startsWith("com.android.internal.") ||
@@ -268,6 +290,8 @@ class EduLockAccessibilityService : AccessibilityService() {
             packageName.startsWith("com.android.providers.")
     private companion object {
         const val LOCK_PREFS = "edulock_lock_state"
+        const val KEY_LAST_SERVICE_TICK_AT = "last_service_tick_at"
+        const val KEY_KIDS_MODE_ENABLED = "kids_mode_enabled"
         const val KEY_CHILD_ACTIVE = "child_active"
         const val KEY_ALLOWED_PACKAGES = "allowed_packages"
         const val KEY_BLOCKED_PACKAGES = "blocked_packages"
