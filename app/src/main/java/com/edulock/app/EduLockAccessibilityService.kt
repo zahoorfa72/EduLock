@@ -116,11 +116,17 @@ class EduLockAccessibilityService : AccessibilityService() {
             ?.coerceIn(1, 1440)
         val appUsed = prefs.getLong(APP_USED_PREFIX + packageName, 0L)
         val blockedForAppTime = appLimitMinutes != null && appUsed >= appLimitMinutes * MILLIS_PER_MINUTE
+        // Earned minutes are the child's total daily screen-time budget. Counted usage
+        // is shared across all monitored apps, so switching apps cannot bypass the reward.
+        val earnedMinutes = prefs.getInt(KEY_EARNED_MINUTES, 0).coerceIn(0, 1440)
+        val totalUsed = prefs.getLong(KEY_USED_MS, 0L).coerceAtLeast(0L)
+        val blockedForEarnedTime = totalUsed >= earnedMinutes * MILLIS_PER_MINUTE
         val blockedForSchedule = !isWithinWeeklySchedule(packageName)
-        if (explicitlyBlocked || blockedForAppTime || blockedForSchedule) {
+        if (explicitlyBlocked || blockedForAppTime || blockedForEarnedTime || blockedForSchedule) {
             val message = when {
                 explicitlyBlocked -> "This app has been disabled by your parent."
                 blockedForAppTime -> "Your daily limit for this app has been reached."
+                blockedForEarnedTime -> "Your earned screen time has been used. Complete learning tasks to earn more time."
                 else -> "This app is outside the allowed hours set by your parent."
             }
             showBlocker(message)
