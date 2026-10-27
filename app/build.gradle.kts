@@ -24,6 +24,21 @@ android {
         buildConfigField("String", "SUPABASE_URL", quotedBuildConfig(supabaseUrl))
         buildConfigField("String", "SUPABASE_ANON_KEY", quotedBuildConfig(supabaseAnonKey))
     }
+    // Force the debug build to use the keystore preserved by android.yml instead
+    // of allowing the Android Gradle Plugin to pick another runner-local debug key.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("${System.getenv("HOME")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+    buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
