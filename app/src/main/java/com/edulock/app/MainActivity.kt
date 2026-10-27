@@ -1014,7 +1014,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     LaunchedEffect(screen, familyId) {
         if (screen == AppScreen.CHILD_LOCATIONS && familyId.isNotBlank()) {
             while (true) {
-                delay(60_000)
+                delay(30_000)
                 try {
                     val latestChildren = repository.loadChildren(familyId)
                     children = latestChildren
