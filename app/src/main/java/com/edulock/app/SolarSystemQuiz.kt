@@ -213,6 +213,18 @@ private fun learning3DHtml(modelType: String): String {
             title = "Circuit explorer"; description = "Animated current demonstrates a closed electric circuit."
             shape = """<div class="circuit"><i class="wire top"></i><i class="wire right"></i><i class="wire bottom"></i><i class="wire left"></i><b class="battery"></b><b class="lamp"></b><i class="electron e1"></i><i class="electron e2"></i><i class="electron e3"></i></div>"""
         }
+        "magnet" -> {
+            title = "Magnet field explorer"; description = "A horseshoe magnet labels the north and south poles."
+            shape = """<div class="magnet"><i class="magnetbody"></i><b class="north">N</b><b class="south">S</b><i class="fieldline f1"></i><i class="fieldline f2"></i><i class="fieldline f3"></i></div>"""
+        }
+        "volcano" -> {
+            title = "Volcano explorer"; description = "Inspect the crater, lava and volcanic rock layers."
+            shape = """<div class="volcano"><i class="mountain"></i><i class="crater"></i><i class="lavaflow"></i><i class="rocklayer layer1"></i><i class="rocklayer layer2"></i></div>"""
+        }
+        "flower" -> {
+            title = "Flower anatomy"; description = "Touch the petals, centre, stem and leaves."
+            shape = """<div class="flower"><i class="stem"></i><i class="leaf leaf1"></i><i class="leaf leaf2"></i><i class="petal p1"></i><i class="petal p2"></i><i class="petal p3"></i><i class="petal p4"></i><i class="petal p5"></i><i class="petal p6"></i><b class="flowercenter"></b></div>"""
+        }
         else -> {
             title = "3D learning model"; description = "Touch and drag the model; use its shapes to answer the question."
             shape = """<div class="cube"><i class="face front"></i><i class="face back"></i><i class="face right"></i><i class="face left"></i><i class="face top"></i><i class="face bottom"></i></div>"""
@@ -225,7 +237,7 @@ private fun learning3DHtml(modelType: String): String {
 .wrap{padding:8px}.stage{height:178px;position:relative;overflow:hidden;border:1px solid #344476;border-radius:16px;background:radial-gradient(ellipse at 50% 40%,#283d77,#0a112f 72%);perspective:700px;touch-action:pan-y}
 .star{position:absolute;width:2px;height:2px;border-radius:50%;background:#dce7ff;box-shadow:30px 26px #dce7ff,72px 93px #9db4f5,145px 20px #fff,210px 120px #dce7ff,260px 46px #8faaff,330px 85px #fff,385px 27px #dce7ff,410px 135px #b5c5ff}
 .caption{padding:7px 3px 2px;color:#bfd0ff;font-size:12px;line-height:1.4}.title{font-size:14px;font-weight:800;color:#f7f4ff}.detail{margin-top:7px;min-height:48px;padding:9px 11px;background:linear-gradient(135deg,#172650,#142c48);border:1px solid #3a6191;border-radius:12px;color:#dceaff;font-size:12px;line-height:1.45}.detail strong{color:#82f0db;font-size:13px}
-.atom,.molecule,.cube,.cell,.earth,.circuit{position:absolute;left:50%;top:49%;transform:translate(-50%,-50%);transform-style:preserve-3d}
+.atom,.molecule,.cube,.cell,.earth,.circuit,.magnet,.volcano,.flower{position:absolute;left:50%;top:49%;transform:translate(-50%,-50%);transform-style:preserve-3d}
 .atom{width:128px;height:110px;animation:float 4s ease-in-out infinite}.nucleus{position:absolute;left:54px;top:44px;width:25px;height:25px;border-radius:50%;background:radial-gradient(circle at 30% 25%,#ffc2ba,#e64756 42%,#67184f);box-shadow:0 0 19px #f05c9b}
 .orbit{position:absolute;left:9px;top:24px;width:110px;height:60px;border:2px solid #65d9ff;border-radius:50%;transform-style:preserve-3d}.orbit1{transform:rotateX(65deg) rotateZ(22deg)}.orbit2{transform:rotateX(65deg) rotateZ(82deg)}.orbit3{transform:rotateX(65deg) rotateZ(143deg)}.orbit b{position:absolute;left:90%;top:18%;width:12px;height:12px;background:radial-gradient(circle at 30% 20%,white,#46c8ff 55%,#1e53a8);border-radius:50%;box-shadow:0 0 12px #42d6ff;animation:electron 2s linear infinite}.orbit2 b{animation-delay:-.65s}.orbit3 b{animation-delay:-1.2s}
 .molecule{width:175px;height:118px;animation:float 4s ease-in-out infinite}.sphere{position:absolute;border-radius:50%;box-shadow:inset -10px -10px 15px #02061766,0 0 16px #b6ccff44}.oxygen{width:56px;height:56px;left:60px;top:28px;background:radial-gradient(circle at 28% 22%,#fff0ed,#f14f57 48%,#8d193b)}.hydrogen{width:35px;height:35px;background:radial-gradient(circle at 28% 20%,white,#d8e2ed 55%,#61718d)}.h1{left:22px;top:66px}.h2{left:119px;top:66px}.bond{position:absolute;width:58px;height:9px;background:linear-gradient(#c8e2fc,#4a6d98);top:70px;border-radius:9px;transform-style:preserve-3d}.b1{left:34px;transform:rotate(36deg)}.b2{left:91px;transform:rotate(-36deg)}
@@ -280,7 +292,7 @@ Object.keys(detailMap).forEach(selector=>stage.querySelectorAll(selector).forEac
 }));
 let down=false,lastX=0,angle=0;
 stage.addEventListener('pointerdown',e=>{down=true;lastX=e.clientX;stage.setPointerCapture(e.pointerId)});
-stage.addEventListener('pointermove',e=>{if(!down)return;angle+=e.clientX-lastX;lastX=e.clientX;stage.style.perspectiveOrigin=(50+angle*.12)+'% 50%';const model=stage.querySelector('.cube,.atom,.molecule,.cell,.earth,.circuit');if(model){model.style.animationPlayState='paused';model.style.transform='translate(-50%,-50%) rotateY('+angle+'deg) rotateX('+(angle*.35)+'deg)'}});
+stage.addEventListener('pointermove',e=>{if(!down)return;angle+=e.clientX-lastX;lastX=e.clientX;stage.style.perspectiveOrigin=(50+angle*.12)+'% 50%';const model=stage.querySelector('.cube,.atom,.molecule,.cell,.earth,.circuit,.magnet,.volcano,.flower');if(model){model.style.animationPlayState='paused';model.style.transform='translate(-50%,-50%) rotateY('+angle+'deg) rotateX('+(angle*.35)+'deg)'}});
 stage.addEventListener('pointerup',()=>{down=false});
 stage.addEventListener('pointercancel',()=>{down=false});
 })();</script>
