@@ -113,8 +113,7 @@ class EduLockAccessibilityService : AccessibilityService() {
         if (!prefs.getBoolean(KEY_CHILD_ACTIVE, false) || packageName == applicationContext.packageName ||
             // In managed kiosk mode the Lock Task controller is authoritative. The Accessibility
             // overlay must not blanket-exempt the normal launcher when Kids Mode is on.
-            (!kidsModeEnabled && packageName in essentialPackages(false)) ||
-            (kidsModeEnabled && packageName in essentialPackages(true)) ||
+            packageName in essentialPackages(kidsModeEnabled) ||
             isInternalSystemPackage(packageName)) {
             hideBlocker()
             return
