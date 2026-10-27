@@ -968,7 +968,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Button(onClick = { screen = AppScreen.CHILDREN; execute { children = repository.loadChildren(familyId) } }, modifier = Modifier.fillMaxWidth()) { Text("Manage child profiles") }
                     Button(onClick = { screen = AppScreen.SUBJECTS; execute { subjects = repository.loadSubjects(familyId) } }, modifier = Modifier.fillMaxWidth()) { Text("Subjects & questions") }
                     OutlinedButton(onClick = { selectedSubject = null; templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES }, modifier = Modifier.fillMaxWidth()) { Text("🧪 Learning templates for all subjects") }
-                    OutlinedButton(onClick = { solarQuizReturnScreen = AppScreen.PARENT_HOME; screen = AppScreen.SOLAR_SYSTEM_QUIZ }, modifier = Modifier.fillMaxWidth()) { Text("🌌 Preview the 3D Solar System quiz") }
+                    OutlinedButton(onClick = { selected3DModel = "solar-system"; screen = AppScreen.LEARNING_3D_LAB }, modifier = Modifier.fillMaxWidth()) { Text("🌌 3D Learning Lab • all models") }
+                    OutlinedButton(onClick = { screen = AppScreen.DRAWING_STUDIO }, modifier = Modifier.fillMaxWidth()) { Text("🎨 Drawing & Colour Studio") }
                     Button(onClick = { selectedChild = null; selectedSubject = null; screen = AppScreen.ASSIGN_TASK }, modifier = Modifier.fillMaxWidth()) { Text("Assign learning task & reward") }
                     OutlinedButton(onClick = { screen = AppScreen.REPORTS; execute { attempts = repository.loadAttempts(); conceptProgress = repository.loadConceptProgress() } }, modifier = Modifier.fillMaxWidth()) { Text("🏆  Learning progress reports") }
                     OutlinedButton(onClick = {
