@@ -3368,6 +3368,62 @@ private fun EduLockApp(repository: EduLockRepository) {
                         SummaryCard("Minutes earned today", earnedToday.toString(), "Minutes available from completed tasks.")
                         SummaryCard("Task streak", "$childStreakDays day${if (childStreakDays == 1) "" else "s"}", "Pass at least one task each day to build your streak.")
                     }
+                    AppUiText("My apps", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    if (allowedApps.none { it.enabled }) {
+                        AppUiText("No parent-approved apps are currently available.")
+                    } else {
+                        allowedApps.filter { it.enabled }.forEach { app ->
+                            val lockPrefs = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
+                            val usedMs = lockPrefs.getLong("app_used_millis_" + app.packageName, 0L).coerceAtLeast(0L)
+                            val earnedMs = lockPrefs.getStringSet("app_earned_minutes", emptySet()).orEmpty()
+                                .firstOrNull { it.startsWith(app.packageName + "=") }?.substringAfter("=")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+                            val remaining = (app.dailyLimitMinutes + earnedMs - (usedMs / 60_000L).toInt()).coerceAtLeast(0)
+                            val hasTask = tasks.any { it.rewardPackageName == app.packageName } ||
+                                tasks.any { task -> !task.rewardGroupId.isNullOrBlank() && appGroups.any { it.id == task.rewardGroupId && app.packageName in it.packageNames } }
+                            val status = if (remaining <= 0) "Time's up • answer to unlock" else "$remaining min left"
+                            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        AppUiText(app.displayName, fontWeight = FontWeight.SemiBold)
+                                        AppUiText(status, color = if (remaining <= 0) Color(0xFFB45309) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                        if (hasTask) AppUiText("A learning task unlocks this app.", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    Button(
+                                        onClick = {
+                                            val launch = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                                            if (launch == null) {
+                                                notice = "This app is not installed on the child phone."
+                                            } else if (remaining <= 0) {
+                                                val task = tasks.firstOrNull { it.rewardPackageName == app.packageName }
+                                                    ?: tasks.firstOrNull { t -> !t.rewardGroupId.isNullOrBlank() && appGroups.any { it.id == t.rewardGroupId && app.packageName in it.packageNames } }
+                                                if (task != null) {
+                                                    execute {
+                                                        val loadedQuestions = repository.loadQuestionsForTask(task.id, task.subjectId, task.questionCount)
+                                                        val loadedTranslations = repository.loadQuestionTranslations(loadedQuestions.map { it.id })
+                                                        activeTask = task
+                                                        questions = loadedQuestions
+                                                        questionTranslations = loadedTranslations
+                                                        answerLanguages = loadedQuestions.associate { q -> q.id to (childProfile?.preferredLanguage ?: q.languageCode) }
+                                                        answers = emptyMap()
+                                                        questionIndex = 0
+                                                        taskDeadlineAtMillis = task.timeLimitSeconds?.let { System.currentTimeMillis() + it * 1000L }
+                                                        taskSecondsRemaining = task.timeLimitSeconds ?: 0
+                                                        screen = AppScreen.PLAY_TASK
+                                                    }
+                                                } else {
+                                                    notice = "Time's up. Ask your parent to assign a learning task to this app."
+                                                }
+                                            } else {
+                                                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                context.startActivity(launch)
+                                            }
+                                        },
+                                        enabled = !busy,
+                                    ) { AppUiText(if (remaining <= 0) "Unlock" else "Open") }
+                                }
+                            }
+                        }
+                    }
                     AppUiText("Assigned tasks")
                     if (tasks.isEmpty()) AppUiText("No active tasks yet. Ask your parent to assign a task.")
                     tasks.forEach { task ->
