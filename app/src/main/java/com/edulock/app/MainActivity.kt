@@ -1511,6 +1511,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 ) { AppUiText("🕊 Religious education: " + studyTrackLabel(child.studyTrack)) }
                                 OutlinedButton(
                                     onClick = {
+                                        studyTrackPickerTarget = "existing-child"
+                                        studyTrackChildId = child.id
+                                        studyTrackPickerOpen = true
+                                    },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { AppUiText("🕊 Religious education: " + studyTrackLabel(child.studyTrack)) }
+                                OutlinedButton(
+                                    onClick = {
                                         selectedChild = child
                                         curriculumCountryCode = child.countryCode
                                         curriculumGradeLevel = child.schoolGrade.toString()
