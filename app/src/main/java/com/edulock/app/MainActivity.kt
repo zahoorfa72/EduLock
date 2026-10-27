@@ -71,6 +71,11 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.TranslatorOptions
+import kotlinx.coroutines.tasks.await
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import kotlinx.coroutines.delay
@@ -78,6 +83,44 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.util.Locale
+
+private suspend fun translateOnDevice(text: String, sourceCode: String, targetCode: String): String {
+    if (text.isBlank() || sourceCode.equals(targetCode, ignoreCase = true)) return text
+    val source = TranslateLanguage.fromLanguageTag(sourceCode.trim())
+        ?: throw IllegalArgumentException("The on-device translator does not support source language '$sourceCode'.")
+    val target = TranslateLanguage.fromLanguageTag(targetCode.trim())
+        ?: throw IllegalArgumentException("The on-device translator does not support target language '$targetCode'. Choose a supported language code.")
+    val translator = Translation.getClient(
+        TranslatorOptions.Builder().setSourceLanguage(source).setTargetLanguage(target).build()
+    )
+    return try {
+        translator.downloadModelIfNeeded(DownloadConditions.Builder().build()).await()
+        translator.translate(text).await()
+    } finally {
+        translator.close()
+    }
+}
+
+private fun templateTranslationKey(template: ParentLearningTemplate): String =
+    template.subjectTitle + "|" + template.conceptKey
+
+private suspend fun translateTemplate(
+    template: ParentLearningTemplate,
+    targetCode: String
+): ParentLearningTemplate {
+    val source = template.languageCode
+    return template.copy(
+        title = translateOnDevice(template.title, source, targetCode),
+        prompt = translateOnDevice(template.prompt, source, targetCode),
+        options = template.options.map { translateOnDevice(it, source, targetCode) },
+        answer = translateOnDevice(template.answer, source, targetCode),
+        solution = translateOnDevice(template.solution, source, targetCode),
+        materials = template.materials.map { translateOnDevice(it, source, targetCode) },
+        steps = template.steps.map { translateOnDevice(it, source, targetCode) },
+        safety = translateOnDevice(template.safety, source, targetCode),
+        languageCode = targetCode
+    )
+}
 
 private fun studyTrackLabel(code: String): String = when (code) {
     "islamic" -> "Islam"
@@ -298,6 +341,9 @@ private fun EduLockApp(repository: EduLockRepository) {
     var translationPrompt by remember { mutableStateOf("") }
     var translationOptions by remember { mutableStateOf("") }
     var translationAcceptedAnswers by remember { mutableStateOf("") }
+    var bulkTranslationLanguage by remember { mutableStateOf("ur") }
+    var templateTranslationLanguage by remember { mutableStateOf("ur") }
+    var translatedTemplateRows by remember { mutableStateOf<Map<String, ParentLearningTemplate>>(emptyMap()) }
     var taskTitle by remember { mutableStateOf("") }
     var taskQuestionCount by remember { mutableStateOf("5") }
     var taskPassPercent by remember { mutableStateOf("70") }
@@ -856,7 +902,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                 deviceMode = "unknown"
                 AppScreen.DEVICE_SETUP
             }
-            AppScreen.PARENT_HOME, AppScreen.AUTH -> AppScreen.AUTH
+            // Android Back must not send a signed-in parent to the sign-in screen.
+            AppScreen.PARENT_HOME -> AppScreen.PARENT_HOME
+            AppScreen.AUTH -> AppScreen.AUTH
             // Keep a child device out of the parent login/dashboard route.
             AppScreen.CHILD_HOME -> AppScreen.CHILD_HOME
             AppScreen.CHILDREN, AppScreen.SUBJECTS, AppScreen.ASSIGN_TASK, AppScreen.REPORTS, AppScreen.PROTECTION_STATUS, AppScreen.CHILD_LOCATIONS -> AppScreen.PARENT_HOME
@@ -2014,6 +2062,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                         "Ready-to-use 4D question templates matched to the selected child's country, preferred language and optional religious-study track. Parents can change these preferences in the child profile.",
                         style = MaterialTheme.typography.bodyMedium
                     )
+                    Field(
+                        templateTranslationLanguage,
+                        { templateTranslationLanguage = it.trim().lowercase(Locale.ROOT).take(16) },
+                        "Translate visible templates to language code (e.g. ur, ar, hi, fr, es)"
+                    )
                     if (children.isNotEmpty()) {
                         AppUiText("Choose the child this template bank should match", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         children.forEach { child ->
@@ -2076,7 +2129,28 @@ private fun EduLockApp(repository: EduLockRepository) {
                     } else if (filteredTemplates.isEmpty()) {
                         AppUiText("No templates are available for this category yet. Parents can create their own questions.")
                     }
-                    filteredTemplates.forEach { template ->
+                    OutlinedButton(
+                        onClick = {
+                            execute {
+                                val targetCode = templateTranslationLanguage.trim().lowercase(Locale.ROOT)
+                                require(TranslateLanguage.fromLanguageTag(targetCode) != null) {
+                                    "That language code is not supported by the on-device translator. Choose a supported language code such as ur, hi, ar, fr or es."
+                                }
+                                val translated = translatedTemplateRows.toMutableMap()
+                                filteredTemplates.distinctBy { templateTranslationKey(it) }.forEach { template ->
+                                    if (!template.languageCode.equals(targetCode, ignoreCase = true)) {
+                                        translated[templateTranslationKey(template)] = translateTemplate(template, targetCode)
+                                    }
+                                }
+                                translatedTemplateRows = translated
+                                notice = "Translated " + filteredTemplates.size + " visible templates to " + targetCode + ". These previews are translated on this device; source templates remain unchanged."
+                            }
+                        },
+                        enabled = !busy && filteredTemplates.isNotEmpty(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { AppUiText("🌐 Translate all visible templates") }
+                    filteredTemplates.distinctBy { templateTranslationKey(it) }.forEach { sourceTemplate ->
+                        val template = translatedTemplateRows[templateTranslationKey(sourceTemplate)] ?: sourceTemplate
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(22.dp),
@@ -2216,6 +2290,46 @@ private fun EduLockApp(repository: EduLockRepository) {
                     val subject = selectedSubject
                     if (subject != null) {
                         AppUiText("Create a question in " + subject.languageCode + " and give related questions the same concept tag. The tag lets Concept Bridge report understanding separately from language.")
+                        Field(
+                            bulkTranslationLanguage,
+                            { bulkTranslationLanguage = it.trim().lowercase(Locale.ROOT).take(16) },
+                            "Translate every question to language code (e.g. en, ur, sd, ar, hi, fr, es)"
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                execute {
+                                    val targetCode = bulkTranslationLanguage.trim().lowercase(Locale.ROOT)
+                                    require(TranslateLanguage.fromLanguageTag(targetCode) != null) {
+                                        "That language code is not supported by the on-device translator. Choose a supported language code such as ur, hi, ar, fr or es."
+                                    }
+                                    var saved = 0
+                                    var skipped = 0
+                                    questions.forEach { question ->
+                                        if (question.languageCode.equals(targetCode, ignoreCase = true)) {
+                                            skipped++
+                                        } else {
+                                            val translatedPrompt = translateOnDevice(question.prompt, question.languageCode, targetCode)
+                                            val translatedOptions = question.options.map { translateOnDevice(it, question.languageCode, targetCode) }
+                                            val translatedAnswer = if (question.options.isNotEmpty()) {
+                                                val answerIndex = question.options.indexOfFirst { it.equals(question.answer, ignoreCase = true) }
+                                                if (answerIndex >= 0) translatedOptions[answerIndex]
+                                                else translateOnDevice(question.answer, question.languageCode, targetCode)
+                                            } else translateOnDevice(question.answer, question.languageCode, targetCode)
+                                            repository.saveQuestionTranslation(
+                                                question, targetCode, translatedPrompt, translatedOptions, listOf(translatedAnswer)
+                                            )
+                                            saved++
+                                        }
+                                    }
+                                    questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
+                                    notice = "Translated and saved " + saved + " questions to " + targetCode +
+                                        ". Skipped same-language questions: " + skipped + ". Existing original questions were preserved."
+                                }
+                            },
+                            enabled = !busy && questions.isNotEmpty(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { AppUiText("🌐 Auto-translate all " + questions.size + " questions") }
+                        AppUiText("Uses Google's on-device translation models. The first use downloads language models; internet is needed for that download. Available languages depend on the installed model.")
                         AppUiText(
                             questions.size.toString() + " saved questions in this subject",
                             style = MaterialTheme.typography.titleSmall,
