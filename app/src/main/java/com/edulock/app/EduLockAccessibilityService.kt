@@ -244,7 +244,8 @@ class EduLockAccessibilityService : AccessibilityService() {
                 ChildLocationSyncClient.sendHeartbeat(
                     applicationContext,
                     childId,
-                    prefs.getBoolean("location_sharing_enabled", false),
+                    applicationContext.getSharedPreferences(ChildLocationService.PREFS, Context.MODE_PRIVATE)
+                        .getBoolean(ChildLocationService.KEY_SHARING_ENABLED, false),
                     battery,
                     deviceLocked = prefs.getBoolean(KEY_KIDS_MODE_ENABLED, false),
                     guardMode = mode,
