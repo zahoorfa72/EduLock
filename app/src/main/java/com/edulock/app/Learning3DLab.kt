@@ -40,7 +40,24 @@ val LearningModelOptions = listOf(
     LearningModelOption("circuit", "⚡", "Electric Circuit", "Physics", "What happens when a simple circuit is closed?", "Touch the battery, wire, charge markers and lamp."),
     LearningModelOption("magnet", "🧲", "Magnet Lab", "Physics", "Where are a horseshoe magnet's poles?", "Touch each pole and inspect a simplified magnetic-field illustration."),
     LearningModelOption("volcano", "🌋", "Volcano Explorer", "Earth Science", "What is molten rock called before it reaches the surface?", "Explore the crater, lava and surrounding volcanic layers."),
-    LearningModelOption("flower", "🌸", "Flower Anatomy", "Biology", "Which flower part commonly attracts pollinators?", "Touch petals, centre, stem and leaves to inspect their roles.")
+    LearningModelOption("flower", "🌸", "Flower Anatomy", "Biology", "Which flower part commonly attracts pollinators?", "Touch petals, centre, stem and leaves to inspect their roles."),
+    LearningModelOption("earth", "🧭", "People & Places", "Social Studies", "How do maps help us understand communities?", "Explore the globe, map symbols and directions."),
+    LearningModelOption("circuit", "💻", "Computer Skills", "Computer Skills", "How can we keep accounts and devices safer?", "Explore circuit parts and learn how digital tools work."),
+    LearningModelOption("cell", "🩺", "Health & Safety", "Health & Safety", "Which daily habit helps prevent the spread of germs?", "Explore body systems and healthy choices."),
+    LearningModelOption("flower", "🎨", "Art & Design", "Art & Design", "How do primary colours mix to make new colours?", "Explore colour, shape, light and composition."),
+    LearningModelOption("flower", "✏️", "Drawing & Colour", "Drawing & Colour", "How do light and shadow make a drawing look three-dimensional?", "Explore outlines, shading, perspective and colour."),
+    LearningModelOption("book", "📖", "English Discovery", "English", "How do clues in a story help us understand a character?", "Explore story structure, vocabulary and reading clues."),
+    LearningModelOption("book", "اردو", "Urdu Discovery", "Urdu", "لفظ کا مطلب سیاق و سباق سے کیسے سمجھتے ہیں؟", "الفاظ، جملوں اور کہانیوں کو دریافت کریں۔"),
+    LearningModelOption("book", "سنڌي", "Sindhi Discovery", "Sindhi", "جملو پڙهي لفظ جي معنيٰ ڪيئن سمجهي سگهجي ٿي؟", "سنڌي لفظن ۽ ڪهاڻين کي دريافت ڪريو۔"),
+    LearningModelOption("book", "हिंदी", "Hindi Discovery", "Hindi", "वाक्य के संदर्भ से किसी शब्द का अर्थ कैसे समझते हैं?", "शब्दों, वाक्यों और कहानियों को खोजें।"),
+    LearningModelOption("book", "☪️", "Islamic Studies", "Islamic Studies", "Which value encourages kindness and helping others?", "Explore Islamic learning respectfully with parent-selected lessons."),
+    LearningModelOption("book", "🪔", "Hindu Studies", "Hindu Studies", "What does Diwali commonly celebrate in many Hindu traditions?", "Explore Hindu traditions respectfully with parent-selected lessons."),
+    LearningModelOption("book", "✝️", "Christian Studies", "Christian Studies", "Which festival celebrates the resurrection of Jesus in Christianity?", "Explore Christian traditions respectfully with parent-selected lessons."),
+    LearningModelOption("book", "☬", "Sikh Studies", "Sikh Studies", "What does seva mean in Sikh tradition?", "Explore Sikh values, service and community."),
+    LearningModelOption("book", "☸️", "Buddhist Studies", "Buddhist Studies", "What is mindfulness?", "Explore compassion, awareness and Buddhist traditions."),
+    LearningModelOption("book", "✡️", "Jewish Studies", "Jewish Studies", "What is Shabbat in Jewish tradition?", "Explore Jewish traditions respectfully with parent-selected lessons."),
+    LearningModelOption("book", "🕊️", "Jain Studies", "Jain Studies", "What does ahimsa mean?", "Explore non-violence, care and Jain traditions."),
+    LearningModelOption("book", "🌍", "World Religions & Ethics", "World Religions & Ethics", "Why compare traditions respectfully?", "Explore diversity, empathy and shared ethical questions.")
 )
 
 @Composable
