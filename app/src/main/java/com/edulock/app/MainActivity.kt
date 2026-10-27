@@ -1010,11 +1010,13 @@ private fun EduLockApp(repository: EduLockRepository) {
         if (languagePickerOpen) {
             val languageOptions = remember(languageSearch, languagePickerTarget) {
                 val supportedUiLanguages = listOf("en", "ur", "sd", "hi", "af", "sq", "be", "bg", "bn", "ca", "zh", "hr", "cs", "da", "nl", "et", "fi", "fr", "gl", "ka", "de", "el", "gu", "ht", "he", "hu", "is", "id", "ga", "it", "ja", "kn", "ko", "lv", "lt", "mk", "ms", "ml", "mt", "mr", "ne", "no", "fa", "pl", "pt", "ro", "ru", "sr", "sk", "sl", "es", "sw", "sv", "tl", "ta", "te", "th", "tr", "uk", "vi", "cy", "ar", "pa")
-                val optionCodes = if (languagePickerTarget == "display") {
-                    supportedUiLanguages.filter { code ->
+                val optionCodes = when (languagePickerTarget) {
+                    "display" -> supportedUiLanguages.filter { code ->
                         code == "en" || code == "sd" || TranslateLanguage.fromLanguageTag(code) != null
                     }
-                } else Locale.getISOLanguages().distinct()
+                    "translation" -> supportedUiLanguages.filter { code -> TranslateLanguage.fromLanguageTag(code) != null }
+                    else -> Locale.getISOLanguages().distinct()
+                }
                 optionCodes.map { code ->
                     val languageLocale = Locale.forLanguageTag(code)
                     code to when (code) {
@@ -1031,7 +1033,11 @@ private fun EduLockApp(repository: EduLockRepository) {
             }
             AlertDialog(
                 onDismissRequest = { languagePickerOpen = false },
-                title = { AppUiText(if (languagePickerTarget == "display") "Choose app display language" else "Choose a learning language") },
+                title = { AppUiText(when (languagePickerTarget) {
+                    "display" -> "Choose app display language"
+                    "translation" -> "Choose translation language"
+                    else -> "Choose a learning language"
+                }) },
                 text = {
                     Column(
                         modifier = Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState()),
@@ -1048,6 +1054,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 repository.updateParentLearningSettings(familyId, parentCountryCode, parentLearningLanguageCode, parentStudyTrack, parentDisplayLanguageCode)
                                                 notice = "Preferred lesson language saved."
                                             }
+                                        }
+                                        "translation" -> {
+                                            bulkTranslationLanguage = code.lowercase(Locale.ROOT)
+                                            templateTranslationLanguage = code.lowercase(Locale.ROOT)
                                         }
                                         "display" -> {
                                             parentDisplayLanguageCode = code.lowercase(Locale.ROOT)
@@ -2155,6 +2165,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                     } else if (filteredTemplates.isEmpty()) {
                         AppUiText("No templates are available for this category yet. Parents can create their own questions.")
                     }
+                    OutlinedButton(onClick = {
+                        languagePickerTarget = "translation"
+                        languageSearch = ""
+                        languagePickerOpen = true
+                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("Choose translation language: " + languageLabel(templateTranslationLanguage)) }
                     OutlinedButton(
                         onClick = {
                             execute {
@@ -2321,6 +2336,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                             { bulkTranslationLanguage = it.trim().lowercase(Locale.ROOT).take(16) },
                             "Translate every question to language code (e.g. en, ur, sd, ar, hi, fr, es)"
                         )
+                        OutlinedButton(onClick = {
+                            languagePickerTarget = "translation"
+                            languageSearch = ""
+                            languagePickerOpen = true
+                        }, modifier = Modifier.fillMaxWidth()) { AppUiText("Choose translation language: " + languageLabel(bulkTranslationLanguage)) }
                         OutlinedButton(
                             onClick = {
                                 execute {
