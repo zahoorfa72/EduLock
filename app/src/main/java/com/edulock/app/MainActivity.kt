@@ -3023,7 +3023,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 questionSolution = option.detail
                                 question3DModel = option.id
                                 questionType = "multiple_choice"
-                                questionConceptKey = "learning-lab"
+                                questionConceptKey = "3d:" + option.id + ":learning-lab"
                                 questionLanguage = "en"
                                 screen = AppScreen.ADD_QUESTION
                                 notice = "A draft question is ready with the selected 3D model. Review its answer and save it for your learners."
