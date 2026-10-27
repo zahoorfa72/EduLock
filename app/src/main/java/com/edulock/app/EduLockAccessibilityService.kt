@@ -314,23 +314,12 @@ class EduLockAccessibilityService : AccessibilityService() {
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     private fun essentialPackages(kidsModeEnabled: Boolean): Set<String> {
-        // Preserve launcher, navigation, calls and permission components. Do not exempt Settings
-        // during Kids Mode because that would let a child switch off the restriction service.
-        val core = setOf(
-            "com.android.systemui",
-            "com.android.internal.systemui.navbar.threebutton",
-            "com.android.permissioncontroller",
-            "com.google.android.permissioncontroller",
-            // Third-party/OEM HOME launchers are not exempt in Kids Mode. In normal
-            // mode, retaining them prevents accidental blocking during app management.
-            "com.android.phone",
-            "com.android.server.telecom",
-            "com.android.incallui",
-            "com.android.dialer",
-            "com.google.android.dialer",
-            "com.samsung.android.dialer"
-        )
-        val safeSystem = core + setOf(
+        // Keep the safety-critical/system package list identical to the device-owner
+        // kiosk allowlist. Settings and the normal launcher remain excluded in Kids Mode.
+        val shared = ChildDeviceKioskPolicy.KIDS_MODE_SYSTEM_PACKAGES +
+            "com.android.internal.systemui.navbar.threebutton"
+        if (kidsModeEnabled) return shared
+        return shared + setOf(
             "com.android.launcher3",
             "com.google.android.apps.nexuslauncher",
             "com.miui.home",
@@ -339,12 +328,8 @@ class EduLockAccessibilityService : AccessibilityService() {
             "com.huawei.android.launcher",
             "com.sec.android.app.launcher",
             "com.sonymobile.home",
-            "com.oneplus.launcher"
-        )
-        return if (kidsModeEnabled) core else safeSystem + setOf(
-            "com.android.settings",
-            "com.android.packageinstaller",
-            "com.google.android.packageinstaller"
+            "com.oneplus.launcher",
+            "com.android.settings"
         )
     }
 
