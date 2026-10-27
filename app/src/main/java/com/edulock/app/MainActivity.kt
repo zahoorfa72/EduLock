@@ -129,7 +129,39 @@ private fun religionTrackForSubject(title: String): String? = when {
     title.contains("Buddhist Studies", ignoreCase = true) -> "buddhist"
     title.contains("Jewish Studies", ignoreCase = true) -> "jewish"
     title.contains("Jain Studies", ignoreCase = true) -> "jain"
+    title.contains("World Religions", ignoreCase = true) -> "other"
     else -> null
+}
+
+private fun religiousSubjectTitle(track: String): String = when (track) {
+    "islamic" -> "Islamic Studies"
+    "hindu" -> "Hindu Studies"
+    "christian" -> "Christian Studies"
+    "sikh" -> "Sikh Studies"
+    "buddhist" -> "Buddhist Studies"
+    "jewish" -> "Jewish Studies"
+    "jain" -> "Jain Studies"
+    "other" -> "World Religions & Ethics"
+    else -> ""
+}
+
+private data class SubjectSuggestion(val title: String, val languageCode: String = "en", val studyTrack: String? = null)
+
+private fun suggestedSubjectsForCountry(countryCode: String): List<SubjectSuggestion> {
+    val common = listOf(
+        "Mathematics", "Physics", "Chemistry", "Biology", "General Science", "English",
+        "Social Studies", "Computer Skills", "Astronomy", "Geography", "Health & Safety",
+        "Art & Design", "Drawing & Colour"
+    ).map { SubjectSuggestion(it) }
+    val local = when (countryCode.uppercase(Locale.ROOT)) {
+        "PK" -> listOf(SubjectSuggestion("Urdu", "ur"), SubjectSuggestion("Sindhi", "sd"))
+        "IN" -> listOf(SubjectSuggestion("Hindi", "hi"), SubjectSuggestion("Urdu", "ur"))
+        else -> emptyList()
+    }
+    val religions = religiousStudyOptionsForCountry(countryCode)
+        .filter { it.first != "none" }
+        .map { (track, _) -> SubjectSuggestion(religiousSubjectTitle(track), "en", track) }
+    return (common + local + religions).distinctBy { it.title.lowercase(Locale.ROOT) + ":" + it.languageCode }
 }
 
 private fun learningTemplateCategories(countryCode: String): List<String> {
@@ -208,6 +240,9 @@ private fun EduLockApp(repository: EduLockRepository) {
     var childSchoolGrade by remember { mutableStateOf("1") }
     var childAgeYears by remember { mutableStateOf("8") }
     var childAvatarIcon by remember { mutableStateOf("🦊") }
+    var childStudyTrack by remember { mutableStateOf("none") }
+    var studyTrackPickerTarget by remember { mutableStateOf("parent") }
+    var studyTrackChildId by remember { mutableStateOf("") }
     var childDailyGameLimit by remember { mutableStateOf("20") }
     var childGameLimitEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var kidsGameSecondsRemaining by remember { mutableStateOf(0) }
@@ -237,6 +272,9 @@ private fun EduLockApp(repository: EduLockRepository) {
     var curriculumSelectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var subjectTitle by remember { mutableStateOf("") }
     var subjectLanguage by remember { mutableStateOf("en") }
+    var subjectCountryCode by remember { mutableStateOf("PK") }
+    var subjectGradeLevel by remember { mutableStateOf("1") }
+    var editingSubjectId by remember { mutableStateOf<String?>(null) }
     var questionPrompt by remember { mutableStateOf("") }
     var question3DModel by remember { mutableStateOf("none") }
     var questionType by remember { mutableStateOf("multiple_choice") }
@@ -871,6 +909,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 onClick = {
                                     when (countryPickerTarget) {
                                         "child" -> childCountryCode = code
+                                        "subject" -> subjectCountryCode = code
                                         "parent" -> {
                                             parentCountryCode = code
                                             selectedSubject = null
@@ -971,22 +1010,55 @@ private fun EduLockApp(repository: EduLockRepository) {
             )
         }
         if (studyTrackPickerOpen) {
+            val pickerCountry = when (studyTrackPickerTarget) {
+                "child" -> childCountryCode
+                "existing-child" -> children.firstOrNull { it.id == studyTrackChildId }?.countryCode ?: parentCountryCode
+                else -> parentCountryCode
+            }
+            val pickedTrack = when (studyTrackPickerTarget) {
+                "child" -> childStudyTrack
+                "existing-child" -> children.firstOrNull { it.id == studyTrackChildId }?.studyTrack ?: "none"
+                else -> parentStudyTrack
+            }
             AlertDialog(
                 onDismissRequest = { studyTrackPickerOpen = false },
-                title = { AppUiText("Choose a religious-education curriculum") },
+                title = { AppUiText("Choose a religious-education subject") },
                 text = {
                     Column(Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState())) {
-                        AppUiText("Choose a religious-education track for a child profile. Country suggestions are only defaults; parents can select or change the track.")
-                        val trackOptions = religiousStudyOptionsForCountry(parentCountryCode)
-                        trackOptions.forEach { (code, label) ->
+                        AppUiText("Optional for this child. Country changes the order of suggestions, but you choose the actual study track.")
+                        religiousStudyOptionsForCountry(pickerCountry).forEach { (code, label) ->
                             TextButton(onClick = {
-                                parentStudyTrack = code
                                 studyTrackPickerOpen = false
-                                if (familyId.isNotBlank() && session?.accountRole == "parent") execute {
-                                    repository.updateParentLearningSettings(familyId, parentCountryCode, parentLearningLanguageCode, parentStudyTrack, parentDisplayLanguageCode)
-                                    notice = "Learning track saved. You can select its subject templates from Learning Templates."
+                                when (studyTrackPickerTarget) {
+                                    "child" -> {
+                                        childStudyTrack = code
+                                        notice = if (code == "none") "Religious education is off for this child." else "$label selected for this child's learning profile."
+                                    }
+                                    "existing-child" -> {
+                                        val childId = studyTrackChildId
+                                        execute {
+                                            val existingChild = children.firstOrNull { it.id == childId }
+                                                ?: throw IllegalStateException("The child profile could not be found.")
+                                            repository.updateChildStudyTrack(childId, code)
+                                            if (code != "none") {
+                                                repository.findOrCreateSubject(familyId, religiousSubjectTitle(code), existingChild.preferredLanguage, existingChild.countryCode)
+                                            }
+                                            children = repository.loadChildren(familyId)
+                                            subjects = repository.loadSubjects(familyId, parentCountryCode)
+                                            notice = if (code == "none") "Religious education disabled for this child." else "$label is set for this child. Matching questions are available from Learning Templates."
+                                        }
+                                    }
+                                    else -> {
+                                        parentStudyTrack = code
+                                        if (familyId.isNotBlank() && session?.accountRole == "parent") execute {
+                                            repository.updateParentLearningSettings(familyId, parentCountryCode, parentLearningLanguageCode, parentStudyTrack, parentDisplayLanguageCode)
+                                            notice = "Default religious-study preference saved. Each child can have a separate choice."
+                                        }
+                                    }
                                 }
-                            }, modifier = Modifier.fillMaxWidth()) { AppUiText((if (parentStudyTrack == code) "✓ " else "") + label, modifier = Modifier.fillMaxWidth()) }
+                            }, modifier = Modifier.fillMaxWidth()) {
+                                AppUiText((if (pickedTrack == code) "✓ " else "") + label, modifier = Modifier.fillMaxWidth())
+                            }
                         }
                     }
                 },
@@ -1062,9 +1134,6 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         OutlinedButton(onClick = { languagePickerTarget = "parent-learning"; languageSearch = ""; languagePickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
                             AppUiText("📚 Preferred lesson language: " + languageLabel(parentLearningLanguageCode))
-                        }
-                        OutlinedButton(onClick = { studyTrackPickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                            AppUiText("🕊 Religious-education preference: " + studyTrackLabel(parentStudyTrack))
                         }
                         OutlinedButton(onClick = { languagePickerTarget = "display"; languageSearch = ""; languagePickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
                             AppUiText("🌐 App display language: " + languageLabel(parentDisplayLanguageCode))
@@ -1384,7 +1453,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Button(onClick = {
                         childName = ""; childLanguage = parentLearningLanguageCode; childDailyCap = "60"
                         childCountryCode = parentCountryCode; childSchoolGrade = "1"; childAgeYears = "8"
-                        childAvatarIcon = "🦊"; childDailyGameLimit = "20"
+                        childAvatarIcon = "🦊"; childStudyTrack = "none"; childDailyGameLimit = "20"
                         screen = AppScreen.ADD_CHILD
                     }, modifier = Modifier.fillMaxWidth()) { AppUiText("Add child profile") }
                     if (children.isEmpty()) AppUiText("No child profiles yet. Add a child to create the protected parent-child link.")
@@ -1431,6 +1500,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     enabled = !busy,
                                     modifier = Modifier.fillMaxWidth()
                                 ) { AppUiText("Save educational game limit") }
+                                OutlinedButton(
+                                    onClick = {
+                                        studyTrackPickerTarget = "existing-child"
+                                        studyTrackChildId = child.id
+                                        studyTrackPickerOpen = true
+                                    },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { AppUiText("🕊 Religious education: " + studyTrackLabel(child.studyTrack)) }
                                 OutlinedButton(
                                     onClick = {
                                         selectedChild = child
@@ -1515,9 +1593,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Field(childSchoolGrade, { childSchoolGrade = it.filter(Char::isDigit).take(2) }, "School grade (0 = Kindergarten, 1–13)", keyboardType = KeyboardType.Number)
                     Field(childAgeYears, { childAgeYears = it.filter(Char::isDigit).take(2) }, "Child age (3–19 years)", keyboardType = KeyboardType.Number)
                     Field(childLanguage, { childLanguage = it.trim().take(16) }, "Preferred learning language (en, ur, sd...)")
-                    AppUiText("Religious education is optional for each child. Choose a matching track only if your family wants these lessons; the country suggestion is not a guess about your family's beliefs.")
-                    OutlinedButton(onClick = { studyTrackPickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                        AppUiText("🕊 Religious-education subject: " + studyTrackLabel(parentStudyTrack))
+                    AppUiText("Religious education is optional for each child. Country-based suggestions do not assume any family's beliefs.")
+                    OutlinedButton(onClick = {
+                        studyTrackPickerTarget = "child"
+                        studyTrackPickerOpen = true
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        AppUiText("🕊 Religious-education subject: " + studyTrackLabel(childStudyTrack))
                     }
                     AppUiText("The question bank filters by country, grade, age and language. When a reviewed local-language set isn't available, EduLock clearly labels the starter-bank fallback.")
                     Field(childDailyCap, { childDailyCap = it.filter(Char::isDigit).take(4) }, "Maximum reward minutes per day (0–1440)", keyboardType = KeyboardType.Number)
@@ -1531,8 +1612,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                             val created = repository.addChild(
                                 familyId, childName, childLanguage, childDailyCap.toIntOrNull() ?: 60,
                                 childCountryCode, grade, age, childAvatarIcon,
-                                childDailyGameLimit.toIntOrNull() ?: 20
+                                childDailyGameLimit.toIntOrNull() ?: 20, childStudyTrack
                             )
+                            if (childStudyTrack != "none") {
+                                repository.findOrCreateSubject(familyId, religiousSubjectTitle(childStudyTrack), childLanguage, childCountryCode)
+                            }
                             children = repository.loadChildren(familyId)
                             selectedChild = created
                             screen = AppScreen.CHILDREN
@@ -1854,7 +1938,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             (template.countryCode == "ZZ" || template.countryCode.equals(parentCountryCode, ignoreCase = true)) &&
                             (templateCategory != "Religious Education" ||
                                 (parentStudyTrack != "none" &&
-                                    template.conceptKey.startsWith("faith:" + parentStudyTrack + ":")))
+                                    religionTrackForSubject(template.subjectTitle) == parentStudyTrack))
                     }
                     val languageTemplates = countryTemplates.filter {
                         it.languageCode.equals(parentLearningLanguageCode, ignoreCase = true)
