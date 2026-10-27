@@ -1224,7 +1224,8 @@ class EduLockRepository(context: Context) {
             passed = response.optBoolean("passed", false),
             awardedMinutes = response.optInt("awarded_minutes", 0).coerceIn(0, 1440),
             dailyUsedMinutes = response.optInt("daily_used_minutes_after", response.optInt("daily_used_minutes", 0)).coerceAtLeast(0),
-            dailyCapMinutes = response.optInt("daily_cap_minutes", 0).coerceIn(0, 1440)
+            dailyCapMinutes = response.optInt("daily_cap_minutes", 0).coerceIn(0, 1440),
+            rewardToBank = response.optBoolean("reward_to_bank", false)
         )
     }
 
