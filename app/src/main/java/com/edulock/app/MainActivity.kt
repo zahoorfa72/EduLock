@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -4324,7 +4325,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         }
                                         screen = AppScreen.TASK_RESULT
                                     }
-                                }, enabled = !busy && answers[question.id].isNullOrBlank().not(), modifier = Modifier.weight(1f)) { AppUiText("Submit") }
+                                }, enabled = !busy && questions.isNotEmpty() && questions.all { !answers[it.id].isNullOrBlank() }, modifier = Modifier.weight(1f)) { AppUiText("Submit answers") }
                             }
                         }
                     } else {
@@ -4660,6 +4661,7 @@ private fun ScreenFrame(
     Column(
         modifier = Modifier.fillMaxSize()
             .background(Brush.verticalGradient(listOf(Color(0xFFF4F5FF), Color(0xFFF4FFFC), Color(0xFFFFFAEF))))
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
