@@ -38,6 +38,14 @@ begin
   select t.* into v_task from edulock.tasks t
     where t.id = p_task_id and t.child_id = v_child.id and t.active = true;
   if not found then raise exception 'Task is unavailable for this child'; end if;
+  if v_task.reward_package_name is not null and not exists (
+    select 1 from edulock.allowed_apps aa
+    where aa.child_id = v_child.id
+      and aa.package_name = v_task.reward_package_name
+      and aa.enabled = true
+  ) then
+    raise exception 'The selected reward app is no longer enabled for this child';
+  end if;
   if v_task.subject_id is null then raise exception 'This task has no subject'; end if;
 
   select count(*) into v_total from (
@@ -113,3 +121,5 @@ end;
 $$;
 revoke all on function edulock.grade_and_award_task(uuid, uuid, jsonb) from public, anon, authenticated;
 grant execute on function edulock.grade_and_award_task(uuid, uuid, jsonb) to service_role;
+
+notify pgrst, 'reload schema';
