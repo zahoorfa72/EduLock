@@ -750,6 +750,24 @@ class EduLockRepository(context: Context) {
         }
     }
 
+    suspend fun loadQuestionAnswerKeys(questionIds: List<String>): Map<String, String> {
+        requireSession("parent")
+        val ids = questionIds.distinct().filter { it.matches(Regex("[0-9a-fA-F-]{36}")) }
+        if (ids.isEmpty()) return emptyMap()
+        val rows = restArray(
+            "questions?select=id,answer_key&id=in.(" + ids.joinToString(",") + ")"
+        )
+        val result = linkedMapOf<String, String>()
+        for (i in 0 until rows.length()) {
+            val row = rows.optJSONObject(i) ?: continue
+            val key = row.optJSONObject("answer_key") ?: continue
+            val id = row.optString("id")
+            val answer = key.optString("answer").trim()
+            if (id.isNotBlank() && answer.isNotBlank()) result[id] = answer
+        }
+        return result
+    }
+
     suspend fun loadQuestionTranslations(questionIds: List<String>): Map<String, List<QuestionTranslation>> {
         requireSession()
         val ids = questionIds.distinct().filter { it.matches(Regex("[0-9a-fA-F-]{36}")) }
