@@ -719,9 +719,18 @@ private fun EduLockApp(repository: EduLockRepository) {
             color = MaterialTheme.colorScheme.background
         ) {
             when (screen) {
-                AppScreen.DEVICE_SETUP -> ScreenFrame("Set up this phone", notice = notice, busy = busy) {
-                    Text("Choose how this phone will use EduLock.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("A parent phone signs in with the parent's email and password. A child phone must be linked using the six-digit, one-time code generated from the parent's child profile.")
+                AppScreen.DEVICE_SETUP -> ScreenFrame("Welcome to EduLock ✨", notice = notice, busy = busy) {
+                    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEEF0FF))) {
+                        Column(Modifier.fillMaxWidth().padding(22.dp), verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(Modifier.size(84.dp).background(Brush.linearGradient(listOf(Color(0xFF6E60F5), Color(0xFF12B8AC))), RoundedCornerShape(28.dp)), contentAlignment = Alignment.Center) {
+                                Text("🎓", fontSize = 42.sp)
+                            }
+                            Text("Learn. Explore. Grow.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = Color(0xFF29245F))
+                            Text("A safer learning world for curious kids — managed by parents.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF566080))
+                        }
+                    }
+                    Text("Choose how you want to use EduLock.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Parents manage learning and screen time. Children join through a secure one-time pairing code.")
                     Button(
                         onClick = { chooseParentDevice() },
                         enabled = !busy,
@@ -733,24 +742,39 @@ private fun EduLockApp(repository: EduLockRepository) {
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("This is the child's phone — pair with code") }
                 }
-                AppScreen.AUTH -> ScreenFrame("EduLock", notice = notice, busy = busy) {
-                    Text("Learn first. Play with purpose.", style = MaterialTheme.typography.titleMedium)
-                    Text("A parent manages the family. A child device joins securely with a one-time pairing code.")
+                AppScreen.AUTH -> ScreenFrame(if (isRegistering) "Create your parent account" else "Welcome back", notice = notice, busy = busy) {
+                    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F0FF))) {
+                        Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(Modifier.size(68.dp).background(Brush.linearGradient(listOf(Color(0xFF5B4CE8), Color(0xFF00A99D))), RoundedCornerShape(24.dp)), contentAlignment = Alignment.Center) {
+                                Text("🎓", fontSize = 34.sp)
+                            }
+                            Text(if (isRegistering) "Build their bright future" else "Good to see you again", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color(0xFF29245F))
+                            Text("Learn first. Play with purpose.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF626987))
+                        }
+                    }
+                    Text(if (isRegistering) "Create a parent account to manage learning, games and screen time." else "Sign in to continue managing your family.", style = MaterialTheme.typography.bodyMedium)
                     if (isRegistering) {
                         Field(displayName, { displayName = it }, "Parent name")
                     }
                     Field(email, { email = it }, "Parent email", keyboardType = KeyboardType.Email)
                     Field(password, { password = it }, "Password (minimum 8 characters)", password = true)
+                    if (isRegistering) {
+                        Field(confirmPassword, { confirmPassword = it }, "Confirm password", password = true)
+                        if (confirmPassword.isNotEmpty() && confirmPassword != password) {
+                            Text("Passwords do not match yet.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
                     Button(
                         onClick = {
                             execute {
+                                require(password == confirmPassword || !isRegistering) { "Passwords do not match. Please confirm your password." }
                                 val result = repository.signUp(email, password, displayName, "parent")
                                 if (result.session == null) {
                                     emailOtp = ""
                                     resendSeconds = 60
                                     accountRole = "parent"
                                     screen = AppScreen.VERIFY_OTP
-                                    notice = "We sent an eight-digit verification code to $email. Enter it below to verify your email."
+                                    notice = "We requested a verification code for $email. Enter the 6–8 digit code from the newest email. Check Spam and Promotions too."
                                 } else {
                                     resolveSignedIn(result.session)
                                     if (screen == AppScreen.PARENT_HOME) notice = result.message
@@ -770,8 +794,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                         enabled = !busy && !isRegistering,
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Sign in as parent") }
-                    TextButton(onClick = { isRegistering = !isRegistering; notice = null }) {
-                        Text(if (isRegistering) "Already registered? Sign in" else "New to EduLock? Create parent account")
+                    TextButton(onClick = {
+                        isRegistering = !isRegistering
+                        confirmPassword = ""
+                        notice = null
+                    }) {
+                        Text(if (isRegistering) "Already have an account? Sign in" else "New to EduLock? Create an account")
                     }
                     OutlinedButton(
                         onClick = { chooseChildDevice() },
@@ -786,26 +814,26 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.VERIFY_OTP -> ScreenFrame("Let's verify your email ✨", onBack = {
                     screen = AppScreen.AUTH
                     isRegistering = true
-                    notice = "Enter the eight-digit code sent to $email to finish creating your account."
+                    notice = "Enter the 6–8 digit code sent to $email to finish creating your account."
                 }, notice = notice, busy = busy) {
                     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF5FF)), shape = MaterialTheme.shapes.extraLarge) {
                         Column(modifier = Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text("🎨", fontSize = 42.sp)
                             Text("One tiny step to start!", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF173B67))
-                            Text("We sent an 8-digit code to", color = Color(0xFF42566D))
+                            Text("We sent a verification code to", color = Color(0xFF42566D))
                             Text(email, fontWeight = FontWeight.SemiBold, color = Color(0xFF087E8B))
                             Text("Check your inbox and spam folder, then type the code below.", color = Color(0xFF42566D))
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    Field(emailOtp, { emailOtp = it.filter(Char::isDigit).take(8) }, "8-digit verification code", keyboardType = KeyboardType.Number)
+                    Field(emailOtp, { emailOtp = it.filter(Char::isDigit).take(8) }, "Verification code (6–8 digits)", keyboardType = KeyboardType.Number)
                     Button(onClick = {
                         execute {
                             val verified = repository.verifySignupOtp(email, emailOtp, accountRole)
                             resolveSignedIn(verified, pairingCode)
                             if (screen == AppScreen.PARENT_HOME || screen == AppScreen.CHILD_HOME) notice = "🎉 Email verified! Welcome to EduLock."
                         }
-                    }, enabled = !busy && emailOtp.length == 8, modifier = Modifier.fillMaxWidth()) { Text("✓  Verify & continue") }
+                    }, enabled = !busy && emailOtp.length in 6..8, modifier = Modifier.fillMaxWidth()) { Text("✓  Verify & continue") }
                     OutlinedButton(onClick = {
                         execute {
                             repository.resendSignupOtp(email)
@@ -816,7 +844,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }, enabled = !busy && resendSeconds == 0, modifier = Modifier.fillMaxWidth()) {
                         Text(if (resendSeconds > 0) "Resend code in " + resendSeconds + "s" else "↻  Send a new code")
                     }
-                    Text(if (resendSeconds > 0) "For your security, you can request another code in " + resendSeconds + " seconds." else "Didn't receive it? Check Spam, then request a new code.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (resendSeconds > 0) "You can request another code in " + resendSeconds + " seconds." else "Still no email? Check Inbox, Spam and Promotions, then request one fresh code. Email providers may enforce a longer cooldown.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 AppScreen.PAIR_CHILD -> ScreenFrame("Pair this child's device", onBack = {
                     repository.signOut()
