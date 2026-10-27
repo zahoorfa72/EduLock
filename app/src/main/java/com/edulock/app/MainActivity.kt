@@ -420,10 +420,12 @@ private fun EduLockApp(repository: EduLockRepository) {
         val requestedTaskId = launchPreferences.getString("pending_task_id", null)
         if (requestedTaskId != null && childProfile != null && screen == AppScreen.CHILD_HOME &&
             repository.currentSession()?.accountRole == "child" && !busy) {
-            // Only consume a task after it is loaded and confirmed among the child's active tasks.
+            // Keep the pending request until loading succeeds so offline/temporary errors can retry.
             val target = tasks.firstOrNull { it.id == requestedTaskId && it.active }
-            if (target != null) {
+            if (target == null) {
                 launchPreferences.edit().remove("pending_task_id").apply()
+                notice = "The requested task is no longer available. Ask your parent to assign an active task."
+            } else {
                 execute {
                     val subjectId = target.subjectId
                         ?: throw IllegalStateException("This task has no subject. Ask your parent to repair it.")
@@ -442,6 +444,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     activeTask = target
                     questionIndex = 0
                     answers = emptyMap()
+                    launchPreferences.edit().remove("pending_task_id").apply()
                     notice = "Screen-time target reached. Answer the learning task to earn more time."
                     screen = AppScreen.PLAY_TASK
                 }
