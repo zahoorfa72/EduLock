@@ -203,7 +203,12 @@ data class ChildLocationSnapshot(
     val recordedAt: String?,
     val lastSeenAt: String?,
     val sharingEnabled: Boolean,
-    val batteryPercent: Int?
+    val batteryPercent: Int?,
+    val deviceLocked: Boolean? = null,
+    val guardMode: String? = null,
+    val currentAppPackage: String? = null,
+    val screenOn: Boolean? = null,
+    val blockedAppEvents: Int = 0
 )
 data class AttemptRow(
     val id: String,
@@ -1135,9 +1140,16 @@ class EduLockRepository(context: Context) {
         val locations = restArray(
             "child_locations?select=child_id,latitude,longitude,accuracy_meters,recorded_at&child_id=eq.$childId&limit=1"
         )
-        val statuses = restArray(
-            "child_device_status?select=child_id,last_seen_at,sharing_enabled,battery_percent,device_locked,guard_mode,current_app_package,screen_on,blocked_app_events&child_id=eq.$childId&limit=1"
-        )
+        val statuses = try {
+            restArray(
+                "child_device_status?select=child_id,last_seen_at,sharing_enabled,battery_percent,device_locked,guard_mode,current_app_package,screen_on,blocked_app_events&child_id=eq.$childId&limit=1"
+            )
+        } catch (_: IOException) {
+            // Support backend installations before migration 0033.
+            restArray(
+                "child_device_status?select=child_id,last_seen_at,sharing_enabled,battery_percent&child_id=eq.$childId&limit=1"
+            )
+        }
         val point = locations.optJSONObject(0)
         val status = statuses.optJSONObject(0)
         val latitude = if (point != null && !point.isNull("latitude")) point.optDouble("latitude").takeIf { it.isFinite() } else null
@@ -1151,7 +1163,12 @@ class EduLockRepository(context: Context) {
             recordedAt = point?.optString("recorded_at")?.takeIf { !it.isNullOrBlank() && it != "null" },
             lastSeenAt = status?.optString("last_seen_at")?.takeIf { !it.isNullOrBlank() && it != "null" },
             sharingEnabled = status?.optBoolean("sharing_enabled", false) ?: false,
-            batteryPercent = if (status != null && !status.isNull("battery_percent")) status.optInt("battery_percent").coerceIn(0, 100) else null
+            batteryPercent = if (status != null && !status.isNull("battery_percent")) status.optInt("battery_percent").coerceIn(0, 100) else null,
+            deviceLocked = if (status != null && !status.isNull("device_locked")) status.optBoolean("device_locked") else null,
+            guardMode = status?.optString("guard_mode")?.takeIf { it.isNotBlank() && it != "null" },
+            currentAppPackage = status?.optString("current_app_package")?.takeIf { it.isNotBlank() && it != "null" },
+            screenOn = if (status != null && !status.isNull("screen_on")) status.optBoolean("screen_on") else null,
+            blockedAppEvents = status?.optInt("blocked_app_events", 0)?.coerceAtLeast(0) ?: 0
         )
     }
 
