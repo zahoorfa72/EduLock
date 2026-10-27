@@ -1825,15 +1825,28 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 }
                             }
                     }
-                    val filteredTemplates = LearningTemplates.all.filter { template ->
+                    val countryTemplates = LearningTemplates.all.filter { template ->
                         template.category == templateCategory &&
                             (template.countryCode == "ZZ" || template.countryCode.equals(parentCountryCode, ignoreCase = true)) &&
                             (templateCategory != "Religious Education" ||
                                 (parentStudyTrack != "none" &&
                                     template.conceptKey.startsWith("faith:" + parentStudyTrack + ":")))
                     }
+                    val languageTemplates = countryTemplates.filter {
+                        it.languageCode.equals(parentLearningLanguageCode, ignoreCase = true)
+                    }
+                    val localLanguageCategories = setOf("Urdu", "Sindhi", "Hindi")
+                    val filteredTemplates = when {
+                        templateCategory in localLanguageCategories -> countryTemplates
+                        languageTemplates.isNotEmpty() -> languageTemplates
+                        else -> countryTemplates.filter { it.languageCode.equals("en", ignoreCase = true) }
+                    }
                     if (templateCategory == "Religious Education" && parentStudyTrack == "none") {
-                        AppUiText("Choose an optional religious-education track in Family settings to see matching question templates.")
+                        AppUiText("Choose an optional religious-education track in App settings to see matching questions for " + displayCountryName(parentCountryCode) + ".")
+                    } else if (countryTemplates.isEmpty()) {
+                        AppUiText("No templates are available for this subject in " + displayCountryName(parentCountryCode) + " yet. You can create your own questions.")
+                    } else if (parentLearningLanguageCode != "en" && languageTemplates.isEmpty() && templateCategory !in localLanguageCategories) {
+                        AppUiText("No " + languageLabel(parentLearningLanguageCode) + " templates are available in this category yet. English starter templates are shown until translated ones are added.")
                     } else if (filteredTemplates.isEmpty()) {
                         AppUiText("No templates are available for this category yet. Parents can create their own questions.")
                     }
