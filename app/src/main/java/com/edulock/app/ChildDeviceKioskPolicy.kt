@@ -101,6 +101,7 @@ object ChildDeviceKioskPolicy {
             ).filter { isInstalled(context, it) }.toSet() else emptySet()
             val allowlistMatches = if (kidsModeEnabled) {
                 context.packageName in actualAllowlist &&
+                    actualAllowlist == installed.toSet() &&
                     allowedPackages.filter { it != homePackage && isInstalled(context, it) }.all { it in actualAllowlist } &&
                     requiredSystemPackages.all { it in actualAllowlist } &&
                     homeExcluded
