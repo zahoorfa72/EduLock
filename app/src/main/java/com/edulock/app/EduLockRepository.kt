@@ -1249,6 +1249,10 @@ class EduLockRepository(context: Context) {
         val launchPrefs = prefs.edit()
         if (pendingTask != null && pendingTask !in activeTaskIds) launchPrefs.remove("pending_task_id")
         launchPrefs
+            .putStringSet(
+                "app_daily_limits",
+                appLimits + if (activeTaskIds.isEmpty()) emptySet() else setOf("screen_time_task_id=" + activeTaskIds.first())
+            )
             .putBoolean("child_active", true)
             .putString("child_id", child.id)
             .putBoolean("kids_mode_enabled", lockdownMode)
