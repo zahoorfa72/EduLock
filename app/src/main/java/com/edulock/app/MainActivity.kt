@@ -3781,6 +3781,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                         val languageOptions = (listOf(question.languageCode) + questionTranslations[question.id].orEmpty().map { it.languageCode })
                             .distinctBy { it.lowercase() }.sortedWith(compareBy<String> { if (it.equals(selectedLanguage, true)) 0 else 1 }.thenBy { it })
                         AppUiText("Question " + (questionIndex + 1) + " of " + questions.size, style = MaterialTheme.typography.titleMedium)
+                        if (task.timeLimitSeconds != null) {
+                            SummaryCard(
+                                "Time remaining",
+                                "${taskSecondsRemaining / 60}:${(taskSecondsRemaining % 60).toString().padStart(2, '0')}",
+                                "Answers submit automatically when the countdown reaches zero."
+                            )
+                        }
                         LinearProgressIndicator(progress = { (questionIndex + 1).toFloat() / questions.size.toFloat() }, modifier = Modifier.fillMaxWidth())
                         AppUiText("Concept: " + question.conceptKey, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         if (question.conceptKey == "solar-system-planet-id") SolarSystemModelPreview()
