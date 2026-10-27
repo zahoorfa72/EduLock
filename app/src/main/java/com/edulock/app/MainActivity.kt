@@ -256,40 +256,7 @@ private fun EduLockApp(repository: EduLockRepository) {
 
     val scope = rememberCoroutineScope()
 
-    val questionPicturePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedUri ->
-        if (selectedUri != null) {
-            questionPictureUri = selectedUri
-            questionPictureError = null
-            execute {
-                val rawBytes = withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    context.contentResolver.openInputStream(selectedUri)?.use { it.readBytes() }
-                        ?: throw IOException("Could not read the selected picture.")
-                }
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, bounds)
-                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("The selected file is not a supported picture.")
-                val factor = maxOf(bounds.outWidth / 1024f, bounds.outHeight / 1024f, 1f)
-                val options = BitmapFactory.Options().apply {
-                    inSampleSize = Integer.highestOneBit(factor.toInt().coerceAtLeast(1))
-                }
-                val decoded = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
-                    ?: throw IOException("Could not decode the selected picture.")
-                val scale = minOf(1f, 1024f / maxOf(decoded.width, decoded.height).toFloat())
-                val bitmap = if (scale < 1f) Bitmap.createScaledBitmap(
-                    decoded,
-                    (decoded.width * scale).toInt().coerceAtLeast(1),
-                    (decoded.height * scale).toInt().coerceAtLeast(1),
-                    true
-                ) else decoded
-                val stream = ByteArrayOutputStream()
-                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 85, stream)) throw IOException("Could not compress the selected picture.")
-                val bytes = stream.toByteArray()
-                if (bytes.size > 2_000_000) throw IOException("The compressed picture is larger than 2 MB. Please choose a smaller picture.")
-                questionPictureBytes = bytes
-                questionPicturePreview = bitmap
-            }
-        }
-    }
+
 
     val devicePreferences = remember { context.getSharedPreferences("edulock_device_mode", Context.MODE_PRIVATE) }
     var deviceMode by remember { mutableStateOf(devicePreferences.getString("mode", "unknown") ?: "unknown") }
@@ -672,6 +639,41 @@ private fun EduLockApp(repository: EduLockRepository) {
         }
     }
 
+
+    val questionPicturePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedUri ->
+        if (selectedUri != null) {
+            questionPictureUri = selectedUri
+            questionPictureError = null
+            execute {
+                val rawBytes = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    context.contentResolver.openInputStream(selectedUri)?.use { it.readBytes() }
+                        ?: throw IOException("Could not read the selected picture.")
+                }
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, bounds)
+                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("The selected file is not a supported picture.")
+                val factor = maxOf(bounds.outWidth / 1024f, bounds.outHeight / 1024f, 1f)
+                val options = BitmapFactory.Options().apply {
+                    inSampleSize = Integer.highestOneBit(factor.toInt().coerceAtLeast(1))
+                }
+                val decoded = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
+                    ?: throw IOException("Could not decode the selected picture.")
+                val scale = minOf(1f, 1024f / maxOf(decoded.width, decoded.height).toFloat())
+                val bitmap = if (scale < 1f) Bitmap.createScaledBitmap(
+                    decoded,
+                    (decoded.width * scale).toInt().coerceAtLeast(1),
+                    (decoded.height * scale).toInt().coerceAtLeast(1),
+                    true
+                ) else decoded
+                val stream = ByteArrayOutputStream()
+                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 85, stream)) throw IOException("Could not compress the selected picture.")
+                val bytes = stream.toByteArray()
+                if (bytes.size > 2_000_000) throw IOException("The compressed picture is larger than 2 MB. Please choose a smaller picture.")
+                questionPictureBytes = bytes
+                questionPicturePreview = bitmap
+            }
+        }
+    }
     val launchPreferences = remember { context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE) }
     LaunchedEffect(childProfile?.id, screen) {
         val requestedTaskId = launchPreferences.getString("pending_task_id", null)
