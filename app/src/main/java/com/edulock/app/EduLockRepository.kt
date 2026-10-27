@@ -851,6 +851,56 @@ class EduLockRepository(context: Context) {
         }
     }
 
+    suspend fun uploadQuestionImage(familyId: String, questionId: String, jpegBytes: ByteArray): String {
+        val session = requireSession("parent")
+        require(familyId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid family." }
+        require(questionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid question." }
+        require(jpegBytes.isNotEmpty() && jpegBytes.size <= 2_000_000) { "The compressed picture must be under 2 MB." }
+        val fileName = java.util.UUID.randomUUID().toString() + ".jpg"
+        val path = "$familyId/$questionId/$fileName"
+        val encodedPath = path.split("/").joinToString("/") { java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
+        val url = "$baseUrl/storage/v1/object/question-images/$encodedPath"
+        val request = Request.Builder()
+            .url(url)
+            .header("apikey", anonKey)
+            .header("Authorization", "Bearer ${session.accessToken}")
+            .header("Content-Type", "image/jpeg")
+            .header("x-upsert", "false")
+            .post(jpegBytes.toRequestBody("image/jpeg".toMediaType()))
+            .build()
+        http.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("Picture upload failed (HTTP ${response.code}). Apply migration 0033 and check family storage permissions.")
+        }
+        val updated = restArray("questions?id=eq.$questionId", "PATCH", JSONObject().put("picture_path", path))
+        val verify = restArray("questions?select=id,picture_path&id=eq.$questionId&limit=1").optJSONObject(0)
+            ?: throw IOException("Picture uploaded but its question record could not be verified.")
+        if (verify.optString("picture_path") != path) {
+            throw IOException("Picture uploaded but Supabase did not confirm the saved path.")
+        }
+        return path
+    }
+
+    suspend fun createSignedQuestionImageUrl(path: String): String {
+        val session = requireSession()
+        require(path.matches(Regex("[0-9a-fA-F-]{36}/[0-9a-fA-F-]{36}/[A-Za-z0-9-]+\\.jpg"))) { "Invalid question image path." }
+        val encodedPath = path.split("/").joinToString("/") { java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
+        val body = JSONObject().put("expiresIn", 60 * 60)
+        val request = Request.Builder()
+            .url("$baseUrl/storage/v1/object/sign/question-images/$encodedPath")
+            .header("apikey", anonKey)
+            .header("Authorization", "Bearer ${session.accessToken}")
+            .header("Content-Type", "application/json")
+            .post(body.toString().toRequestBody(JSON_MEDIA))
+            .build()
+        http.newCall(request).execute().use { response ->
+            val responseText = response.body?.string().orEmpty()
+            if (!response.isSuccessful) throw IOException("Could not open the private question picture (HTTP ${response.code}).")
+            val signedPath = JSONObject(responseText).optString("signedURL")
+                .takeIf { it.isNotBlank() } ?: throw IOException("Storage returned no signed picture URL.")
+            return if (signedPath.startsWith("http")) signedPath else "$baseUrl/storage/v1$signedPath"
+        }
+    }
+
     suspend fun saveQuestionSolution(questionId: String, solution: String) {
         requireSession("parent")
         require(questionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid question." }
