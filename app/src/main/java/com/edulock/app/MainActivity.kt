@@ -3121,6 +3121,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                             AppUiText("Ready for today's adventure?", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
+                    // In Kids Mode, keep the child in the learning flow when opening EduLock.
+                    // A parent-approved app list still applies to external apps, while this
+                    // dashboard remains the return destination after a target time expires.
                     Button(onClick = { openKidsGames() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎮  Learning Games • daily time limit") }
                     OutlinedButton(onClick = { openKidsDrawingStudio() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🎨 Draw & colour • daily time limit") }
                     OutlinedButton(onClick = { openKids3DLab() }, modifier = Modifier.fillMaxWidth()) { AppUiText("🪐 Explore 4D learning models • timed") }
