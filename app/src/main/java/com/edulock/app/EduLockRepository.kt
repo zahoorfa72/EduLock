@@ -872,7 +872,7 @@ class EduLockRepository(context: Context) {
         http.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IOException("Picture upload failed (HTTP ${response.code}). Apply migration 0033 and check family storage permissions.")
         }
-        val updated = restArray("questions?id=eq.$questionId", "PATCH", JSONObject().put("picture_path", path))
+        restArray("questions?id=eq.$questionId", "PATCH", JSONObject().put("picture_path", path))
         val verify = restArray("questions?select=id,picture_path&id=eq.$questionId&limit=1").optJSONObject(0)
             ?: throw IOException("Picture uploaded but its question record could not be verified.")
         if (verify.optString("picture_path") != path) {
