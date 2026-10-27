@@ -64,7 +64,7 @@ object ChildDeviceKioskPolicy {
             if (context.packageName !in installed) throw IllegalStateException("EduLock is missing from the kiosk allowlist.")
             manager.setLockTaskPackages(admin, installed.toTypedArray())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                // Keep Home disabled in kiosk mode; enabling LOCK_TASK_FEATURE_HOME lets
+                // Home must remain disabled in Kids Mode; enabling LOCK_TASK_FEATURE_HOME lets
                 // users navigate to a launcher (which is intentionally not allowlisted).
                 // Permit status/system info, while leaving notifications, recents and global
                 // actions disabled by omission.
