@@ -59,8 +59,8 @@ object ChildDeviceKioskPolicy {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 // Home must remain disabled in Kids Mode; enabling LOCK_TASK_FEATURE_HOME lets
                 // users navigate to a launcher (which is intentionally not allowlisted).
-                // Permit status/system info, while leaving notifications, recents and global
-                // actions disabled by omission.
+                // Keep the power menu and emergency/SOS actions available while restricting
+                // Home, Recents and notifications during Kids Mode.
                 val features = if (kidsModeEnabled) {
                     DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO or
                         DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS
@@ -93,7 +93,8 @@ object ChildDeviceKioskPolicy {
             }
             val featuresMatch = Build.VERSION.SDK_INT < Build.VERSION_CODES.P ||
                 manager.getLockTaskFeatures(admin) == if (kidsModeEnabled) {
-                    DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
+                    DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO or
+                        DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS
                 } else {
                     DevicePolicyManager.LOCK_TASK_FEATURE_NONE
                 }
