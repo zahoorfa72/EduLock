@@ -1,5 +1,11 @@
 package com.edulock.app
 
+import android.content.Context
+import android.media.AudioManager
+import android.media.ToneGenerator
+import android.os.Handler
+import android.os.Looper
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +70,19 @@ val LearningModelOptions = listOf(
     LearningModelOption("faith-world", "🌍", "World Religions & Ethics", "World Religions & Ethics", "Why compare traditions respectfully?", "Explore diversity, empathy and shared ethical questions.")
 )
 
+private fun play4DAnswerSound(context: Context, correct: Boolean) {
+    try {
+        val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 45)
+        tone.startTone(
+            if (correct) ToneGenerator.TONE_PROP_ACK else ToneGenerator.TONE_PROP_NACK,
+            160
+        )
+        Handler(Looper.getMainLooper()).postDelayed({ tone.release() }, 240)
+    } catch (_: Exception) {
+        // Sound feedback is optional; the quiz remains usable when audio is unavailable.
+    }
+}
+
 @Composable
 fun Learning4DLabScreen(
     selectedModel: String,
@@ -71,6 +91,7 @@ fun Learning4DLabScreen(
     onCreateQuestion: (LearningModelOption) -> Unit
 ) {
     val selected = LearningModelOptions.firstOrNull { it.id == selectedModel } ?: LearningModelOptions.first()
+    val context = LocalContext.current
     var chosenAnswers by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     val questionBankSubject = if (selected.subject == "Earth Science") "General Science" else selected.subject
     val requestedQuestionLanguage = when (questionBankSubject) {
@@ -173,7 +194,10 @@ fun Learning4DLabScreen(
                             template.options.forEach { option ->
                                 val chosen = chosenAnswers[template.conceptKey]
                                 OutlinedButton(
-                                    onClick = { chosenAnswers = chosenAnswers + (template.conceptKey to option) },
+                                    onClick = {
+                                        chosenAnswers = chosenAnswers + (template.conceptKey to option)
+                                        play4DAnswerSound(context, option == template.answer)
+                                    },
                                     modifier = Modifier.fillMaxWidth(),
                                     enabled = chosen == null || chosen != template.answer
                                 ) {
