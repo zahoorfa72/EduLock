@@ -645,6 +645,8 @@ class EduLockRepository(context: Context) {
         if (templates.isEmpty()) return 0
         val existingRows = loadQuestions(subjectId).toMutableList()
         val existingConcepts = existingRows.map { it.conceptKey }.toMutableSet()
+        val existingAnswers = loadQuestionAnswerKeys(existingRows.map { it.id }).toMutableMap()
+        val existingSolutions = loadQuestionSolutions(existingRows.map { it.id }).toMutableMap()
         var created = 0
 
         fun generatedSeedSuffix(key: String): String? {
@@ -664,7 +666,9 @@ class EduLockRepository(context: Context) {
                 val changed = current.prompt != template.prompt ||
                     current.questionType != template.questionType ||
                     current.options != template.options ||
-                    !current.languageCode.equals(template.languageCode, ignoreCase = true)
+                    !current.languageCode.equals(template.languageCode, ignoreCase = true) ||
+                    existingAnswers[current.id] != template.answer ||
+                    (template.solution.isNotBlank() && existingSolutions[current.id] != template.solution)
                 // An existing generated question may need updated wording when the parent's
                 // child is in a different grade band. Keep its ID and history; update in place.
                 if (wantedSuffix != null && changed) {
@@ -675,7 +679,11 @@ class EduLockRepository(context: Context) {
                         .put("answer_key", JSONObject().put("answer", template.answer))
                         .put("language_code", template.languageCode.trim().lowercase(Locale.ROOT))
                     restArray("questions?id=eq.${current.id}", "PATCH", payload)
-                    if (template.solution.isNotBlank()) saveQuestionSolution(current.id, template.solution)
+                    existingAnswers[current.id] = template.answer
+                    if (template.solution.isNotBlank()) {
+                        saveQuestionSolution(current.id, template.solution)
+                        existingSolutions[current.id] = template.solution
+                    }
                     existingRows[sameKeyIndex] = current.copy(
                         prompt = template.prompt, questionType = template.questionType,
                         options = template.options, languageCode = template.languageCode
@@ -700,7 +708,11 @@ class EduLockRepository(context: Context) {
                     .put("language_code", template.languageCode.trim().lowercase(Locale.ROOT))
                     .put("concept_key", key)
                 restArray("questions?id=eq.${legacy.id}", "PATCH", payload)
-                if (template.solution.isNotBlank()) saveQuestionSolution(legacy.id, template.solution)
+                existingAnswers[legacy.id] = template.answer
+                if (template.solution.isNotBlank()) {
+                    saveQuestionSolution(legacy.id, template.solution)
+                    existingSolutions[legacy.id] = template.solution
+                }
                 existingConcepts.remove(legacy.conceptKey)
                 existingConcepts.add(key)
                 existingRows[legacyIndex] = legacy.copy(
