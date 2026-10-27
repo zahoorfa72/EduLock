@@ -3608,9 +3608,61 @@ private fun EduLockApp(repository: EduLockRepository) {
                             onClick = { openSolarQuiz() }
                         )
                     }
+                    if (child?.kidsModeEnabled == true) {
+                        val setupAccessibilityEnabled = isAccessibilityServiceEnabled(context)
+                        val setupAccessibilityOperational = isAccessibilityServiceOperational(context)
+                        val setupManagedActive = isManagedDeviceProtectionActive(context) &&
+                            context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
+                                .getBoolean("lock_task_policy_applied", false)
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (setupManagedActive) Color(0xFFE3F8EA) else Color(0xFFFFF0D8)
+                            ),
+                            shape = RoundedCornerShape(22.dp)
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                AppUiText("🛡️ Phone protection", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+                                AppUiText(
+                                    when {
+                                        setupManagedActive -> "Device-owner kiosk protection is verified on this phone."
+                                        setupAccessibilityOperational -> "Accessibility guard is running. Full kiosk-level enforcement still needs Device Owner setup."
+                                        setupAccessibilityEnabled -> "Accessibility is enabled, but EduLock has not confirmed a live service heartbeat yet."
+                                        else -> "Not active yet. Enable EduLock in Android Accessibility settings on this child's phone."
+                                    },
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                if (!setupAccessibilityOperational) {
+                                    Button(
+                                        onClick = {
+                                            accessibilitySettingsLauncher.launch(
+                                                Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { AppUiText("Open Accessibility settings") }
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        protectionAccessibilityEnabled = isAccessibilityServiceEnabled(context)
+                                        protectionAccessibilityOperational = isAccessibilityServiceOperational(context)
+                                        protectionDeviceAdminEnabled = isDeviceAdminActive(context)
+                                        protectionManagedEnabled = isManagedDeviceProtectionActive(context)
+                                        notice = when {
+                                            protectionManagedEnabled -> "Device-owner protection was checked on this phone."
+                                            protectionAccessibilityOperational -> "Accessibility is enabled and EduLock's service is responding."
+                                            protectionAccessibilityEnabled -> "Accessibility setting is enabled, but the service heartbeat is not current."
+                                            else -> "Accessibility is disabled. App blocking is not active."
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { AppUiText("Refresh protection status") }
+                            }
+                        }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Column(Modifier.weight(1f)) {
-                            SummaryCard("Minutes earned today", earnedToday.toString(), "Minutes available from completed tasks.")
+                            SummaryCard("Minutes earned today", earnedToday.toString(), "Minutes awarded today. Unspent bank minutes remain in the Reward Bank.")
                         }
                         Column(Modifier.weight(1f)) {
                             SummaryCard("Task streak", "$childStreakDays day${if (childStreakDays == 1) "" else "s"}", "Pass at least one task each day to build your streak.")
@@ -4432,7 +4484,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Button(
                         onClick = {
                             val task = activeTask
-                            if (result?.passed == true && task != null && !task.rewardToBank) {
+                            if ((result?.awardedMinutes ?: 0) > 0 && task != null && !task.rewardToBank) {
                                 execute {
                                     val refreshedChild = childProfile
                                     if (refreshedChild != null) {
@@ -4442,13 +4494,16 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         } catch (_: Exception) { /* keep result available and show the last confirmed balance */ }
                                     }
                                     val targetPackage = task.rewardPackageName
+                                        ?: task.rewardGroupId?.let { groupId ->
+                                            appGroups.firstOrNull { it.id == groupId }?.packageNames?.firstOrNull()
+                                        }
                                     if (!targetPackage.isNullOrBlank()) {
                                         val launchIntent = context.packageManager.getLaunchIntentForPackage(targetPackage)
                                         if (launchIntent != null) {
                                             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                             context.startActivity(launchIntent)
                                         } else {
-                                            notice = "The app is not installed on this phone. Ask your parent to check My apps."
+                                            notice = "The reward was recorded, but the destination app is not installed on this phone."
                                         }
                                     } else {
                                         screen = AppScreen.CHILD_HOME
@@ -4461,8 +4516,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         AppUiText(
-                            if (result?.passed == true && activeTask?.rewardPackageName != null && activeTask?.rewardToBank == false)
-                                "Continue to " + (allowedApps.firstOrNull { it.packageName == activeTask?.rewardPackageName }?.displayName ?: activeTask?.rewardPackageName)
+                            if ((result?.awardedMinutes ?: 0) > 0 && activeTask?.rewardToBank == false &&
+                                (activeTask?.rewardPackageName != null || activeTask?.rewardGroupId != null))
+                                "Continue to " + (
+                                    allowedApps.firstOrNull { it.packageName == activeTask?.rewardPackageName }?.displayName
+                                        ?: activeTask?.rewardPackageName
+                                        ?: appGroups.firstOrNull { it.id == activeTask?.rewardGroupId }?.name
+                                        ?: "approved app"
+                                )
                             else "Back to my learning space"
                         )
                     }
