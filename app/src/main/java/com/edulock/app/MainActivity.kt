@@ -83,10 +83,12 @@ import kotlinx.coroutines.tasks.await
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import java.io.IOException
 import java.time.Instant
 import java.time.LocalDate
 import java.util.Locale
@@ -251,6 +253,8 @@ private enum class AppScreen {
 @Composable
 private fun EduLockApp(repository: EduLockRepository) {
     val context = LocalContext.current
+
+    val scope = rememberCoroutineScope()
     val questionPicturePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedUri ->
         if (selectedUri != null) {
             questionPictureUri = selectedUri
@@ -285,7 +289,6 @@ private fun EduLockApp(repository: EduLockRepository) {
             }
         }
     }
-    val scope = rememberCoroutineScope()
     val devicePreferences = remember { context.getSharedPreferences("edulock_device_mode", Context.MODE_PRIVATE) }
     var deviceMode by remember { mutableStateOf(devicePreferences.getString("mode", "unknown") ?: "unknown") }
     var screen by remember { mutableStateOf(if (deviceMode == "unknown") AppScreen.DEVICE_SETUP else AppScreen.AUTH) }
@@ -379,6 +382,12 @@ private fun EduLockApp(repository: EduLockRepository) {
     var subjectGradeLevel by remember { mutableStateOf("1") }
     var editingSubjectId by remember { mutableStateOf<String?>(null) }
     var questionPrompt by remember { mutableStateOf("") }
+    var questionPictureUri by remember { mutableStateOf<Uri?>(null) }
+    var questionPictureBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var questionPicturePreview by remember { mutableStateOf<Bitmap?>(null) }
+    var questionPictureError by remember { mutableStateOf<String?>(null) }
+    var displayedQuestionImageUrl by remember { mutableStateOf<String?>(null) }
+    var questionImageLoading by remember { mutableStateOf(false) }
     var questionPictureUri by remember { mutableStateOf<Uri?>(null) }
     var questionPictureBytes by remember { mutableStateOf<ByteArray?>(null) }
     var questionPicturePreview by remember { mutableStateOf<Bitmap?>(null) }
