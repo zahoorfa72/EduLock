@@ -289,14 +289,14 @@ private fun EduLockApp(repository: EduLockRepository) {
     var pairingChildName by remember { mutableStateOf("") }
     var pairingCodeExpiry by remember { mutableStateOf(0) }
     var earnedToday by remember { mutableStateOf(0) }
-    var childStreakDays by remember { mutableIntStateOf(0) }
+    var childStreakDays by remember { mutableStateOf(0) }
     var activeTask by remember { mutableStateOf<TaskRow?>(null) }
     var questionIndex by remember { mutableStateOf(0) }
     var expandedFourDQuestionId by remember { mutableStateOf<String?>(null) }
     var answers by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var taskResult by remember { mutableStateOf<TaskResult?>(null) }
     var taskDeadlineAtMillis by remember { mutableStateOf<Long?>(null) }
-    var taskSecondsRemaining by remember { mutableIntStateOf(0) }
+    var taskSecondsRemaining by remember { mutableStateOf(0) }
 
     var childName by remember { mutableStateOf("") }
     var childLanguage by remember { mutableStateOf("en") }
@@ -3862,7 +3862,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         if (task.timeLimitSeconds != null) {
                             SummaryCard(
                                 "Time remaining",
-                                "${taskSecondsRemaining / 60}:${(taskSecondsRemaining % 60).toString().padStart(2, '0')}",
+                                (taskSecondsRemaining / 60).toString() + ":" + ((taskSecondsRemaining % 60).toString().let { if (it.length < 2) "0$it" else it }),
                                 "Answers submit automatically when the countdown reaches zero."
                             )
                         }
