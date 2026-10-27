@@ -16,6 +16,7 @@ import android.widget.TextView
 import android.view.inputmethod.InputMethodManager
 import android.content.IntentFilter
 import android.os.BatteryManager
+import android.os.Build
 import java.util.concurrent.Executors
 import java.time.LocalDate
 import java.time.LocalTime
