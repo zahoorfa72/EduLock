@@ -85,9 +85,27 @@ object ChildDeviceKioskPolicy {
             }
             val actualAllowlist = manager.getLockTaskPackages(admin).toSet()
             val homeExcluded = !kidsModeEnabled || homePackage.isBlank() || homePackage !in actualAllowlist
-            val confirmed = manager.isDeviceOwnerApp(context.packageName) &&
+            val requiredSystemPackages = if (kidsModeEnabled) setOf(
+                "com.android.systemui",
+                "com.android.permissioncontroller",
+                "com.google.android.permissioncontroller",
+                "com.android.phone",
+                "com.android.server.telecom",
+                "com.android.incallui",
+                "com.android.dialer",
+                "com.google.android.dialer",
+                "com.samsung.android.dialer"
+            ).filter { isInstalled(context, it) }.toSet() else emptySet()
+            val allowlistMatches = if (kidsModeEnabled) {
                 context.packageName in actualAllowlist &&
-                homeExcluded &&
+                    allowedPackages.filter { it != homePackage && isInstalled(context, it) }.all { it in actualAllowlist } &&
+                    requiredSystemPackages.all { it in actualAllowlist } &&
+                    homeExcluded
+            } else {
+                context.packageName in actualAllowlist
+            }
+            val confirmed = manager.isDeviceOwnerApp(context.packageName) &&
+                allowlistMatches &&
                 manager.isUninstallBlocked(admin, context.packageName) == kidsModeEnabled &&
                 restrictionsMatch
             context.getSharedPreferences(LOCK_PREFS, Context.MODE_PRIVATE)
