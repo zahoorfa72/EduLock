@@ -4,6 +4,11 @@ begin;
 
 alter table edulock.tasks
   add column if not exists reward_to_bank boolean not null default false;
+alter table edulock.tasks
+  drop constraint if exists tasks_reward_to_bank_no_fixed_target;
+alter table edulock.tasks
+  add constraint tasks_reward_to_bank_no_fixed_target
+  check (not reward_to_bank or (reward_package_name is null and reward_group_id is null));
 
 create table if not exists edulock.child_reward_bank (
   id uuid primary key default gen_random_uuid(),
@@ -308,7 +313,8 @@ begin
   return jsonb_build_object(
     'attempt_id', v_attempt_id, 'score_percent', v_score, 'passed', v_passed,
     'awarded_minutes', v_award, 'daily_used_minutes_after', v_daily_used + v_award,
-    'daily_cap_minutes', v_child.daily_cap_minutes
+    'daily_cap_minutes', v_child.daily_cap_minutes,
+    'reward_to_bank', v_task.reward_to_bank
   );
 end;
 $$;
