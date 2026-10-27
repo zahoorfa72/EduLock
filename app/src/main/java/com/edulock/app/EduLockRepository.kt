@@ -1136,7 +1136,7 @@ class EduLockRepository(context: Context) {
             "child_locations?select=child_id,latitude,longitude,accuracy_meters,recorded_at&child_id=eq.$childId&limit=1"
         )
         val statuses = restArray(
-            "child_device_status?select=child_id,last_seen_at,sharing_enabled,battery_percent&child_id=eq.$childId&limit=1"
+            "child_device_status?select=child_id,last_seen_at,sharing_enabled,battery_percent,device_locked,guard_mode,current_app_package,screen_on,blocked_app_events&child_id=eq.$childId&limit=1"
         )
         val point = locations.optJSONObject(0)
         val status = statuses.optJSONObject(0)
