@@ -228,8 +228,16 @@ class EduLockAccessibilityService : AccessibilityService() {
             manager.addView(panel, params)
             blocker = panel
             blockerDetail = detail
-        } catch (_: Exception) {
-            // If Android rejects an overlay, leave the app usable and retry on the next foreground event.
+            lockPrefs().edit()
+                .putLong(KEY_LAST_BLOCKER_SUCCESS_AT, System.currentTimeMillis())
+                .remove(KEY_LAST_BLOCKER_ERROR)
+                .apply()
+        } catch (error: Exception) {
+            // Never report enforcement as successful if Android rejected the restriction overlay.
+            lockPrefs().edit()
+                .putString(KEY_LAST_BLOCKER_ERROR, error.javaClass.simpleName + ": " + (error.message ?: "Android rejected the blocker"))
+                .putLong(KEY_LAST_BLOCKER_ERROR_AT, System.currentTimeMillis())
+                .apply()
         }
     }
 
@@ -293,6 +301,9 @@ class EduLockAccessibilityService : AccessibilityService() {
     private companion object {
         const val LOCK_PREFS = "edulock_lock_state"
         const val KEY_LAST_SERVICE_TICK_AT = "last_service_tick_at"
+        const val KEY_LAST_BLOCKER_SUCCESS_AT = "last_blocker_success_at"
+        const val KEY_LAST_BLOCKER_ERROR = "last_blocker_error"
+        const val KEY_LAST_BLOCKER_ERROR_AT = "last_blocker_error_at"
         const val KEY_KIDS_MODE_ENABLED = "kids_mode_enabled"
         const val KEY_CHILD_ACTIVE = "child_active"
         const val KEY_ALLOWED_PACKAGES = "allowed_packages"
