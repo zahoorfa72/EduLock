@@ -164,6 +164,12 @@ private fun suggestedSubjectsForCountry(countryCode: String): List<SubjectSugges
     return (common + local + religions).distinctBy { it.title.lowercase(Locale.ROOT) + ":" + it.languageCode }
 }
 
+private fun fourDTemplatesForSubject(subjectTitle: String, languageCode: String): List<ParentLearningTemplate> {
+    val matchingSubject = FourDQuestionBanks.all.filter { it.subjectTitle.equals(subjectTitle.trim(), ignoreCase = true) }
+    val localized = matchingSubject.filter { it.languageCode.equals(languageCode.trim(), ignoreCase = true) }
+    return localized.ifEmpty { matchingSubject.filter { it.languageCode.equals("en", ignoreCase = true) } }
+}
+
 private fun learningTemplateCategories(countryCode: String): List<String> {
     val common = listOf(
         "Mathematics", "Physics", "Chemistry", "Biology", "General Science",
@@ -1041,7 +1047,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 ?: throw IllegalStateException("The child profile could not be found.")
                                             repository.updateChildStudyTrack(childId, code)
                                             if (code != "none") {
-                                                repository.findOrCreateSubject(familyId, religiousSubjectTitle(code), existingChild.preferredLanguage, existingChild.countryCode)
+                                                val religiousSubject = repository.findOrCreateSubject(familyId, religiousSubjectTitle(code), existingChild.preferredLanguage, existingChild.countryCode)
+                                            val starterQuestions = fourDTemplatesForSubject(religiousSubject.title, existingChild.preferredLanguage)
+                                            repository.ensureTemplateQuestions(religiousSubject.id, starterQuestions)
                                             }
                                             children = repository.loadChildren(familyId)
                                             subjects = repository.loadSubjects(familyId, parentCountryCode)
@@ -1615,7 +1623,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 childDailyGameLimit.toIntOrNull() ?: 20, childStudyTrack
                             )
                             if (childStudyTrack != "none") {
-                                repository.findOrCreateSubject(familyId, religiousSubjectTitle(childStudyTrack), childLanguage, childCountryCode)
+                                val religiousSubject = repository.findOrCreateSubject(familyId, religiousSubjectTitle(childStudyTrack), childLanguage, childCountryCode)
+                                val starterQuestions = fourDTemplatesForSubject(religiousSubject.title, childLanguage)
+                                repository.ensureTemplateQuestions(religiousSubject.id, starterQuestions)
                             }
                             children = repository.loadChildren(familyId)
                             selectedChild = created
@@ -1912,12 +1922,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                             }
                             OutlinedButton(onClick = {
                                 execute {
-                                    repository.findOrCreateSubject(familyId, suggestion.title, suggestion.languageCode, parentCountryCode)
+                                    val suggestedSubject = repository.findOrCreateSubject(familyId, suggestion.title, suggestion.languageCode, parentCountryCode)
+                                    val starterQuestions = fourDTemplatesForSubject(suggestedSubject.title, suggestion.languageCode)
+                                    val addedQuestionCount = repository.ensureTemplateQuestions(suggestedSubject.id, starterQuestions)
                                     subjects = repository.loadSubjects(familyId, parentCountryCode)
                                     notice = if (suggestion.studyTrack == null) {
-                                        suggestion.title + " added to your subject list."
+                                        suggestion.title + " added with " + addedQuestionCount + " 4D starter questions."
                                     } else {
-                                        suggestion.title + " added. Select " + studyTrackLabel(suggestion.studyTrack) + " in the child's profile to enable matching religious tasks."
+                                        suggestion.title + " added with " + addedQuestionCount + " starter questions. Select " + studyTrackLabel(suggestion.studyTrack) + " in the child's profile to enable matching religious tasks."
                                     }
                                 }
                             }, enabled = !busy) { AppUiText("＋ Add") }
@@ -2143,12 +2155,17 @@ private fun EduLockApp(repository: EduLockRepository) {
                             val grade = subjectGradeLevel.toIntOrNull() ?: throw IllegalArgumentException("Enter a grade from 0 to 13.")
                             require(grade in 0..13) { "Grade must be between Kindergarten (0) and 13." }
                             val currentSubjectId = editingSubjectId
-                            if (currentSubjectId == null) {
+                            val savedSubject = if (currentSubjectId == null) {
                                 repository.addSubject(familyId, subjectTitle, subjectLanguage, subjectCountryCode, grade)
-                                notice = "Subject saved."
                             } else {
                                 repository.updateSubject(currentSubjectId, subjectTitle, subjectLanguage, subjectCountryCode, grade)
-                                notice = "Subject updated."
+                            }
+                            val starterQuestions = fourDTemplatesForSubject(savedSubject.title, savedSubject.languageCode)
+                            val addedQuestionCount = repository.ensureTemplateQuestions(savedSubject.id, starterQuestions)
+                            notice = if (currentSubjectId == null) {
+                                "Subject saved with " + addedQuestionCount + " 4D starter questions."
+                            } else {
+                                "Subject updated. " + addedQuestionCount + " missing 4D starter questions added."
                             }
                             subjects = repository.loadSubjects(familyId, parentCountryCode)
                             editingSubjectId = null
