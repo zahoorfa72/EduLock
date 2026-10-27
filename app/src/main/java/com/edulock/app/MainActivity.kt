@@ -1452,10 +1452,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                         style = MaterialTheme.typography.bodyMedium
                     )
                     OutlinedButton(
-                        onClick = { solarQuizReturnScreen = AppScreen.LEARNING_TEMPLATES; screen = AppScreen.SOLAR_SYSTEM_QUIZ },
+                        onClick = { selected3DModel = "solar-system"; screen = AppScreen.LEARNING_3D_LAB },
                         enabled = !busy,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("🌌 Play interactive 3D Solar System quiz") }
+                    ) { Text("🌌 Preview all interactive 3D learning models") }
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf("Mathematics", "Physics", "Chemistry", "Biology", "General Science", "English", "Urdu", "Sindhi", "Hindi", "Social Studies", "Computer Skills")
                             .chunked(2).forEach { categories ->
