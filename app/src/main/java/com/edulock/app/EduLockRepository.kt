@@ -93,7 +93,8 @@ data class QuestionRow(
     val questionType: String,
     val options: List<String>,
     val languageCode: String,
-    val conceptKey: String
+    val conceptKey: String,
+    val picturePath: String? = null
 )
 
 data class QuestionTranslation(
@@ -885,7 +886,11 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadQuestions(subjectId: String, limit: Int = 500): List<QuestionRow> {
         requireSession()
-        val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,created_at&subject_id=eq.$subjectId&order=created_at.asc,id.asc&limit=${limit.coerceIn(1, 500)}")
+        val rows = try {
+            restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,picture_path,created_at&subject_id=eq.$subjectId&order=created_at.asc,id.asc&limit=${limit.coerceIn(1, 500)}")
+        } catch (_: IOException) {
+            restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,created_at&subject_id=eq.$subjectId&order=created_at.asc,id.asc&limit=${limit.coerceIn(1, 500)}")
+        }
         return (0 until rows.length()).mapNotNull { i ->
             rows.optJSONObject(i)?.let { row -> row.toQuestionRow() }
         }
@@ -1144,7 +1149,7 @@ class EduLockRepository(context: Context) {
         if (ids.isEmpty()) return fallbackSubjectId?.let { loadQuestions(it, limit) } ?: emptyList()
         val byId = linkedMapOf<String, QuestionRow>()
         ids.chunked(50).forEach { chunk ->
-            val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,created_at&id=in.(" +
+            val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,picture_path,created_at&id=in.(" +
                 chunk.joinToString(",") + ")&limit=50")
             for (i in 0 until rows.length()) {
                 val row = rows.optJSONObject(i) ?: continue
@@ -1840,7 +1845,8 @@ class EduLockRepository(context: Context) {
             questionType = optString("question_type", "short_answer"),
             options = (0 until opts.length()).map { opts.optString(it) },
             languageCode = optString("language_code", "en"),
-            conceptKey = optString("concept_key", "general")
+            conceptKey = optString("concept_key", "general"),
+            picturePath = optString("picture_path").takeIf { it.isNotBlank() && it != "null" }
         )
     }
 
