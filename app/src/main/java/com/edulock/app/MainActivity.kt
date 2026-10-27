@@ -2105,7 +2105,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             questionAnswer = template.answer
                                             questionLanguage = template.languageCode
                                             questionConceptKey = if ((template.conceptKey.startsWith("4d:") || template.conceptKey.startsWith("3d:")))
-                                                template.conceptKey.removePrefix("4d:").removePrefix("3d:").substringAfter(":").substringAfter(":")
+                                                template.conceptKey.removePrefix("4d:").removePrefix("3d:").substringAfter(":")
                                             else template.conceptKey
                                             questionSolution = buildString {
                                                 append(template.solution)
