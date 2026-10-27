@@ -9,6 +9,12 @@ alter table edulock.tasks
 alter table edulock.questions
   add column if not exists picture_path text;
 
+alter table edulock.questions
+  drop constraint if exists questions_question_type_check;
+alter table edulock.questions
+  add constraint questions_question_type_check
+  check (question_type in ('multiple_choice','true_false','short_answer','numeric','matching','picture'));
+
 -- The question images bucket is private. No direct public reads are enabled.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('question-images', 'question-images', false, 5242880, array['image/jpeg','image/png','image/webp'])
