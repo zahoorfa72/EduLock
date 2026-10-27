@@ -1221,6 +1221,19 @@ class EduLockRepository(context: Context) {
         }
     }
 
+    suspend fun loadChildTaskStreak(childId: String): Pair<Int, Int> {
+        requireSession("child")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        return try {
+            val rows = restArray("child_task_streaks?select=consecutive_days,last_passed_day&child_id=eq.$childId&limit=1")
+            val row = rows.optJSONObject(0) ?: return 0 to 0
+            row.optInt("consecutive_days", 0).coerceIn(0, 30) to 0
+        } catch (_: IOException) {
+            // The pre-0033 app remains usable; the streak card simply shows no recorded streak.
+            0 to 0
+        }
+    }
+
     suspend fun loadAllowedApps(childId: String): List<AllowedApp> {
         requireSession()
         val rows = restArray("allowed_apps?select=id,child_id,package_name,display_name,enabled,daily_limit_minutes,weekly_schedule&child_id=eq.$childId&order=display_name.asc")
