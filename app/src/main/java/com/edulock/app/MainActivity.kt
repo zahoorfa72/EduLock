@@ -3129,9 +3129,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                     val kidsModeEnabled = child?.kidsModeEnabled == true
                     val serviceSettingEnabled = isAccessibilityServiceEnabled(context)
                     val serviceOperational = isAccessibilityServiceOperational(context)
+                    val lockStatusPrefs = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
+                    val blockerError = lockStatusPrefs.getString("last_blocker_error", null)
+                    val blockerErrorAt = lockStatusPrefs.getLong("last_blocker_error_at", 0L)
+                    val blockerSuccessAt = lockStatusPrefs.getLong("last_blocker_success_at", 0L)
+                    val blockerFailedRecently = !blockerError.isNullOrBlank() &&
+                        blockerErrorAt > blockerSuccessAt &&
+                        System.currentTimeMillis() - blockerErrorAt < 24L * 60L * 60L * 1000L
                     val managedProtectionActive = isManagedDeviceProtectionActive(context)
-                    val kioskPolicyApplied = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
-                        .getBoolean("lock_task_policy_applied", false)
+                    val kioskPolicyApplied = lockStatusPrefs.getBoolean("lock_task_policy_applied", false)
                     SummaryCard(
                         "App access",
                         if (kidsModeEnabled) "Kids Mode • allowlist" else "Available by default",
@@ -3143,15 +3149,19 @@ private fun EduLockApp(repository: EduLockRepository) {
                     SummaryCard(
                         "App blocking",
                         when {
-                            serviceOperational -> "Active • service responding"
+                            blockerFailedRecently -> "NOT CONFIRMED • blocker error"
+                            serviceOperational -> "Service responding • overlay not recently tested"
                             serviceSettingEnabled -> "Enabled, not confirmed running"
                             else -> "Needs setup"
                         },
                         when {
+                            blockerFailedRecently ->
+                                "Android rejected the last restriction overlay, so app blocking is not reported as successful. Error: " + blockerError
                             serviceOperational && kidsModeEnabled ->
-                                "Android shows EduLock's Accessibility service is running. Kids Mode blocks foreground apps not in the synced allowlist."
+                                "Android confirms the Accessibility service is responding. The last restriction overlay succeeded; Kids Mode checks the synced allowlist."
                             serviceOperational ->
-                                "Android shows EduLock's Accessibility service is running. Individual app blocks, limits and schedules can be enforced."
+                                "Android confirms the Accessibility service is responding. Restrictions are enforced only when Android accepts the blocker overlay."
+
                             serviceSettingEnabled ->
                                 "The Android toggle is on, but EduLock has not confirmed a recent service heartbeat. Refresh status before relying on app blocking."
                             else ->
