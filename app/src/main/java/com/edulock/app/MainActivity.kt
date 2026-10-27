@@ -3142,7 +3142,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         "App access",
                         if (kidsModeEnabled) "Kids Mode • allowlist" else "Available by default",
                         if (kidsModeEnabled)
-                            "Only explicitly enabled apps should open. The launcher/navigation and essential phone/permission components stay available. Other apps are blocked after a successful sync."
+                            "Only explicitly enabled apps should open. In managed kiosk mode, the normal launcher is excluded; calls and required permission/system prompts remain available. Other apps are blocked after the device confirms its rules sync."
                         else
                             "Apps stay available unless a parent disables an app or its configured daily limit is reached."
                     )
@@ -3178,7 +3178,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             },
                             when {
                                 managedProtectionActive && kioskPolicyApplied ->
-                                    "Android confirmed device-owner restrictions and the lock-task allowlist. The launcher stays available, but only allowlisted apps are permitted in kiosk mode."
+                                    "Android confirmed device-owner restrictions and the Lock Task allowlist. Kids Mode excludes the normal launcher, so children stay in EduLock or explicitly allowed apps. System permission prompts and calls remain available."
                                 serviceOperational ->
                                     "Accessibility-based blocking is running, but this phone is not confirmed as device owner. It cannot guarantee protection against force-stop, Clear data or system-level escape."
                                 else ->
