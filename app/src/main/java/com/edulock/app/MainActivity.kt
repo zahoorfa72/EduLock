@@ -3456,6 +3456,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         religiousStudyTrack = learnerForLab?.studyTrack ?: "none",
                         gradeLevel = learnerForLab?.schoolGrade ?: 3,
                         ageYears = learnerForLab?.ageYears ?: 9,
+                        isChildMode = solarQuizReturnScreen == AppScreen.CHILD_HOME,
                         onStartSolarQuiz = {
                             solarQuizReturnScreen = if (solarQuizReturnScreen == AppScreen.CHILD_HOME) AppScreen.CHILD_HOME else AppScreen.LEARNING_3D_LAB
                             screen = AppScreen.SOLAR_SYSTEM_QUIZ
