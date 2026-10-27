@@ -1268,29 +1268,22 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 onClick = { screen = AppScreen.REPORTS; execute { attempts = repository.loadAttempts(); conceptProgress = repository.loadConceptProgress() } }
                             )
                         }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            DashboardIconTile(
-                                icon = "⚙️", title = "App settings", subtitle = "Country, languages, religion, limits and protection",
-                                modifier = Modifier.weight(1f), accent = Color(0xFF4E5D75),
-                                onClick = {
-                                    screen = AppScreen.APP_SETTINGS
-                                    execute {
-                                        val prefs = repository.loadParentLearningSettings(familyId)
-                                        parentCountryCode = prefs.countryCode
-                                        parentLearningLanguageCode = prefs.learningLanguageCode
-                                        parentStudyTrack = prefs.studyTrack
-                                        parentDisplayLanguageCode = prefs.displayLanguageCode
-                                        context.getSharedPreferences("edulock_display_language", Context.MODE_PRIVATE).edit()
-                                            .putString("language", prefs.displayLanguageCode).apply()
-                                    }
+                        DashboardIconTile(
+                            icon = "⚙️", title = "App settings", subtitle = "Country, languages, religion, limits and protection",
+                            accent = Color(0xFF4E5D75),
+                            onClick = {
+                                screen = AppScreen.APP_SETTINGS
+                                execute {
+                                    val prefs = repository.loadParentLearningSettings(familyId)
+                                    parentCountryCode = prefs.countryCode
+                                    parentLearningLanguageCode = prefs.learningLanguageCode
+                                    parentStudyTrack = prefs.studyTrack
+                                    parentDisplayLanguageCode = prefs.displayLanguageCode
+                                    context.getSharedPreferences("edulock_display_language", Context.MODE_PRIVATE).edit()
+                                        .putString("language", prefs.displayLanguageCode).apply()
                                 }
-                            )
-                            DashboardIconTile(
-                                icon = "🛡️", title = "Protection status", subtitle = "Review this device's setup",
-                                modifier = Modifier.weight(1f), accent = Color(0xFF0C948F),
-                                onClick = { refreshProtectionStatus(); screen = AppScreen.PROTECTION_STATUS }
-                            )
-                        }
+                            }
+                        )
                     }
                 }
 
