@@ -68,8 +68,8 @@ select region.country_code, region.curriculum_name, g.grade_level,
          when s.code='arts' then '["An intentional distribution of visual weight","A guarantee that every object is identical","A rule that only one colour may be used"]'::jsonb
          when s.code='astronomy' and g.grade_level<=3 then '["The Sun","The Moon","Jupiter"]'::jsonb
          when s.code='astronomy' and g.grade_level<=6 then '["Mars","Venus","Neptune"]'::jsonb
-         when s.code='astronomy' and g.grade_level<=9 then '["Viewing geometry as the Moon orbits Earth","Earth's shadow every night","Clouds on the Moon"]'::jsonb
-         else '["Orbital radius and gravity","The planet's colour only","The number of moons only"]'::jsonb
+         when s.code='astronomy' and g.grade_level<=9 then '["Viewing geometry as the Moon orbits Earth","Earth''s shadow every night","Clouds on the Moon"]'::jsonb
+         else '["Orbital radius and gravity","The planet''s colour only","The number of moons only"]'::jsonb
        end,
        jsonb_build_object('answer',
          case
