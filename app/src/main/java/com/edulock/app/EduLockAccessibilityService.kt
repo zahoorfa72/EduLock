@@ -274,6 +274,16 @@ class EduLockAccessibilityService : AccessibilityService() {
             "com.android.internal.systemui.navbar.threebutton",
             "com.android.permissioncontroller",
             "com.google.android.permissioncontroller",
+            // Third-party/OEM HOME launchers are not exempt in Kids Mode. In normal
+            // mode, retaining them prevents accidental blocking during app management.
+            "com.android.phone",
+            "com.android.server.telecom",
+            "com.android.incallui",
+            "com.android.dialer",
+            "com.google.android.dialer",
+            "com.samsung.android.dialer"
+        )
+        val safeSystem = core + setOf(
             "com.android.launcher3",
             "com.google.android.apps.nexuslauncher",
             "com.miui.home",
@@ -282,15 +292,9 @@ class EduLockAccessibilityService : AccessibilityService() {
             "com.huawei.android.launcher",
             "com.sec.android.app.launcher",
             "com.sonymobile.home",
-            "com.oneplus.launcher",
-            "com.android.phone",
-            "com.android.server.telecom",
-            "com.android.incallui",
-            "com.android.dialer",
-            "com.google.android.dialer",
-            "com.samsung.android.dialer"
+            "com.oneplus.launcher"
         )
-        return if (kidsModeEnabled) core else core + setOf(
+        return if (kidsModeEnabled) core else safeSystem + setOf(
             "com.android.settings",
             "com.android.packageinstaller",
             "com.google.android.packageinstaller"
