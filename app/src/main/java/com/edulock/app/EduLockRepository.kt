@@ -997,9 +997,21 @@ class EduLockRepository(context: Context) {
             "Choose a different language from the question's original language."
         }
         require(prompt.trim().isNotEmpty()) { "Enter the translated question." }
-        val accepted = acceptedAnswers.map { it.trim().take(1000) }.filter { it.isNotEmpty() }.distinct()
+        var accepted = acceptedAnswers.map { it.trim().take(1000) }.filter { it.isNotEmpty() }.distinct()
         require(accepted.isNotEmpty() && accepted.size <= 30) { "Enter between 1 and 30 accepted answers, one per line." }
-        val cleanOptions = options.map { it.trim().take(500) }.filter { it.isNotEmpty() }
+        var cleanOptions = options.map { it.trim().take(500) }.filter { it.isNotEmpty() }
+        if (question.questionType == "matching") {
+            val pairs = options.mapNotNull { raw ->
+                val parts = raw.split("|", limit = 2)
+                if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank())
+                    parts[0].trim().take(250) to parts[1].trim().take(250)
+                else null
+            }.distinctBy { it.first }
+            require(pairs.size >= 2 && pairs.size == options.size) { "Add at least two translated matching pairs in left|right format." }
+            require(pairs.map { it.second }.distinct().size == pairs.size) { "Translated right-side matches must be unique." }
+            cleanOptions = pairs.map { "L|" + it.first } + pairs.map { it.second }.shuffled().map { "R|" + it }
+            accepted = listOf(pairs.joinToString(";") { (left, right) -> "$left=$right" })
+        }
         if (question.questionType == "multiple_choice" || question.questionType == "true_false") {
             require(cleanOptions.size >= 2) { "Add at least two translated answer options." }
             require(accepted.any { answer -> cleanOptions.any { it.equals(answer, ignoreCase = true) } }) {
