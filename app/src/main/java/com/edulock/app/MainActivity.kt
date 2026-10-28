@@ -804,6 +804,33 @@ private fun EduLockApp(repository: EduLockRepository) {
         }
     }
 
+    fun leaveChildTask() {
+        val task = activeTask
+        if (task != null && screen == AppScreen.PLAY_TASK) {
+            val now = System.currentTimeMillis()
+            val pausedTaskRemaining = taskDeadlineAtMillis?.let {
+                (((it - now + 999L) / 1000L).toInt()).coerceAtLeast(0)
+            }
+            val currentQuestionId = questions.getOrNull(questionIndex)?.id
+            val pausedQuestionRemaining = if (questionDeadlineAtMillis != null &&
+                currentQuestionId != null && currentQuestionId == questionDeadlineQuestionId &&
+                currentQuestionId !in expiredQuestionIds) {
+                (((questionDeadlineAtMillis!! - now + 999L) / 1000L).toInt()).coerceAtLeast(0)
+            } else null
+            saveTaskDraft(
+                task.id, answers, questionIndex, expiredQuestionIds,
+                null, null, questionDeadlineQuestionId,
+                pausedTaskRemaining, pausedQuestionRemaining
+            )
+            taskDeadlineAtMillis = null
+            questionDeadlineAtMillis = null
+            taskSecondsRemaining = pausedTaskRemaining ?: 0
+            questionSecondsRemaining = pausedQuestionRemaining ?: 0
+        }
+        screen = AppScreen.CHILD_HOME
+        notice = "Progress saved. Open Learning again whenever you are ready to continue."
+    }
+
 
     val questionPicturePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedUri ->
         if (selectedUri != null) {
@@ -1370,29 +1397,33 @@ private fun EduLockApp(repository: EduLockRepository) {
         }
     }
     BackHandler(enabled = screen != AppScreen.AUTH) {
-        screen = when (screen) {
-            AppScreen.DEVICE_SETUP -> AppScreen.DEVICE_SETUP
-            AppScreen.VERIFY_OTP -> AppScreen.AUTH
-            // Don't let Android Back from child pairing return to parent sign-in/role selection.
-            AppScreen.PAIR_CHILD -> AppScreen.PAIR_CHILD
-            // Android Back must not send a signed-in parent to the sign-in screen.
-            AppScreen.PARENT_HOME -> AppScreen.PARENT_HOME
-            AppScreen.AUTH -> AppScreen.AUTH
-            // Keep a child device out of the parent login/dashboard route.
-            AppScreen.CHILD_HOME -> AppScreen.CHILD_HOME
-            AppScreen.CHILDREN, AppScreen.SUBJECTS, AppScreen.ASSIGN_TASK, AppScreen.REPORTS, AppScreen.PROTECTION_STATUS, AppScreen.CHILD_LOCATIONS -> AppScreen.PARENT_HOME
-            AppScreen.ADD_CHILD, AppScreen.APP_USAGE_REPORT, AppScreen.ALLOWED_APPS, AppScreen.CURRICULUM_LIBRARY -> AppScreen.CHILDREN
-            AppScreen.ADD_SUBJECT, AppScreen.QUESTIONS -> AppScreen.SUBJECTS
-            AppScreen.LEARNING_TEMPLATES -> if (selectedSubject != null) AppScreen.QUESTIONS else AppScreen.PARENT_HOME
-            AppScreen.ADD_QUESTION, AppScreen.ADD_TRANSLATION -> AppScreen.QUESTIONS
-            AppScreen.PLAY_TASK, AppScreen.TASK_RESULT -> AppScreen.CHILD_HOME
-            AppScreen.SOLAR_SYSTEM_QUIZ -> solarQuizReturnScreen
-            AppScreen.KIDS_GAMES -> AppScreen.CHILD_HOME
-            AppScreen.APP_SETTINGS -> AppScreen.PARENT_HOME
-            AppScreen.LEARNING_3D_LAB -> if (solarQuizReturnScreen == AppScreen.CHILD_HOME) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME
-            AppScreen.DRAWING_STUDIO -> if (childProfile != null) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME
+        if (screen == AppScreen.PLAY_TASK) {
+            leaveChildTask()
+        } else {
+            screen = when (screen) {
+                AppScreen.DEVICE_SETUP -> AppScreen.DEVICE_SETUP
+                AppScreen.VERIFY_OTP -> AppScreen.AUTH
+                // Don't let Android Back from child pairing return to parent sign-in/role selection.
+                AppScreen.PAIR_CHILD -> AppScreen.PAIR_CHILD
+                // Android Back must not send a signed-in parent to the sign-in screen.
+                AppScreen.PARENT_HOME -> AppScreen.PARENT_HOME
+                AppScreen.AUTH -> AppScreen.AUTH
+                // Keep a child device out of the parent login/dashboard route.
+                AppScreen.CHILD_HOME -> AppScreen.CHILD_HOME
+                AppScreen.CHILDREN, AppScreen.SUBJECTS, AppScreen.ASSIGN_TASK, AppScreen.REPORTS, AppScreen.PROTECTION_STATUS, AppScreen.CHILD_LOCATIONS -> AppScreen.PARENT_HOME
+                AppScreen.ADD_CHILD, AppScreen.APP_USAGE_REPORT, AppScreen.ALLOWED_APPS, AppScreen.CURRICULUM_LIBRARY -> AppScreen.CHILDREN
+                AppScreen.ADD_SUBJECT, AppScreen.QUESTIONS -> AppScreen.SUBJECTS
+                AppScreen.LEARNING_TEMPLATES -> if (selectedSubject != null) AppScreen.QUESTIONS else AppScreen.PARENT_HOME
+                AppScreen.ADD_QUESTION, AppScreen.ADD_TRANSLATION -> AppScreen.QUESTIONS
+                AppScreen.PLAY_TASK, AppScreen.TASK_RESULT -> AppScreen.CHILD_HOME
+                AppScreen.SOLAR_SYSTEM_QUIZ -> solarQuizReturnScreen
+                AppScreen.KIDS_GAMES -> AppScreen.CHILD_HOME
+                AppScreen.APP_SETTINGS -> AppScreen.PARENT_HOME
+                AppScreen.LEARNING_3D_LAB -> if (solarQuizReturnScreen == AppScreen.CHILD_HOME) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME
+                AppScreen.DRAWING_STUDIO -> if (childProfile != null) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME
+            }
+            notice = null
         }
-        notice = null
     }
 
     LaunchedEffect(screen, childProfile?.id) {
@@ -4430,7 +4461,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     AppUiText("Privacy: EduLock records app package names and total foreground time for approved apps only. It does not collect screen contents, keystrokes, messages, or browser history.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
-                AppScreen.PLAY_TASK -> ScreenFrame(activeTask?.title ?: "Task", onBack = { screen = AppScreen.CHILD_HOME }, notice = notice, busy = busy) {
+                AppScreen.PLAY_TASK -> ScreenFrame(activeTask?.title ?: "Task", onBack = { leaveChildTask() }, notice = notice, busy = busy) {
                     val task = activeTask
                     val question = questions.getOrNull(questionIndex)
                     if (task != null && question != null) {
@@ -4624,14 +4655,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             AppUiText(if (busy) "Submitting answers…" else "Submit answers (" + answers.count { it.value.isNotBlank() } + "/" + questions.size + ")")
                         }
                         OutlinedButton(
-                            onClick = {
-                                saveTaskDraft(
-                                    task.id, answers, questionIndex, expiredQuestionIds,
-                                    taskDeadlineAtMillis, questionDeadlineAtMillis, questionDeadlineQuestionId
-                                )
-                                screen = AppScreen.CHILD_HOME
-                                notice = "Progress saved. Open Learning again whenever you are ready to continue this task."
-                            },
+                            onClick = { leaveChildTask() },
                             enabled = !busy,
                             modifier = Modifier.fillMaxWidth()
                         ) { AppUiText("Save progress & leave task") }
