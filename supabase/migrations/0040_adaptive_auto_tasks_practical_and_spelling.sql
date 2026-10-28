@@ -175,6 +175,80 @@ grant select on edulock.practical_task_submissions, edulock.child_concept_progre
 grant select, insert, update, delete on edulock.child_learning_preferences to authenticated;
 
 -- Ensure a matching index is available for adaptive question selection.
+-- Trusted practical completion and adaptive-selection helper functions.
+create or replace function edulock.submit_practical_completion(
+  p_user_id uuid, p_practical_task_id uuid, p_completion_note text default '', p_evidence_path text default null
+) returns jsonb
+language plpgsql security definer set search_path = ''
+as $
+declare
+  v_child edulock.children%rowtype;
+  v_task edulock.practical_tasks%rowtype;
+  v_submission edulock.practical_task_submissions%rowtype;
+begin
+  select * into v_child from edulock.children c where c.child_user_id = p_user_id;
+  if not found then raise exception 'No linked child profile was found'; end if;
+  select * into v_task from edulock.practical_tasks p
+    where p.id = p_practical_task_id and p.child_id = v_child.id and p.active = true;
+  if not found then raise exception 'This practical task is not available to this child'; end if;
+  if char_length(coalesce(p_completion_note,'')) > 2000 then raise exception 'Completion note is too long'; end if;
+  if char_length(coalesce(p_evidence_path,'')) > 500 then raise exception 'Invalid evidence path'; end if;
+  insert into edulock.practical_task_submissions(
+    practical_task_id, child_id, completion_note, evidence_path, status
+  ) values (
+    v_task.id, v_child.id, coalesce(btrim(p_completion_note),''), p_evidence_path, 'submitted'
+  ) returning * into v_submission;
+  return jsonb_build_object(
+    'submission_id', v_submission.id,
+    'status', v_submission.status,
+    'submitted_at', v_submission.submitted_at
+  );
+end;
+$;
+revoke all on function edulock.submit_practical_completion(uuid, uuid, text, text) from public, anon, authenticated;
+grant execute on function edulock.submit_practical_completion(uuid, uuid, text, text) to service_role;
+
+-- Select eligible saved written questions, preferring weak concepts and due review items.
+-- This function returns IDs only; the caller must continue applying grade/age/subject filters.
+create or replace function edulock.adaptive_question_candidates(
+  p_child_id uuid, p_subject_ids uuid[], p_grade integer, p_age integer, p_limit integer default 20
+) returns table(question_id uuid, concept_key text, priority numeric, reason text)
+language sql stable security definer set search_path = ''
+as $
+  with eligible as (
+    select q.id, q.concept_key, q.subject_id, q.created_at, q.difficulty_level,
+      coalesce(cp.focus_score, 0)::numeric as focus_score,
+      cp.next_review_at,
+      cp.last_question_id
+    from edulock.questions q
+    left join edulock.child_concept_progress cp
+      on cp.child_id = p_child_id and cp.concept_key = coalesce(nullif(q.concept_key,''),'general')
+    where q.subject_id = any(p_subject_ids)
+      and q.learning_mode = 'written'
+      and q.grade_level = p_grade
+      and p_age between q.age_min and q.age_max
+      and (cp.next_review_at is null or cp.next_review_at <= now() or cp.focus_score > 0)
+  )
+  select e.id, coalesce(nullif(e.concept_key,''),'general'),
+    (e.focus_score * 10)
+      + case when e.next_review_at is not null and e.next_review_at <= now() then 5 else 0 end
+      + case when e.last_question_id = e.id then 1 else 0 end
+      + (e.difficulty_level::numeric * 0.1),
+    case
+      when e.focus_score > 0 then 'focus_on_weak_concept'
+      when e.next_review_at is not null and e.next_review_at <= now() then 'spaced_review'
+      else 'new_saved_question'
+    end
+  from eligible e
+  order by
+    (e.focus_score * 10)
+      + case when e.next_review_at is not null and e.next_review_at <= now() then 5 else 0 end desc,
+    e.created_at desc, e.id
+  limit greatest(1, least(coalesce(p_limit,20),100));
+$;
+revoke all on function edulock.adaptive_question_candidates(uuid, uuid[], integer, integer, integer) from public, anon, authenticated;
+grant execute on function edulock.adaptive_question_candidates(uuid, uuid[], integer, integer, integer) to service_role;
+
 create index if not exists questions_subject_mode_difficulty_idx
   on edulock.questions(subject_id, learning_mode, difficulty_level, created_at);
 
