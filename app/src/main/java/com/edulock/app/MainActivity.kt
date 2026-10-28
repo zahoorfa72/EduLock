@@ -5074,8 +5074,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             val earnedMs = lockPrefs.getStringSet("app_earned_minutes", emptySet()).orEmpty()
                                 .firstOrNull { it.startsWith(app.packageName + "=") }?.substringAfter("=")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
                             val remaining = if (app.dailyLimitMinutes <= 0) Int.MAX_VALUE else (app.dailyLimitMinutes + earnedMs - (usedMs / 60_000L).toInt()).coerceAtLeast(0)
-                            val hasTask = tasks.any { it.rewardToBank } ||
-                                tasks.any { it.rewardPackageName == app.packageName } ||
+                            val hasTask = tasks.any { it.rewardPackageName == app.packageName } ||
                                 tasks.any { task -> !task.rewardGroupId.isNullOrBlank() && appGroups.any { it.id == task.rewardGroupId && app.packageName in it.packageNames } }
                             val status = if (app.dailyLimitMinutes <= 0) "No app-specific daily cap" else if (remaining <= 0) "Time's up • answer to unlock" else "$remaining min left"
                             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
@@ -5093,7 +5092,6 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             } else if (remaining <= 0) {
                                                 val task = tasks.firstOrNull { it.rewardPackageName == app.packageName }
                                                     ?: tasks.firstOrNull { t -> !t.rewardGroupId.isNullOrBlank() && appGroups.any { it.id == t.rewardGroupId && app.packageName in it.packageNames } }
-                                                    ?: tasks.firstOrNull { it.rewardToBank }
                                                 if (task != null) {
                                                     openChildTask(task)
                                                 } else {
