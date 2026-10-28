@@ -232,7 +232,6 @@ as $
   select e.id, coalesce(nullif(e.concept_key,''),'general'),
     (e.focus_score * 10)
       + case when e.next_review_at is not null and e.next_review_at <= now() then 5 else 0 end
-      + case when e.last_question_id = e.id then 1 else 0 end
       + (e.difficulty_level::numeric * 0.1),
     case
       when e.focus_score > 0 then 'focus_on_weak_concept'
