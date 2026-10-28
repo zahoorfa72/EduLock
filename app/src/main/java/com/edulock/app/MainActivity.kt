@@ -699,6 +699,12 @@ private fun EduLockApp(repository: EduLockRepository) {
     var physicalChallenges by remember { mutableStateOf(emptyList<PhysicalChallenge>()) }
     var practicalTasks by remember { mutableStateOf(emptyList<PracticalTaskRow>()) }
     var practicalCompletionNotes by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var practicalTaskTitle by remember { mutableStateOf("") }
+    var practicalTaskInstructions by remember { mutableStateOf("") }
+    var practicalTaskMaterials by remember { mutableStateOf("") }
+    var practicalTaskSafety by remember { mutableStateOf("") }
+    var practicalTaskKind by remember { mutableStateOf("practical") }
+    var practicalTaskMinutes by remember { mutableStateOf("10") }
     var writtenAnswerFeedback by remember { mutableStateOf(emptyList<WrittenAnswerFeedback>()) }
     var challengeSubmissions by remember { mutableStateOf(emptyList<ChallengeSubmission>()) }
     var challengeVideoPreviewFiles by remember { mutableStateOf<Map<String, File>>(emptyMap()) }
@@ -5238,17 +5244,128 @@ private fun EduLockApp(repository: EduLockRepository) {
                 }
 
                 AppScreen.PRACTICAL_TASKS -> ScreenFrame(
-                    "Practical learning • separate from written tasks",
-                    onBack = { screen = AppScreen.CHILD_HOME },
+                    if (session?.accountRole == "parent") "Manage practical learning tasks" else "Practical learning • separate from written tasks",
+                    onBack = { screen = if (session?.accountRole == "parent") AppScreen.PARENT_HOME else AppScreen.CHILD_HOME },
                     notice = notice,
                     busy = busy
                 ) {
-                    AppUiText(
-                        "Try a hands-on activity. Follow the safety notes and ask a parent for help when needed.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    val parentViewing = session?.accountRole == "parent"
+                    val targetChild = selectedChild ?: children.firstOrNull()
+                    if (parentViewing) {
+                        AppUiText("Save hands-on, physical, life-skill or creative tasks here. These activities stay separate from written questions.")
+                        AppUiText("Child profile", fontWeight = FontWeight.SemiBold)
+                        children.forEach { child ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(
+                                    selected = targetChild?.id == child.id,
+                                    onClick = {
+                                        selectedChild = child
+                                        execute { practicalTasks = repository.loadPracticalTasksForParent(familyId, child.id) }
+                                    }
+                                )
+                                AppUiText(child.displayName + " • Grade " + child.schoolGrade)
+                            }
+                        }
+                        OutlinedTextField(
+                            value = practicalTaskTitle,
+                            onValueChange = { practicalTaskTitle = it.take(160) },
+                            label = { AppUiText("Activity title") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = practicalTaskInstructions,
+                            onValueChange = { practicalTaskInstructions = it.take(5000) },
+                            label = { AppUiText("Steps / instructions") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 3
+                        )
+                        OutlinedTextField(
+                            value = practicalTaskMaterials,
+                            onValueChange = { practicalTaskMaterials = it.take(1000) },
+                            label = { AppUiText("Materials (comma-separated)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = practicalTaskSafety,
+                            onValueChange = { practicalTaskSafety = it.take(1000) },
+                            label = { AppUiText("Safety notes (required for physical tasks)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Column(Modifier.weight(1f)) {
+                                AppUiText("Activity type")
+                                listOf("practical","physical","life_skill","creative").forEach { kind ->
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        RadioButton(selected = practicalTaskKind == kind, onClick = { practicalTaskKind = kind })
+                                        AppUiText(kind.replace('_',' ').replaceFirstChar { it.uppercase() })
+                                    }
+                                }
+                            }
+                            Column(Modifier.weight(1f)) {
+                                OutlinedTextField(
+                                    value = practicalTaskMinutes,
+                                    onValueChange = { practicalTaskMinutes = it.filter(Char::isDigit).take(3) },
+                                    label = { AppUiText("Minutes") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                AppUiText("Ages 3–19 • choose age fit per child")
+                            }
+                        }
+                        Button(
+                            onClick = {
+                                execute {
+                                    val child = targetChild ?: throw IllegalStateException("Add a child profile first.")
+                                    val minutes = practicalTaskMinutes.toIntOrNull()?.coerceIn(1,180)
+                                        ?: throw IllegalArgumentException("Enter a duration from 1 to 180 minutes.")
+                                    if (practicalTaskKind == "physical" && practicalTaskSafety.isBlank()) {
+                                        throw IllegalArgumentException("Add safety notes for physical activities.")
+                                    }
+                                    val saved = repository.createPracticalTask(
+                                        familyId = familyId,
+                                        childId = child.id,
+                                        title = practicalTaskTitle,
+                                        instructions = practicalTaskInstructions,
+                                        materialsJson = if (practicalTaskMaterials.isBlank()) "[]" else
+                                            org.json.JSONArray(practicalTaskMaterials.split(',').map { it.trim() }.filter { it.isNotBlank() }).toString(),
+                                        safetyNotes = practicalTaskSafety,
+                                        activityKind = practicalTaskKind,
+                                        ageMin = child.ageYears.coerceIn(3,19),
+                                        ageMax = child.ageYears.coerceIn(3,19),
+                                        expectedMinutes = minutes
+                                    )
+                                    practicalTasks = listOf(saved) + practicalTasks.filterNot { it.id == saved.id }
+                                    practicalTaskTitle = ""
+                                    practicalTaskInstructions = ""
+                                    practicalTaskMaterials = ""
+                                    practicalTaskSafety = ""
+                                    notice = "Practical task saved to " + child.displayName + "'s profile."
+                                }
+                            },
+                            enabled = !busy && targetChild != null,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { AppUiText("Save practical task") }
+                        OutlinedButton(
+                            onClick = {
+                                execute {
+                                    val child = targetChild ?: throw IllegalStateException("Select a child first.")
+                                    practicalTasks = repository.loadPracticalTasksForParent(familyId, child.id)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { AppUiText("Refresh saved practical tasks") }
+                    } else {
+                        AppUiText(
+                            "Try a hands-on activity. Follow the safety notes and ask a parent for help when needed.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                     if (practicalTasks.isEmpty()) {
-                        SummaryCard("No practical tasks yet", "🧩", "Ask your parent to save a practical activity for your profile.")
+                        SummaryCard(
+                            if (parentViewing) "No saved activities yet" else "No practical tasks yet",
+                            "🧩",
+                            if (parentViewing) "Create and save a practical activity above." else "Ask your parent to save a practical activity for your profile."
+                        )
                     } else {
                         practicalTasks.forEach { practical ->
                             Card(
@@ -5267,29 +5384,31 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         AppUiText("Safety: " + practical.safetyNotes, color = MaterialTheme.colorScheme.error)
                                     }
                                     AppUiText("About ${practical.expectedMinutes} minutes • Ages ${practical.ageMin}–${practical.ageMax}")
-                                    OutlinedTextField(
-                                        value = practicalCompletionNotes[practical.id].orEmpty(),
-                                        onValueChange = { value ->
-                                            practicalCompletionNotes = practicalCompletionNotes + (practical.id to value.take(2000))
-                                        },
-                                        label = { AppUiText("What did you do? (optional)") },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        minLines = 2
-                                    )
-                                    Button(
-                                        onClick = {
-                                            execute {
-                                                repository.submitPracticalTask(
-                                                    practical.id,
-                                                    practicalCompletionNotes[practical.id].orEmpty()
-                                                )
-                                                practicalCompletionNotes = practicalCompletionNotes - practical.id
-                                                notice = "Practical task submitted for parent review."
-                                            }
-                                        },
-                                        enabled = !busy,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) { AppUiText("Done • send to parent") }
+                                    if (!parentViewing) {
+                                        OutlinedTextField(
+                                            value = practicalCompletionNotes[practical.id].orEmpty(),
+                                            onValueChange = { value ->
+                                                practicalCompletionNotes = practicalCompletionNotes + (practical.id to value.take(2000))
+                                            },
+                                            label = { AppUiText("What did you do? (optional)") },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            minLines = 2
+                                        )
+                                        Button(
+                                            onClick = {
+                                                execute {
+                                                    repository.submitPracticalTask(
+                                                        practical.id,
+                                                        practicalCompletionNotes[practical.id].orEmpty()
+                                                    )
+                                                    practicalCompletionNotes = practicalCompletionNotes - practical.id
+                                                    notice = "Practical task submitted for parent review."
+                                                }
+                                            },
+                                            enabled = !busy,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) { AppUiText("Done • send to parent") }
+                                    }
                                 }
                             }
                         }
