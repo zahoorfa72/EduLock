@@ -939,6 +939,65 @@ class EduLockRepository(context: Context) {
         return questionId
     }
 
+    suspend fun updateQuestion(
+        question: QuestionRow, prompt: String, optionLines: List<String>, answer: String,
+        languageCode: String, conceptKey: String, solution: String
+    ) {
+        requireSession("parent")
+        require(question.id.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid question." }
+        require(prompt.trim().isNotEmpty()) { "Enter the question." }
+        require(languageCode.matches(Regex("[A-Za-z][A-Za-z0-9-]{1,15}"))) { "Use a language code such as en, ur or sd." }
+        require(conceptKey.trim().isNotEmpty() && conceptKey.trim().length <= 160) { "Enter a concept tag of 1–160 characters." }
+        require(answer.trim().isNotEmpty() || question.questionType == "matching") { "Enter the correct answer." }
+
+        var storedOptions = optionLines.map { it.trim().take(500) }.filter { it.isNotEmpty() }
+        var storedAnswer = answer.trim().take(1000)
+        when (question.questionType) {
+            "multiple_choice" -> {
+                require(storedOptions.size >= 2) { "Add at least two answer options." }
+                require(storedOptions.any { it.equals(storedAnswer, ignoreCase = true) }) {
+                    "The correct answer must match one of the answer options."
+                }
+            }
+            "true_false" -> require(storedAnswer.equals("true", true) || storedAnswer.equals("false", true)) {
+                "For true/false questions, enter true or false as the correct answer."
+            }
+            "matching" -> {
+                val pairs = optionLines.mapNotNull { raw ->
+                    val parts = raw.split("|", limit = 2)
+                    if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank())
+                        parts[0].trim().take(250) to parts[1].trim().take(250)
+                    else null
+                }.distinctBy { it.first }
+                require(pairs.size >= 2 && pairs.size == optionLines.size) {
+                    "Add at least two matching pairs, one per line in left item|right item format."
+                }
+                require(pairs.map { it.second }.distinct().size == pairs.size) { "Each right-side match must be unique." }
+                storedOptions = pairs.map { "L|" + it.first } + pairs.map { it.second }.shuffled().map { "R|" + it }
+                storedAnswer = pairs.joinToString(";") { it.first + "=" + it.second }.take(1000)
+            }
+            "picture" -> require(answer.isNotBlank()) { "Enter the correct answer for this picture question." }
+            "short_answer", "numeric" -> Unit
+            else -> throw IllegalArgumentException("Unsupported question type.")
+        }
+
+        restArray(
+            "questions?id=eq." + question.id, "PATCH",
+            JSONObject()
+                .put("prompt", prompt.trim().take(10_000))
+                .put("question_type", question.questionType)
+                .put("options", JSONArray(storedOptions))
+                .put("answer_key", JSONObject().put("answer", storedAnswer))
+                .put("language_code", languageCode.trim().lowercase())
+                .put("concept_key", conceptKey.trim().replace(Regex("\\s+"), " ").take(160))
+        )
+        if (solution.isBlank()) {
+            restArray("question_solutions?question_id=eq." + question.id, "DELETE")
+        } else {
+            saveQuestionSolution(question.id, solution)
+        }
+    }
+
     suspend fun uploadQuestionImage(familyId: String, questionId: String, jpegBytes: ByteArray): String {
         val session = requireSession("parent")
         require(familyId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid family." }
