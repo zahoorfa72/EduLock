@@ -444,6 +444,8 @@ private fun EduLockApp(repository: EduLockRepository) {
     var groupRewardSearchQuery by remember { mutableStateOf("") }
     var settingsSearchQuery by remember { mutableStateOf("") }
     var childSecurityAppSearchQuery by remember { mutableStateOf("") }
+    var templateSearchQuery by remember { mutableStateOf("") }
+    var curriculumQuestionSearchQuery by remember { mutableStateOf("") }
     var selectedChild by remember { mutableStateOf<ChildProfile?>(null) }
     var childSecurityApps by remember { mutableStateOf(emptyList<AllowedApp>()) }
     var childEmergencyEnabled by remember { mutableStateOf(false) }
@@ -2530,9 +2532,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                             "Country" to "Curriculum country and regional question suggestions",
                             "Learning language" to "Language used for learning content",
                             "App language" to "Language used by the app interface",
-                            "Child profiles" to "Child profiles, pairing codes, delink, questions and rewards",
-                            "App limits" to "Allowed apps, blocked apps and daily screen-time limits",
-                            "Emergency access" to "Parent-created emergency access and strict daily limits",
+                            "Child profiles" to "Child profiles, country, grade, language, daily reward cap, game limit, Kids Mode, pairing codes and delink",
+                            "App limits" to "Allowed apps, blocked apps, daily screen-time limits and weekly schedules",
+                            "Emergency & logout codes" to "Parent-generated one-time logout PIN, no time expiry, emergency access and strict daily limits",
+                            "Question rewards" to "Question reward minutes, concept group bonuses and learning tasks",
                             "Location & alerts" to "Child location sharing and family alerts",
                             "Device protection" to "Accessibility and managed-device protection",
                             "Notifications" to "Android notification permission",
@@ -2550,9 +2553,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         "Country" -> { countryPickerTarget = "parent"; countrySearch = ""; countryPickerOpen = true }
                                         "Learning language" -> { languagePickerTarget = "parent-learning"; languageSearch = ""; languagePickerOpen = true }
                                         "App language" -> { languagePickerTarget = "display"; languageSearch = ""; languagePickerOpen = true }
-                                        "Child profiles", "App limits", "Emergency access" -> {
+                                        "Child profiles", "App limits", "Emergency access", "Emergency & logout codes" -> {
                                             screen = AppScreen.CHILDREN
                                             execute { children = repository.loadChildren(familyId) }
+                                        }
+                                        "Question rewards" -> {
+                                            screen = AppScreen.SUBJECTS
+                                            execute { subjects = repository.loadSubjects(familyId, parentCountryCode) }
                                         }
                                         "Location & alerts" -> {
                                             screen = AppScreen.CHILD_LOCATIONS
@@ -3252,6 +3259,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         curriculumSubjectCode, curriculumLanguageCode
                                     )
                                     curriculumSearchResult = result
+                                    curriculumQuestionSearchQuery = ""
                                     curriculumSelectedIds = result.questions.map { it.id }.toSet()
                                     notice = if (result.questions.isEmpty())
                                         "No questions match this grade and age yet. Try another subject or grade."
@@ -3288,7 +3296,50 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     }
                                 }
                             }
-                            result.questions.forEach { item ->
+                            OutlinedTextField(
+                                value = curriculumQuestionSearchQuery,
+                                onValueChange = { curriculumQuestionSearchQuery = it.take(200) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                label = { AppUiText("Search curriculum questions") },
+                                placeholder = { AppUiText("Find by question, topic, language or source") }
+                            )
+                            val visibleCurriculumQuestions = result.questions.filter { item ->
+                                curriculumQuestionSearchQuery.isBlank() ||
+                                    item.prompt.contains(curriculumQuestionSearchQuery, ignoreCase = true) ||
+                                    item.topic.contains(curriculumQuestionSearchQuery, ignoreCase = true) ||
+                                    item.subjectName.contains(curriculumQuestionSearchQuery, ignoreCase = true) ||
+                                    item.languageCode.contains(curriculumQuestionSearchQuery, ignoreCase = true) ||
+                                    item.curriculumName.contains(curriculumQuestionSearchQuery, ignoreCase = true) ||
+                                    item.options.any { option -> option.contains(curriculumQuestionSearchQuery, ignoreCase = true) }
+                            }
+                            if (visibleCurriculumQuestions.isEmpty()) {
+                                AppUiText("No curriculum questions match '${curriculumQuestionSearchQuery}'.")
+                            }
+                            val visibleCurriculumQuestionIds = visibleCurriculumQuestions.map { it.id }.toSet()
+                            val allVisibleQuestionsSelected = visibleCurriculumQuestionIds.isNotEmpty() &&
+                                visibleCurriculumQuestionIds.all { it in curriculumSelectedIds }
+                            if (visibleCurriculumQuestions.isNotEmpty()) {
+                                OutlinedButton(
+                                    onClick = {
+                                        curriculumSelectedIds = if (allVisibleQuestionsSelected) {
+                                            curriculumSelectedIds - visibleCurriculumQuestionIds
+                                        } else {
+                                            curriculumSelectedIds + visibleCurriculumQuestionIds
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    AppUiText(
+                                        if (allVisibleQuestionsSelected) {
+                                            if (curriculumQuestionSearchQuery.isBlank()) "Clear selection" else "Clear matching selection"
+                                        } else {
+                                            if (curriculumQuestionSearchQuery.isBlank()) "Select all questions" else "Select matching questions"
+                                        }
+                                    )
+                                }
+                            }
+                            visibleCurriculumQuestions.forEach { item ->
                                 val chosen = item.id in curriculumSelectedIds
                                 Card(
                                     modifier = Modifier.fillMaxWidth().clickable {
@@ -3596,6 +3647,26 @@ private fun EduLockApp(repository: EduLockRepository) {
                         languageTemplates.isNotEmpty() -> languageTemplates
                         else -> countryTemplates.filter { it.languageCode.equals("en", ignoreCase = true) }
                     }
+                    OutlinedTextField(
+                        value = templateSearchQuery,
+                        onValueChange = { templateSearchQuery = it.take(200) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { AppUiText("Search learning templates") },
+                        placeholder = { AppUiText("Find by title, subject, question or concept") }
+                    )
+                    val searchableTemplates = filteredTemplates.filter { template ->
+                        templateSearchQuery.isBlank() ||
+                            template.title.contains(templateSearchQuery, ignoreCase = true) ||
+                            template.subjectTitle.contains(templateSearchQuery, ignoreCase = true) ||
+                            template.prompt.contains(templateSearchQuery, ignoreCase = true) ||
+                            template.conceptKey.contains(templateSearchQuery, ignoreCase = true) ||
+                            template.questionType.contains(templateSearchQuery, ignoreCase = true) ||
+                            template.options.any { it.contains(templateSearchQuery, ignoreCase = true) }
+                    }
+                    if (templateSearchQuery.isNotBlank() && searchableTemplates.isEmpty()) {
+                        AppUiText("No learning templates match '${templateSearchQuery}'.")
+                    }
                     if (templateCategory == "Religious Education" && templateStudyTrack == "none") {
                         AppUiText("Choose a religious-education track in this child's profile to see matching questions for " + displayCountryName(templateCountryCode) + ".")
                     } else if (countryTemplates.isEmpty()) {
@@ -3619,19 +3690,19 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     else "That language code is not supported by the on-device translator. Choose a supported language from the list."
                                 }
                                 val translated = translatedTemplateRows.toMutableMap()
-                                filteredTemplates.distinctBy { templateTranslationKey(it) }.forEach { template ->
+                                searchableTemplates.distinctBy { templateTranslationKey(it) }.forEach { template ->
                                     if (!template.languageCode.equals(targetCode, ignoreCase = true)) {
                                         translated[templateTranslationKey(template)] = translateTemplate(template, targetCode)
                                     }
                                 }
                                 translatedTemplateRows = translated
-                                notice = "Translated " + filteredTemplates.size + " visible templates to " + targetCode + ". These previews are translated on this device; source templates remain unchanged."
+                                notice = "Translated " + searchableTemplates.size + " visible templates to " + targetCode + ". These previews are translated on this device; source templates remain unchanged."
                             }
                         },
-                        enabled = !busy && filteredTemplates.isNotEmpty(),
+                        enabled = !busy && searchableTemplates.isNotEmpty(),
                         modifier = Modifier.fillMaxWidth()
                     ) { AppUiText("🌐 Translate all visible templates") }
-                    filteredTemplates.distinctBy { templateTranslationKey(it) }.forEach { sourceTemplate ->
+                    searchableTemplates.distinctBy { templateTranslationKey(it) }.forEach { sourceTemplate ->
                         val template = translatedTemplateRows[templateTranslationKey(sourceTemplate)] ?: sourceTemplate
                         Card(
                             modifier = Modifier.fillMaxWidth(),
