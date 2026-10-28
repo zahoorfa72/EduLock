@@ -622,6 +622,9 @@ private fun EduLockApp(repository: EduLockRepository) {
     var questionRewardEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var questionGroupRewardEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var questionRewardGroups by remember { mutableStateOf(emptyList<QuestionRewardGroup>()) }
+    var groupRewardsExpanded by remember { mutableStateOf(false) }
+    var translationEditorQuestionId by remember { mutableStateOf<String?>(null) }
+    var questionDeleteConfirmation by remember { mutableStateOf<QuestionRow?>(null) }
     var selectedTaskSubjectIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var appGroups by remember { mutableStateOf(emptyList<AppGroup>()) }
     var appGroupName by remember { mutableStateOf("") }
@@ -3129,25 +3132,79 @@ private fun EduLockApp(repository: EduLockRepository) {
                     val subject = selectedSubject
                     if (subject != null) {
                         AppUiText("Create a question in " + subject.languageCode + " and give related questions the same concept tag. The tag lets Concept Bridge report understanding separately from language.")
-                        OutlinedButton(onClick = { execute {
-                            questionRewardGroups = repository.loadQuestionRewardGroups(subject.id)
-                            questionGroupRewardEdits = questionRewardGroups.associate { it.conceptKey to it.rewardMinutes.toString() }
-                        } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                            AppUiText("🏅 Load group reward settings")
+                        AppUiText("Questions are added one at a time. Choosing a template only fills the form; it is not saved until you press Save question.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val eligibleRewardConcepts = questions
+                            .groupingBy { it.conceptKey.trim() }
+                            .eachCount()
+                            .filter { (concept, count) -> concept.isNotBlank() && count >= 2 }
+                            .keys.sorted()
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                AppUiText("🏅 Concept group rewards", fontWeight = FontWeight.Bold)
+                                AppUiText(
+                                    "Bonus minutes when every assigned question sharing a concept tag is correct.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    val opening = !groupRewardsExpanded
+                                    groupRewardsExpanded = opening
+                                    if (opening) execute {
+                                        val loadedGroups = repository.loadQuestionRewardGroups(subject.id)
+                                        questionRewardGroups = loadedGroups
+                                        questionGroupRewardEdits = loadedGroups.associate { it.conceptKey to it.rewardMinutes.toString() }
+                                    }
+                                },
+                                enabled = !busy,
+                                modifier = Modifier.height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 3.dp)
+                            ) { AppUiText(if (groupRewardsExpanded) "Hide" else "Configure (" + eligibleRewardConcepts.size + ")", fontSize = 12.sp) }
                         }
-                        AppUiText("Group rewards are bonus minutes granted only when every question in that concept group assigned to the task is correct.")
-                        questions.map { it.conceptKey.trim() }.filter { it.isNotBlank() }.distinct().sorted().forEach { concept ->
-                            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-                                Column(Modifier.padding(9.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    AppUiText("🏅 " + concept, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                    Field(
-                                        questionGroupRewardEdits[concept] ?: questionRewardGroups.firstOrNull { it.conceptKey == concept }?.rewardMinutes?.toString() ?: "0",
-                                        { value -> questionGroupRewardEdits = questionGroupRewardEdits + (concept to value.filter(Char::isDigit).take(4)) },
-                                        "Bonus minutes when all group questions are correct",
-                                        keyboardType = KeyboardType.Number
-                                    )
-                                    LaunchedEffect(concept, questionGroupRewardEdits[concept]) {
-                                        val value = questionGroupRewardEdits[concept]?.toIntOrNull() ?: return@LaunchedEffect
+                        if (groupRewardsExpanded) {
+                            AppUiText(
+                                "Only concepts used by two or more questions are listed. Type a reward from 0–1440 minutes; changes save automatically. To group questions, give them the same concept tag.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (eligibleRewardConcepts.isEmpty()) {
+                                AppUiText("No question groups yet. Add at least two questions with the same concept tag to configure a group bonus.")
+                            } else {
+                                eligibleRewardConcepts.forEach { concept ->
+                                    val savedGroupMinutes = questionRewardGroups.firstOrNull { it.conceptKey == concept }?.rewardMinutes ?: 0
+                                    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                                        Row(
+                                            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                AppUiText(concept, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                                AppUiText("Group bonus · " + questions.count { it.conceptKey.trim() == concept } + " questions",
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    style = MaterialTheme.typography.labelSmall)
+                                            }
+                                            OutlinedTextField(
+                                                value = questionGroupRewardEdits[concept] ?: savedGroupMinutes.toString(),
+                                                onValueChange = { value ->
+                                                    questionGroupRewardEdits = questionGroupRewardEdits + (concept to value.filter(Char::isDigit).take(4))
+                                                },
+                                                modifier = Modifier.width(100.dp).height(58.dp),
+                                                singleLine = true,
+                                                label = { AppUiText("Minutes", fontSize = 11.sp) },
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                                            )
+                                        }
+                                    }
+                                    LaunchedEffect(subject.id, concept, questionGroupRewardEdits[concept], groupRewardsExpanded) {
+                                        if (!groupRewardsExpanded) return@LaunchedEffect
+                                        val raw = questionGroupRewardEdits[concept] ?: return@LaunchedEffect
+                                        val value = raw.toIntOrNull() ?: return@LaunchedEffect
                                         delay(700)
                                         val previous = questionRewardGroups.firstOrNull { it.conceptKey == concept }?.rewardMinutes ?: 0
                                         if (value !in 0..1440 || value == previous) return@LaunchedEffect
@@ -3331,18 +3388,124 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             AppUiText("Worked solution", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                             AppUiText(solution)
                                         }
-                                        OutlinedButton(onClick = {
-                                            selectedQuestionForTranslation = question
-                                            translationLanguage = when (question.languageCode.lowercase()) {
-                                                "en" -> "ur"
-                                                "ur" -> "sd"
-                                                else -> "en"
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    if (translationEditorQuestionId == question.id) {
+                                                        translationEditorQuestionId = null
+                                                    } else {
+                                                        translationEditorQuestionId = question.id
+                                                        val existingTranslation = savedTranslationsForQuestion.firstOrNull()
+                                                        translationLanguage = existingTranslation?.languageCode ?: when (question.languageCode.lowercase()) {
+                                                            "en" -> "ur"
+                                                            "ur" -> "sd"
+                                                            else -> "en"
+                                                        }
+                                                        translationPrompt = existingTranslation?.prompt.orEmpty()
+                                                        translationOptions = if (question.questionType == "matching") "" else existingTranslation?.options?.joinToString("\n").orEmpty()
+                                                        // Accepted answer keys are intentionally never fetched into the child-readable client.
+                                                        // Parents re-enter the accepted answer(s) when creating or updating a translation.
+                                                        translationAcceptedAnswers = ""
+                                                    }
+                                                },
+                                                enabled = !busy,
+                                                modifier = Modifier.weight(1f),
+                                                contentPadding = PaddingValues(horizontal = 7.dp, vertical = 5.dp)
+                                            ) {
+                                                AppUiText(
+                                                    if (translationEditorQuestionId == question.id) "Close translation editor" else "🌐 Translate / edit",
+                                                    fontSize = 12.sp
+                                                )
                                             }
-                                            translationPrompt = ""
-                                            translationOptions = ""
-                                            translationAcceptedAnswers = ""
-                                            screen = AppScreen.ADD_TRANSLATION
-                                        }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Translate / edit translation") }
+                                            OutlinedButton(
+                                                onClick = { questionDeleteConfirmation = question },
+                                                enabled = !busy,
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp)
+                                            ) { AppUiText("🗑 Remove", fontSize = 12.sp) }
+                                        }
+                                        if (translationEditorQuestionId == question.id) {
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = RoundedCornerShape(12.dp),
+                                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                            ) {
+                                                Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                                    AppUiText("Edit translation on this page", fontWeight = FontWeight.Bold)
+                                                    AppUiText(
+                                                        "This changes the language version only; it does not change the original question. For privacy, re-enter the accepted correct answer(s) before saving.",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                    Field(
+                                                        translationLanguage,
+                                                        { translationLanguage = it.trim().lowercase(Locale.ROOT).take(16) },
+                                                        "Target language code (en, ur, sd, etc.)"
+                                                    )
+                                                    CompositionLocalProvider(LocalLayoutDirection provides directionFor(translationLanguage)) {
+                                                        Field(translationPrompt, { translationPrompt = it }, "Translated question prompt")
+                                                        if (question.questionType == "multiple_choice" || question.questionType == "true_false") {
+                                                            Field(translationOptions, { translationOptions = it }, "Translated options (one per line)")
+                                                        } else if (question.questionType == "matching") {
+                                                            Field(translationOptions, { translationOptions = it }, "Translated matching pairs (one per line: left|right)")
+                                                        }
+                                                        Field(translationAcceptedAnswers, { translationAcceptedAnswers = it }, "Accepted correct answers (one per line)")
+                                                    }
+                                                    Button(
+                                                        onClick = {
+                                                            execute {
+                                                                val targetCode = translationLanguage.trim().lowercase(Locale.ROOT)
+                                                                val opts = translationOptions.lines().map { it.trim() }.filter { it.isNotEmpty() }
+                                                                val accepted = translationAcceptedAnswers.lines().map { it.trim() }.filter { it.isNotEmpty() }
+                                                                repository.saveQuestionTranslation(question, targetCode, translationPrompt, opts, accepted)
+                                                                questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
+                                                                translationEditorQuestionId = null
+                                                                translationAcceptedAnswers = ""
+                                                                notice = "Translation saved. The original question and its progress remain unchanged."
+                                                            }
+                                                        },
+                                                        enabled = !busy && translationPrompt.isNotBlank() && translationAcceptedAnswers.isNotBlank() &&
+                                                            !translationLanguage.equals(question.languageCode, ignoreCase = true),
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) { AppUiText("Save translation") }
+                                                }
+                                            }
+                                        }
+                                        if (questionDeleteConfirmation?.id == question.id) {
+                                            AlertDialog(
+                                                onDismissRequest = { questionDeleteConfirmation = null },
+                                                title = { AppUiText("Remove this question?") },
+                                                text = {
+                                                    AppUiText(
+                                                        "This permanently deletes the question, its translations and worked solution. Historical answer details linked to this question may also be removed. This action cannot be undone."
+                                                    )
+                                                },
+                                                confirmButton = {
+                                                    TextButton(onClick = {
+                                                        execute {
+                                                            repository.deleteQuestion(question.id)
+                                                            val refreshedQuestions = repository.loadQuestions(subject.id)
+                                                            questions = refreshedQuestions
+                                                            questionTranslations = repository.loadQuestionTranslations(refreshedQuestions.map { it.id })
+                                                            questionSolutions = repository.loadQuestionSolutions(refreshedQuestions.map { it.id })
+                                                            questionRewardGroups = repository.loadQuestionRewardGroups(subject.id)
+                                                            questionGroupRewardEdits = questionRewardGroups.associate { it.conceptKey to it.rewardMinutes.toString() }
+                                                            questionRewardEdits = questionRewardEdits - question.id
+                                                            if (translationEditorQuestionId == question.id) translationEditorQuestionId = null
+                                                            if (expandedFourDQuestionId == question.id) expandedFourDQuestionId = null
+                                                            questionDeleteConfirmation = null
+                                                            notice = "Question removed. Remaining questions and settings are unchanged."
+                                                        }
+                                                    }) { AppUiText("Delete permanently", color = MaterialTheme.colorScheme.error) }
+                                                },
+                                                dismissButton = {
+                                                    TextButton(onClick = { questionDeleteConfirmation = null }) { AppUiText("Cancel") }
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
