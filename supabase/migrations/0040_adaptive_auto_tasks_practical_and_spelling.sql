@@ -312,8 +312,8 @@ begin
       select s.id, s.title, s.family_id
       from edulock.subjects s
       where s.family_id = v_child.family_id
-        and (not exists (select 1 from edulock.child_subject_selections css where css.child_id = v_child.id)
-          or exists (select 1 from edulock.child_subject_selections css where css.child_id = v_child.id and css.subject_id = s.id))
+        and (not exists (select 1 from edulock.child_subjects css where css.child_id = v_child.id)
+          or exists (select 1 from edulock.child_subjects css where css.child_id = v_child.id and css.subject_id = s.id))
         and exists (
           select 1 from edulock.questions q
           where q.subject_id = s.id and q.learning_mode = 'written'
