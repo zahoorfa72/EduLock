@@ -3027,9 +3027,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                             fontWeight = FontWeight.Bold
                         )
                         OutlinedButton(
-                            onClick = { templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES },
+                            onClick = { templateCategory = subject.title; screen = AppScreen.LEARNING_TEMPLATES },
                             modifier = Modifier.fillMaxWidth()
-                        ) { AppUiText("✨ Browse ready-made templates") }
+                        ) { AppUiText("✨ Browse " + subject.title + " question templates") }
                         Button(onClick = {
                             questionPrompt = ""; questionOptions = ""; questionAnswer = ""; questionType = "multiple_choice"
                             questionLanguage = subject.languageCode
