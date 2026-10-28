@@ -400,14 +400,16 @@ private fun EduLockApp(repository: EduLockRepository) {
         } catch (_: Exception) { LocalTaskDraft() }
     }
     LaunchedEffect(
-        activeTask?.id, answers, questionIndex, expiredQuestionIds,
+        screen, activeTask?.id, answers, questionIndex, expiredQuestionIds,
         taskDeadlineAtMillis, questionDeadlineAtMillis, questionDeadlineQuestionId
     ) {
-        activeTask?.id?.let {
-            saveTaskDraft(
-                it, answers, questionIndex, expiredQuestionIds,
-                taskDeadlineAtMillis, questionDeadlineAtMillis, questionDeadlineQuestionId
-            )
+        if (screen == AppScreen.PLAY_TASK) {
+            activeTask?.id?.let {
+                saveTaskDraft(
+                    it, answers, questionIndex, expiredQuestionIds,
+                    taskDeadlineAtMillis, questionDeadlineAtMillis, questionDeadlineQuestionId
+                )
+            }
         }
     }
 
@@ -741,6 +743,49 @@ private fun EduLockApp(repository: EduLockRepository) {
                 notice = e.message?.take(500) ?: "Something went wrong. Please try again."
             } finally {
                 busy = false
+            }
+        }
+    }
+
+    fun openChildTask(task: TaskRow) {
+        execute {
+            val loadedQuestions = repository.loadQuestionsForTask(task.id, task.subjectId, task.questionCount)
+            if (loadedQuestions.isEmpty()) {
+                throw IllegalStateException("This task has no linked questions. Ask your parent to repair it.")
+            }
+            if (loadedQuestions.size != task.questionCount) {
+                throw IllegalStateException("This task needs " + task.questionCount + " questions, but only " + loadedQuestions.size + " are available. Ask your parent to repair it.")
+            }
+            val loadedTranslations = repository.loadQuestionTranslations(loadedQuestions.map { it.id })
+            val draft = readTaskDraft(task.id)
+            questions = loadedQuestions
+            questionTranslations = loadedTranslations
+            answerLanguages = loadedQuestions.associate { question ->
+                val preferred = childProfile?.preferredLanguage ?: question.languageCode
+                val translated = loadedTranslations[question.id].orEmpty().any {
+                    it.languageCode.equals(preferred, ignoreCase = true)
+                }
+                question.id to if (translated) preferred.lowercase() else question.languageCode
+            }
+            activeTask = task
+            answers = draft.answers.filterKeys { key -> loadedQuestions.any { it.id == key } }
+            questionIndex = draft.questionIndex.coerceIn(0, (loadedQuestions.size - 1).coerceAtLeast(0))
+            expiredQuestionIds = draft.expiredQuestionIds.intersect(loadedQuestions.map { it.id }.toSet())
+            taskDeadlineAtMillis = draft.taskDeadlineAtMillis
+            questionDeadlineAtMillis = draft.questionDeadlineAtMillis
+            questionDeadlineQuestionId = draft.questionDeadlineQuestionId
+            taskSecondsRemaining = draft.taskDeadlineAtMillis?.let {
+                (((it - System.currentTimeMillis() + 999L) / 1000L).toInt()).coerceAtLeast(0)
+            } ?: 0
+            questionSecondsRemaining = draft.questionDeadlineAtMillis?.let {
+                (((it - System.currentTimeMillis() + 999L) / 1000L).toInt()).coerceAtLeast(0)
+            } ?: 0
+            taskResult = null
+            screen = AppScreen.PLAY_TASK
+            notice = if (draft.answers.isNotEmpty() || draft.questionIndex > 0) {
+                "Your saved progress is restored. Continue where you stopped."
+            } else {
+                "Task opened. Your answers are saved as you work, so you can return later."
             }
         }
     }
