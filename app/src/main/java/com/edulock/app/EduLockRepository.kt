@@ -94,7 +94,10 @@ data class QuestionRow(
     val options: List<String>,
     val languageCode: String,
     val conceptKey: String,
-    val picturePath: String? = null
+    val picturePath: String? = null,
+    val gradeLevel: Int = 1,
+    val ageMin: Int = 3,
+    val ageMax: Int = 19
 )
 
 data class QuestionTranslation(
@@ -128,7 +131,9 @@ data class TaskRow(
     val rewardGroupId: String? = null,
     val timeLimitSeconds: Int? = null,
     val rewardToBank: Boolean = true,
-    val questionTimeLimitSeconds: Int? = null
+    val questionTimeLimitSeconds: Int? = null,
+    val targetGradeLevel: Int = 1,
+    val targetAgeYears: Int = 8
 )
 
 data class AllowedApp(
@@ -1002,11 +1007,7 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadQuestions(subjectId: String, limit: Int = 500): List<QuestionRow> {
         requireSession()
-        val rows = try {
-            restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,picture_path,created_at&subject_id=eq.$subjectId&order=created_at.asc,id.asc&limit=${limit.coerceIn(1, 500)}")
-        } catch (_: IOException) {
-            restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,created_at&subject_id=eq.$subjectId&order=created_at.asc,id.asc&limit=${limit.coerceIn(1, 500)}")
-        }
+        val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,picture_path,grade_level,age_min,age_max,created_at&subject_id=eq.$subjectId&order=created_at.asc,id.asc&limit=${limit.coerceIn(1, 500)}")
         return (0 until rows.length()).mapNotNull { i ->
             rows.optJSONObject(i)?.let { row -> row.toQuestionRow() }
         }
@@ -1135,6 +1136,9 @@ class EduLockRepository(context: Context) {
         require(selectedSubjects.size == 1) {
             "Each task must contain questions from exactly one subject. Create a separate task for each subject."
         }
+        require(selectedSubjects.single().gradeLevel == child.schoolGrade) {
+            "This subject is for Grade ${selectedSubjects.single().gradeLevel}, but ${child.displayName} is in Grade ${child.schoolGrade}. Select or create a subject for the child's current class."
+        }
         require(title.trim().isNotEmpty()) { "Enter a task title" }
         require(questionCount in 1..500) { "Question count must be from 1 to 500" }
         require(passPercent in 0..100) { "Passing score must be from 0 to 100 percent" }
@@ -1154,11 +1158,18 @@ class EduLockRepository(context: Context) {
                 "The selected app group is empty or no longer available."
             }
         }
-        val pools = selectedSubjects.map { subject -> loadQuestions(subject.id, 500) }
+        val pools = selectedSubjects.map { subject ->
+            loadQuestions(subject.id, 500).filter { question ->
+                question.gradeLevel == child.schoolGrade &&
+                    child.ageYears in question.ageMin..question.ageMax
+            }
+        }
         val available = pools.sumOf { it.size }
-        require(available > 0) { "Add at least one question to the selected subject bank first." }
+        require(available > 0) {
+            "No questions in this subject match ${child.displayName}'s Grade ${child.schoolGrade} and age ${child.ageYears}. Add or import questions for this grade and age first."
+        }
         require(questionCount <= available) {
-            "The selected subject banks contain only $available questions. Add questions or lower the task question count."
+            "Only $available questions match Grade ${child.schoolGrade}, age ${child.ageYears}, and this subject. Lower the task question count or add matching questions."
         }
         // Round-robin selection balances questions across selected subject banks.
         val selectedQuestions = mutableListOf<QuestionRow>()
@@ -1180,6 +1191,8 @@ class EduLockRepository(context: Context) {
                 .put("family_id", familyId)
                 .put("child_id", child.id)
                 .put("subject_id", selectedSubjects.first().id)
+                .put("target_grade_level", child.schoolGrade)
+                .put("target_age_years", child.ageYears)
                 .put("title", title.trim().take(160))
                 .put("question_count", questionCount)
                 .put("pass_percent", passPercent)
@@ -1310,43 +1323,39 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadChildTasks(childId: String): List<TaskRow> {
         requireSession("child")
-        val rows = try {
-            restArray("tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id,time_limit_seconds,question_time_limit_seconds,reward_to_bank&child_id=eq.$childId&active=eq.true&order=created_at.desc")
-        } catch (_: IOException) {
-            try {
-                // Existing installs without the per-question timer migration.
-                restArray("tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id,time_limit_seconds,reward_to_bank&child_id=eq.$childId&active=eq.true&order=created_at.desc")
-            } catch (_: IOException) {
-                try {
-                    restArray("tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id,reward_to_bank&child_id=eq.$childId&active=eq.true&order=created_at.desc")
-                } catch (_: IOException) {
-                    // Compatibility with older installations that have not applied migrations 0033/0034.
-                    restArray("tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id&child_id=eq.$childId&active=eq.true&order=created_at.desc")
-                }
-            }
-        }
+        val rows = restArray("tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id,time_limit_seconds,question_time_limit_seconds,reward_to_bank,target_grade_level,target_age_years&child_id=eq.$childId&active=eq.true&order=created_at.desc")
         return (0 until rows.length()).mapNotNull { i -> rows.optJSONObject(i)?.toTaskRow() }
     }
 
-    suspend fun loadQuestionsForTask(taskId: String, fallbackSubjectId: String?, limit: Int): List<QuestionRow> {
+    suspend fun loadQuestionsForTask(
+        taskId: String, fallbackSubjectId: String?, limit: Int,
+        targetGradeLevel: Int? = null, targetAgeYears: Int? = null
+    ): List<QuestionRow> {
         requireSession("child")
         require(taskId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid task." }
+        fun matchesChildScope(question: QuestionRow): Boolean =
+            (targetGradeLevel == null || question.gradeLevel == targetGradeLevel) &&
+                (targetAgeYears == null || targetAgeYears in question.ageMin..question.ageMax)
+        val safeLimit = limit.coerceIn(1, 500)
         val links = restArray("task_questions?select=question_id,sort_order&task_id=eq.$taskId&order=sort_order.asc")
         val ids = (0 until links.length()).mapNotNull { index ->
             links.optJSONObject(index)?.optString("question_id")?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) }
-        }.take(limit.coerceIn(1, 500))
-        if (ids.isEmpty()) return fallbackSubjectId?.let { loadQuestions(it, limit) } ?: emptyList()
+        }.take(500)
+        if (ids.isEmpty()) {
+            val subjectQuestions = fallbackSubjectId?.let { loadQuestions(it, 500) } ?: emptyList()
+            return subjectQuestions.filter(::matchesChildScope).take(safeLimit)
+        }
         val byId = linkedMapOf<String, QuestionRow>()
         ids.chunked(50).forEach { chunk ->
-            val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,picture_path,created_at&id=in.(" +
+            val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,picture_path,grade_level,age_min,age_max,created_at&id=in.(" +
                 chunk.joinToString(",") + ")&limit=50")
             for (i in 0 until rows.length()) {
                 val row = rows.optJSONObject(i) ?: continue
                 val question = row.toQuestionRow()
-                byId[question.id] = question
+                if (matchesChildScope(question)) byId[question.id] = question
             }
         }
-        return ids.mapNotNull { byId[it] }
+        return ids.mapNotNull { byId[it] }.take(safeLimit)
     }
 
     suspend fun loadChildLocationSnapshot(childId: String): ChildLocationSnapshot {
@@ -2036,7 +2045,9 @@ class EduLockRepository(context: Context) {
         timeLimitSeconds = optInt("time_limit_seconds", 0).takeIf { !isNull("time_limit_seconds") && it in 10..3600 },
         rewardToBank = optBoolean("reward_to_bank", false),
         questionTimeLimitSeconds = optInt("question_time_limit_seconds", 0)
-            .takeIf { !isNull("question_time_limit_seconds") && it in 5..600 }
+            .takeIf { !isNull("question_time_limit_seconds") && it in 5..600 },
+        targetGradeLevel = optInt("target_grade_level", 1),
+        targetAgeYears = optInt("target_age_years", 8)
     )
 
     private fun JSONObject.toQuestionRow(): QuestionRow {
@@ -2049,7 +2060,10 @@ class EduLockRepository(context: Context) {
             options = (0 until opts.length()).map { opts.optString(it) },
             languageCode = optString("language_code", "en"),
             conceptKey = optString("concept_key", "general"),
-            picturePath = optString("picture_path").takeIf { it.isNotBlank() && it != "null" }
+            picturePath = optString("picture_path").takeIf { it.isNotBlank() && it != "null" },
+            gradeLevel = optInt("grade_level", 1),
+            ageMin = optInt("age_min", 3),
+            ageMax = optInt("age_max", 19)
         )
     }
 
