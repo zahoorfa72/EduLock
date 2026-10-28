@@ -109,6 +109,8 @@ import android.webkit.WebViewClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -2827,9 +2829,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 groupRewardsExpanded = false
                                 screen = AppScreen.QUESTIONS
                                 execute {
-                                    questions = repository.loadQuestions(subject.id)
-                                    questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
-                                    questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
+                                    val loadedQuestions = repository.loadQuestions(subject.id)
+                                    questions = loadedQuestions
+                                    val questionIds = loadedQuestions.map { it.id }
+                                    coroutineScope {
+                                        val translationsDeferred = async { repository.loadQuestionTranslations(questionIds) }
+                                        val solutionsDeferred = async { repository.loadQuestionSolutions(questionIds) }
+                                        questionTranslations = translationsDeferred.await()
+                                        questionSolutions = solutionsDeferred.await()
+                                    }
                                     notice = null
                                 }
                             },
@@ -2855,9 +2863,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         groupRewardsExpanded = false
                                         screen = AppScreen.QUESTIONS
                                         execute {
-                                            questions = repository.loadQuestions(subject.id)
-                                            questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
-                                            questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
+                                                                                        val loadedQuestions = repository.loadQuestions(subject.id)
+                                                                                questions = loadedQuestions
+                                                                                val questionIds = loadedQuestions.map { it.id }
+                                                                                coroutineScope {
+                                                                                    val translationsDeferred = async { repository.loadQuestionTranslations(questionIds) }
+                                                                                    val solutionsDeferred = async { repository.loadQuestionSolutions(questionIds) }
+                                                                                    questionTranslations = translationsDeferred.await()
+                                                                                    questionSolutions = solutionsDeferred.await()
+                                                                                }
                                             notice = null
                                         }
                                     },
