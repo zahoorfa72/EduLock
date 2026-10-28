@@ -404,8 +404,11 @@ begin
         when length(btrim(v_expected)) = 0 then 100
         when lower(regexp_replace(btrim(v_actual), '[^[:alnum:] ]', '', 'g')) =
              lower(regexp_replace(btrim(v_expected), '[^[:alnum:] ]', '', 'g')) then 100
-        when similarity(lower(btrim(v_actual)), lower(btrim(v_expected))) >= 0.8 then 80
-        when similarity(lower(btrim(v_actual)), lower(btrim(v_expected))) >= 0.6 then 60
+        when lower(btrim(v_actual)) = lower(btrim(v_expected)) then 100
+        when length(btrim(v_actual)) > 0 and length(btrim(v_expected)) > 0
+          and abs(length(btrim(v_actual)) - length(btrim(v_expected))) <= 1 then 80
+        when length(btrim(v_actual)) > 0 and length(btrim(v_expected)) > 0
+          and abs(length(btrim(v_actual)) - length(btrim(v_expected))) <= 3 then 60
         else 30 end;
       if v_accuracy < 70 then v_errors := v_errors || jsonb_build_array('Check answer accuracy and key concepts'); end if;
       if v_spelling < 80 then v_errors := v_errors || jsonb_build_array('Review spelling'); end if;
