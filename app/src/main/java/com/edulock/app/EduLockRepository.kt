@@ -1227,7 +1227,7 @@ class EduLockRepository(context: Context) {
     suspend fun loadParentTasks(): List<TaskRow> {
         requireSession("parent")
         val rows = restArray(
-            "tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id,time_limit_seconds,question_time_limit_seconds,reward_to_bank&order=created_at.desc&limit=500"
+            "tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id,time_limit_seconds,question_time_limit_seconds,reward_to_bank,target_grade_level,target_age_years&order=created_at.desc&limit=500"
         )
         return (0 until rows.length()).mapNotNull { index -> rows.optJSONObject(index)?.toTaskRow() }
     }
@@ -1321,10 +1321,16 @@ class EduLockRepository(context: Context) {
         }
     }
 
-    suspend fun loadChildTasks(childId: String): List<TaskRow> {
+    suspend fun loadChildTasks(
+        childId: String, schoolGrade: Int? = null, ageYears: Int? = null
+    ): List<TaskRow> {
         requireSession("child")
         val rows = restArray("tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id,time_limit_seconds,question_time_limit_seconds,reward_to_bank,target_grade_level,target_age_years&child_id=eq.$childId&active=eq.true&order=created_at.desc")
         return (0 until rows.length()).mapNotNull { i -> rows.optJSONObject(i)?.toTaskRow() }
+            .filter { task ->
+                (schoolGrade == null || task.targetGradeLevel == schoolGrade) &&
+                    (ageYears == null || task.targetAgeYears == ageYears)
+            }
     }
 
     suspend fun loadQuestionsForTask(
