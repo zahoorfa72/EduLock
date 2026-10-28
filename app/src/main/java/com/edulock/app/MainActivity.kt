@@ -2897,11 +2897,19 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }, modifier = Modifier.fillMaxWidth()) { AppUiText("Create subject") }
 
                     AppUiText("Your selected subjects", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    AppUiText("Only subjects saved to your family are shown. Open a subject to view its questions, add questions, and manage translations.")
+                    AppUiText(if (selectedChild != null) "Subjects for " + selectedChild!!.displayName + ". Each subject has its own questions." else "Open a subject to view its questions and translations.")
                     val visibleSubjects = subjects
                         .filter { subject ->
+                            val child = selectedChild
                             val track = religionTrackForSubject(subject.title)
-                            track == null || children.any { child -> child.studyTrack == track }
+                            val childContextMatches = child == null ||
+                                (subject.countryCode.equals(child.countryCode, ignoreCase = true) ||
+                                    subject.countryCode.equals("ZZ", ignoreCase = true)) &&
+                                subject.gradeLevel == child.schoolGrade
+                            val selectedIds = child?.id?.let { childSubjectSelections[it] }
+                            val explicitlySelected = selectedIds == null || subject.id in selectedIds
+                            val trackMatches = track == null || (child != null && child.studyTrack == track)
+                            childContextMatches && explicitlySelected && trackMatches
                         }
                         .distinctBy { subject ->
                             listOf(
