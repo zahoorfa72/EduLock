@@ -135,6 +135,16 @@ data class ConceptProgress(
     val percent: Int get() = if (total == 0) 0 else (correct * 100) / total
 }
 
+data class DailyTaskSettings(
+    val childId: String,
+    val enabled: Boolean = false,
+    val dailyTaskCount: Int = 1,
+    val questionsPerTask: Int = 4,
+    val passPercent: Int = 70,
+    val rewardMinutes: Int = 1,
+    val dailyCapMinutes: Int = 30
+)
+
 data class TaskRow(
     val id: String,
     val childId: String,
@@ -1509,16 +1519,14 @@ class EduLockRepository(context: Context) {
         questionCount: Int, passPercent: Int, rewardMinutes: Int, taskDailyCapMinutes: Int,
         rewardPackageName: String? = null, rewardGroupId: String? = null,
         timeLimitSeconds: Int? = null, rewardToBank: Boolean = true,
-        questionTimeLimitSeconds: Int? = null
+        questionTimeLimitSeconds: Int? = null,
+        selectedQuestionIds: List<String> = emptyList()
     ) {
         requireSession("parent")
         val selectedSubjects = subjects.distinctBy { it.id }.take(20)
-        require(selectedSubjects.isNotEmpty()) { "Choose one subject for this task." }
-        require(selectedSubjects.size == 1) {
-            "Each task must contain questions from exactly one subject. Create a separate task for each subject."
-        }
-        require(selectedSubjects.single().gradeLevel == child.schoolGrade) {
-            "This subject is for Grade ${selectedSubjects.single().gradeLevel}, but ${child.displayName} is in Grade ${child.schoolGrade}. Select or create a subject for the child's current class."
+        require(selectedSubjects.isNotEmpty()) { "Choose at least one subject for this task." }
+        require(selectedSubjects.all { it.gradeLevel == child.schoolGrade }) {
+            "All chosen subjects must match ${child.displayName}'s current grade (${child.schoolGrade})."
         }
         require(title.trim().isNotEmpty()) { "Enter a task title" }
         require(questionCount in 1..500) { "Question count must be from 1 to 500" }
@@ -1552,26 +1560,42 @@ class EduLockRepository(context: Context) {
         require(questionCount <= available) {
             "Only $available questions match Grade ${child.schoolGrade}, age ${child.ageYears}, and this subject. Lower the task question count or add matching questions."
         }
-        // Round-robin selection balances questions across selected subject banks.
-        val selectedQuestions = mutableListOf<QuestionRow>()
-        var poolIndex = 0
-        while (selectedQuestions.size < questionCount) {
-            var selectedAny = false
-            pools.forEach { pool ->
-                if (poolIndex < pool.size && selectedQuestions.size < questionCount) {
-                    selectedQuestions += pool[poolIndex]
-                    selectedAny = true
-                }
+        val selectedQuestions = if (selectedQuestionIds.isNotEmpty()) {
+            val requestedIds = selectedQuestionIds.distinct()
+            require(requestedIds.size == selectedQuestionIds.size) { "A question can only be selected once." }
+            require(requestedIds.size == questionCount) {
+                "Task question count must match the number of selected questions."
             }
-            if (!selectedAny) break
-            poolIndex++
+            require(requestedIds.size <= 500) { "Choose no more than 500 questions in one task." }
+            val availableById = pools.flatten().associateBy { it.id }
+            val matched = requestedIds.mapNotNull { availableById[it] }
+            require(matched.size == requestedIds.size) {
+                "One or more selected questions do not match the child's grade, age or selected subjects. Refresh the question list."
+            }
+            matched
+        } else {
+            // Round-robin selection balances questions across the chosen subject banks.
+            val chosen = mutableListOf<QuestionRow>()
+            var poolIndex = 0
+            while (chosen.size < questionCount) {
+                var selectedAny = false
+                pools.forEach { pool ->
+                    if (poolIndex < pool.size && chosen.size < questionCount) {
+                        chosen += pool[poolIndex]
+                        selectedAny = true
+                    }
+                }
+                if (!selectedAny) break
+                poolIndex++
+            }
+            chosen
         }
         require(selectedQuestions.size == questionCount) { "Could not assemble the requested task questions." }
         val createdRows = restArray("tasks?select=id", "POST",
             JSONObject()
                 .put("family_id", familyId)
                 .put("child_id", child.id)
-                .put("subject_id", selectedSubjects.first().id)
+                .put("subject_id", selectedQuestions.first().subjectId)
                 .put("target_grade_level", child.schoolGrade)
                 .put("target_age_years", child.ageYears)
                 .put("title", title.trim().take(160))
@@ -1903,6 +1927,56 @@ class EduLockRepository(context: Context) {
         }
     }
 
+
+    suspend fun loadChildDailyTaskSettings(childId: String): DailyTaskSettings {
+        requireSession("parent")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        val row = restArray(
+            "child_daily_task_settings?select=child_id,enabled,daily_task_count,questions_per_task,pass_percent,reward_minutes,daily_cap_minutes&child_id=eq.$childId&limit=1"
+        ).optJSONObject(0)
+        return DailyTaskSettings(
+            childId = childId,
+            enabled = row?.optBoolean("enabled", false) ?: false,
+            dailyTaskCount = (row?.optInt("daily_task_count", 1) ?: 1).coerceIn(1, 5),
+            questionsPerTask = (row?.optInt("questions_per_task", 4) ?: 4).coerceIn(1, 20),
+            passPercent = (row?.optInt("pass_percent", 70) ?: 70).coerceIn(0, 100),
+            rewardMinutes = (row?.optInt("reward_minutes", 1) ?: 1).coerceIn(0, 60),
+            dailyCapMinutes = (row?.optInt("daily_cap_minutes", 30) ?: 30).coerceIn(0, 1440)
+        )
+    }
+
+    suspend fun saveChildDailyTaskSettings(settings: DailyTaskSettings) {
+        requireSession("parent")
+        require(settings.childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        require(settings.dailyTaskCount in 1..5) { "Daily task count must be from 1 to 5." }
+        require(settings.questionsPerTask in 1..20) { "Questions per task must be from 1 to 20." }
+        require(settings.passPercent in 0..100) { "Pass score must be from 0 to 100 percent." }
+        require(settings.rewardMinutes in 0..60) { "Reward per correct answer must be from 0 to 60 minutes." }
+        require(settings.dailyCapMinutes in 0..1440) { "Daily task reward cap must be from 0 to 1440 minutes." }
+        val payload = JSONObject()
+            .put("child_id", settings.childId)
+            .put("enabled", settings.enabled)
+            .put("daily_task_count", settings.dailyTaskCount)
+            .put("questions_per_task", settings.questionsPerTask)
+            .put("pass_percent", settings.passPercent)
+            .put("reward_minutes", settings.rewardMinutes)
+            .put("daily_cap_minutes", settings.dailyCapMinutes)
+            .put("updated_at", java.time.Instant.now().toString())
+        val saved = restArray(
+            "child_daily_task_settings?on_conflict=child_id",
+            "POST", payload, prefer = "resolution=merge-duplicates,return=representation"
+        ).optJSONObject(0) ?: throw IOException("Supabase did not confirm the daily task settings were saved.")
+        require(saved.optString("child_id") == settings.childId &&
+            saved.optBoolean("enabled", !settings.enabled) == settings.enabled &&
+            saved.optInt("daily_task_count", -1) == settings.dailyTaskCount &&
+            saved.optInt("questions_per_task", -1) == settings.questionsPerTask
+        ) { "Supabase returned different daily task settings. No success was reported." }
+    }
+
+    suspend fun ensureDailyTasks(): JSONObject {
+        requireSession("child")
+        return requestFunction("ensure-daily-tasks", JSONObject())
+    }
 
     suspend fun loadChildTasks(
         childId: String, schoolGrade: Int? = null, ageYears: Int? = null
