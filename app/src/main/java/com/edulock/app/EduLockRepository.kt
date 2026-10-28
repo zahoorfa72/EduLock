@@ -1941,6 +1941,41 @@ class EduLockRepository(context: Context) {
     }
 
     /** Per-answer written feedback visible to the linked child and its parent. */
+    suspend fun loadChildLearningPreferences(childId: String): ChildLearningPreferences {
+        requireSession("parent")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        val row = restArray(
+            "child_learning_preferences?select=child_id,kindergarten_mode,gentle_reminders,daily_written_question_limit,practical_tasks_enabled&child_id=eq.$childId&limit=1"
+        ).optJSONObject(0)
+        return ChildLearningPreferences(
+            childId = childId,
+            kindergartenMode = row?.optBoolean("kindergarten_mode", false) ?: false,
+            gentleReminders = row?.optBoolean("gentle_reminders", true) ?: true,
+            dailyWrittenQuestionLimit = (row?.optInt("daily_written_question_limit", 8) ?: 8).coerceIn(1,100),
+            practicalTasksEnabled = row?.optBoolean("practical_tasks_enabled", true) ?: true
+        )
+    }
+
+    suspend fun saveChildLearningPreferences(preferences: ChildLearningPreferences) {
+        requireSession("parent")
+        require(preferences.childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        require(preferences.dailyWrittenQuestionLimit in 1..100) { "Daily written question limit must be 1–100." }
+        val payload = JSONObject()
+            .put("child_id", preferences.childId)
+            .put("kindergarten_mode", preferences.kindergartenMode)
+            .put("gentle_reminders", preferences.gentleReminders)
+            .put("daily_written_question_limit", preferences.dailyWrittenQuestionLimit)
+            .put("practical_tasks_enabled", preferences.practicalTasksEnabled)
+            .put("updated_at", java.time.Instant.now().toString())
+        val saved = restArray(
+            "child_learning_preferences?on_conflict=child_id", "POST", payload,
+            prefer = "resolution=merge-duplicates,return=representation"
+        ).optJSONObject(0) ?: throw IOException("EduLock did not confirm the learning preferences were saved.")
+        require(saved.optString("child_id") == preferences.childId) {
+            "EduLock did not confirm the selected child's learning preferences."
+        }
+    }
+
     suspend fun loadWrittenAnswerFeedback(childId: String? = null): List<WrittenAnswerFeedback> {
         requireSession()
         val currentSession = sessionStore.read() ?: throw IOException("Sign in to view learning feedback.")
