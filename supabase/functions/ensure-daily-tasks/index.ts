@@ -60,7 +60,8 @@ Deno.serve(async (req) => {
 
     // Pull recent per-question history to produce a compact, explainable practice plan.
     const { data: attempts, error: attemptsError } = await schema.from("attempt_answers")
-      .select("question_id,concept_key,is_correct,created_at")
+      .select("question_id,concept_key,is_correct,created_at,attempts!inner(child_id)")
+      .eq("attempts.child_id", child.id)
       .order("created_at", { ascending: false }).limit(500);
     if (attemptsError) console.warn("Could not load adaptive attempt history", attemptsError.message);
     const history = attempts ?? [];
@@ -87,20 +88,8 @@ Deno.serve(async (req) => {
     // Store progress summary for parent/child reports; RLS blocks clients from forging it.
     for (const item of focusConcepts) {
       const stats = conceptStats.get(item.concept_key)!;
-      await schema.from("child_concept_progress").upsert({
-        child_id: child.id,
-        concept_key: item.concept_key,
-        attempts: stats.wrong + stats.correct,
-        correct_attempts: stats.correct,
-        wrong_attempts: stats.wrong,
-        focus_score: item.focus_score,
-        last_attempt_at: new Date().toISOString(),
-        next_review_at: new Date(Date.now() + (item.focus_score >= 4 ? 60 : 24 * 60) * 60_000).toISOString(),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "child_id,concept_key" }).then(({ error }) => {
-        if (error) console.warn("Concept progress sync failed", item.concept_key, error.message);
-        return { error };
-      });
+      // The database grader is authoritative for concept_progress writes. This API
+      // only derives an in-memory focus summary from this child's own attempt history.
     }
 
     // Distinct practical portal feed. It is deliberately not attached to written tasks.
