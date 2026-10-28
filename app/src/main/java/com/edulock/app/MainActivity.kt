@@ -436,6 +436,9 @@ private fun EduLockApp(repository: EduLockRepository) {
     var children by remember { mutableStateOf(emptyList<ChildProfile>()) }
     var subjects by remember { mutableStateOf(emptyList<SubjectRow>()) }
     var selectedChild by remember { mutableStateOf<ChildProfile?>(null) }
+    var childSubjectSelections by remember { mutableStateOf<Map<String, Set<String>>>(emptyMap()) }
+    var childSubjectDraft by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var childSubjectDraftChildId by remember { mutableStateOf("") }
     var selectedSubject by remember { mutableStateOf<SubjectRow?>(null) }
     var subjectDeleteConfirmation by remember { mutableStateOf<SubjectRow?>(null) }
     var questions by remember { mutableStateOf(emptyList<QuestionRow>()) }
@@ -1615,6 +1618,39 @@ private fun EduLockApp(repository: EduLockRepository) {
         }
     }
 
+    LaunchedEffect(familyId, children.map { it.id }) {
+        if (familyId.isNotBlank() && session?.accountRole == "parent") {
+            try {
+                childSubjectSelections = repository.loadChildSubjectSelections(familyId)
+            } catch (_: Exception) {
+                // Keep the last confirmed per-child subject choices if temporarily offline.
+            }
+        }
+    }
+
+    LaunchedEffect(screen, selectedChild?.id, subjects) {
+        val child = selectedChild
+        if (screen == AppScreen.CURRICULUM_LIBRARY && child != null) {
+            childSubjectDraftChildId = child.id
+            try {
+                val saved = repository.loadChildSubjectSelections(familyId)
+                childSubjectSelections = saved
+                val available = subjects.filter { subject ->
+                    subject.gradeLevel == child.schoolGrade &&
+                        (subject.countryCode.equals(child.countryCode, ignoreCase = true) ||
+                            subject.countryCode.equals("ZZ", ignoreCase = true))
+                }.map { it.id }.toSet()
+                childSubjectDraft = saved[child.id] ?: available
+            } catch (_: Exception) {
+                childSubjectDraft = childSubjectSelections[child.id] ?: subjects.filter {
+                    it.gradeLevel == child.schoolGrade &&
+                        (it.countryCode.equals(child.countryCode, ignoreCase = true) ||
+                            it.countryCode.equals("ZZ", ignoreCase = true))
+                }.map { it.id }.toSet()
+            }
+        }
+    }
+
     LaunchedEffect(screen, childProfile?.id) {
         val linked = childProfile
         if (linked != null && session?.accountRole == "child" &&
@@ -2565,6 +2601,61 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 AppUiText("Choose the child's learning context and import ready-made questions. The answer key stays server-side; you do not need to write questions yourself.")
+                            }
+                        }
+
+                        val childSubjectsAvailable = subjects.filter { subject ->
+                            subject.gradeLevel == child.schoolGrade &&
+                                (subject.countryCode.equals(child.countryCode, ignoreCase = true) ||
+                                    subject.countryCode.equals("ZZ", ignoreCase = true))
+                        }
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F0FF))
+                        ) {
+                            Column(
+                                Modifier.fillMaxWidth().padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                AppUiText("Subjects for " + child.displayName, fontWeight = FontWeight.Bold)
+                                AppUiText("Select the subject banks this child should use.", style = MaterialTheme.typography.bodySmall)
+                                if (childSubjectsAvailable.isEmpty()) {
+                                    AppUiText("No saved subjects match this child's country and grade yet.", style = MaterialTheme.typography.bodySmall)
+                                } else {
+                                    childSubjectsAvailable.forEach { subject ->
+                                        Row(
+                                            Modifier.fillMaxWidth().clickable {
+                                                childSubjectDraft = if (subject.id in childSubjectDraft) childSubjectDraft - subject.id else childSubjectDraft + subject.id
+                                            }.padding(vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Checkbox(
+                                                checked = subject.id in childSubjectDraft,
+                                                onCheckedChange = { checked ->
+                                                    childSubjectDraft = if (checked) childSubjectDraft + subject.id else childSubjectDraft - subject.id
+                                                }
+                                            )
+                                            Column(Modifier.weight(1f)) {
+                                                AppUiText(subject.title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                                AppUiText(subject.languageCode.uppercase() + " • Grade " + subject.gradeLevel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                    }
+                                    Button(
+                                        onClick = {
+                                            execute {
+                                                require(childSubjectDraft.isNotEmpty()) { "Select at least one subject for this child." }
+                                                repository.saveChildSubjectSelection(familyId, child.id, childSubjectDraft)
+                                                childSubjectSelections = childSubjectSelections + (child.id to childSubjectDraft)
+                                                notice = "Subjects saved for " + child.displayName + "."
+                                            }
+                                        },
+                                        enabled = !busy && childSubjectDraft.isNotEmpty() && childSubjectDraftChildId == child.id,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp)
+                                    ) { AppUiText("Save subjects") }
+                                }
                             }
                         }
 
@@ -3930,11 +4021,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                         color = MaterialTheme.colorScheme.primary
                     )
                     AppUiText("Choose a subject")
+                    val savedChildSubjectIds = selectedChild?.id?.let { childSubjectSelections[it] }
                     val assignableSubjects = subjects.filter { subject ->
+                        val allowedByChildSelection = savedChildSubjectIds == null || subject.id in savedChildSubjectIds
                         val religionTrack = religionTrackForSubject(subject.title)
                         val isCountrySubject = subject.countryCode.equals(selectedTaskCountry, ignoreCase = true) ||
                             subject.countryCode.equals("ZZ", ignoreCase = true)
-                        isCountrySubject &&
+                        allowedByChildSelection &&
+                            isCountrySubject &&
                             subject.gradeLevel == selectedChild?.schoolGrade &&
                             (religionTrack == null || (selectedChildTrack != "none" && religionTrack == selectedChildTrack))
                     }
