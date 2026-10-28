@@ -72,8 +72,6 @@ create table if not exists edulock.child_concept_progress (
 create index if not exists child_concept_review_idx
   on edulock.child_concept_progress(child_id, focus_score desc, next_review_at);
 
--- Keep granular scoring and feedback so parent and child screens can show the exact
--- accuracy/spelling breakdown instead of only a pass/fail flag.
 create table if not exists edulock.child_learning_preferences (
   child_id uuid primary key references edulock.children(id) on delete cascade,
   kindergarten_mode boolean not null default false,
