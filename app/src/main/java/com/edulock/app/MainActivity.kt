@@ -5520,6 +5520,39 @@ private fun EduLockApp(repository: EduLockRepository) {
                             }
                         }
                     }
+                    AppUiText("Written answer accuracy & spelling", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    OutlinedButton(
+                        onClick = {
+                            execute {
+                                val childId = selectedChild?.id ?: children.firstOrNull()?.id
+                                    ?: throw IllegalStateException("Add or select a child profile first.")
+                                writtenAnswerFeedback = repository.loadWrittenAnswerFeedback(childId)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { AppUiText("Load spelling and accuracy feedback") }
+                    if (writtenAnswerFeedback.isEmpty()) {
+                        AppUiText("Select a child and load feedback to review exact answers, accuracy marks, spelling marks, and focus areas.")
+                    } else {
+                        writtenAnswerFeedback.forEach { feedback ->
+                            val child = children.firstOrNull { it.id == feedback.childId }
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                    AppUiText(child?.displayName ?: "Child profile", fontWeight = FontWeight.SemiBold)
+                                    AppUiText("Concept: " + feedback.conceptKey.replace('_', ' '))
+                                    AppUiText("Submitted: " + feedback.suppliedAnswer)
+                                    AppUiText("Expected: " + feedback.expectedAnswer)
+                                    AppUiText("Accuracy: " + feedback.accuracyScore + "% • Spelling: " + feedback.spellingScore + "%")
+                                    AppUiText("Final answer mark: " + feedback.finalScore + "/100", fontWeight = FontWeight.Bold)
+                                    if (feedback.feedback.isNotBlank()) AppUiText("Practice tip: " + feedback.feedback)
+                                    if (feedback.detectedErrorsJson != "[]") AppUiText("Focus areas: " + feedback.detectedErrorsJson)
+                                }
+                            }
+                        }
+                    }
                     AppUiText("Task history", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     if (attempts.isEmpty()) AppUiText("No submitted task attempts yet.")
                     attempts.forEach { attempt ->
