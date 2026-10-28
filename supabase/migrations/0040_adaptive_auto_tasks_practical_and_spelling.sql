@@ -480,10 +480,13 @@ begin
       v_focus,now(),now() + case when v_focus >= 4 then interval '1 hour' else interval '1 day' end,
       (v_candidate->>'question_id')::uuid,now()
     ) on conflict(child_id,concept_key) do update set
-      subject_id=excluded.subject_id,attempts=excluded.attempts,correct_attempts=excluded.correct_attempts,
-      wrong_attempts=excluded.wrong_attempts,focus_score=excluded.focus_score,
-      last_attempt_at=excluded.last_attempt_at,next_review_at=excluded.next_review_at,
-      last_question_id=excluded.last_question_id,updated_at=now();
+      subject_id=excluded.subject_id,attempts=edulock.child_concept_progress.attempts+1,
+      correct_attempts=edulock.child_concept_progress.correct_attempts +
+        case when coalesce((v_candidate->>'is_correct')::boolean,false) then 1 else 0 end,
+      wrong_attempts=edulock.child_concept_progress.wrong_attempts +
+        case when coalesce((v_candidate->>'is_correct')::boolean,false) then 0 else 1 end,
+      focus_score=excluded.focus_score,last_attempt_at=excluded.last_attempt_at,
+      next_review_at=excluded.next_review_at,last_question_id=excluded.last_question_id,updated_at=now();
   end loop;
 
   if v_award > 0 then
