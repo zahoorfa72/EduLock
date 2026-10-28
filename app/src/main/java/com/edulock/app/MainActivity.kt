@@ -5462,6 +5462,28 @@ private fun EduLockApp(repository: EduLockRepository) {
                             "Try a hands-on activity. Follow the safety notes and ask a parent for help when needed.",
                             style = MaterialTheme.typography.bodyMedium
                         )
+                        OutlinedButton(
+                            onClick = {
+                                execute {
+                                    val child = childProfile ?: throw IllegalStateException("Your linked child profile was not found.")
+                                    practicalTasks = repository.loadPracticalTasks(child.id)
+                                    practicalSubmissions = repository.loadMyPracticalSubmissions(child.id)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { AppUiText("Refresh my practical tasks and reviews") }
+                        if (practicalSubmissions.isNotEmpty()) {
+                            AppUiText("Parent review", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            practicalSubmissions.forEach { submission ->
+                                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                        AppUiText(submission.title, fontWeight = FontWeight.Bold)
+                                        AppUiText("Status: " + submission.status.replace('_',' '))
+                                        if (submission.parentFeedback.isNotBlank()) AppUiText("Parent tip: " + submission.parentFeedback)
+                                    }
+                                }
+                            }
+                        }
                     }
                     if (practicalTasks.isEmpty()) {
                         SummaryCard(
