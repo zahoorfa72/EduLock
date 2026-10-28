@@ -248,6 +248,121 @@ $adaptive$;
 revoke all on function edulock.adaptive_question_candidates(uuid, uuid[], integer, integer, integer) from public, anon, authenticated;
 grant execute on function edulock.adaptive_question_candidates(uuid, uuid[], integer, integer, integer) to service_role;
 
+-- Keep new saved questions discoverable without rewriting the database task generator.
+create or replace function edulock.ensure_daily_tasks_for_child(p_user_id uuid)
+returns jsonb
+language plpgsql security definer set search_path = ''
+as $daily$
+declare
+  v_child edulock.children%rowtype;
+  v_result jsonb;
+  v_task_count integer := 0;
+  v_question_count integer := 0;
+  v_task edulock.tasks%rowtype;
+  v_subject record;
+  v_ids uuid[];
+  v_question record;
+  v_title text;
+  v_daily_count integer := 1;
+  v_questions_per_task integer := 4;
+  v_pass integer := 70;
+  v_reward integer := 1;
+  v_cap integer := 30;
+  v_kinder boolean := false;
+  v_focus integer;
+  v_today date := (now() at time zone 'UTC')::date;
+begin
+  select * into v_child from edulock.children c where c.child_user_id = p_user_id for update;
+  if not found then raise exception 'No linked child profile was found'; end if;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_child.id::text, 0));
+
+  select coalesce(p.daily_written_question_limit,8), coalesce(p.kindergarten_mode,false)
+    into v_questions_per_task, v_kinder
+    from edulock.child_learning_preferences p where p.child_id = v_child.id;
+  v_questions_per_task := greatest(1, least(v_questions_per_task, if(v_kinder,4,12)));
+  v_kinder := v_kinder or coalesce(v_child.age_years,8) <= 6 or coalesce(v_child.school_grade,1) <= 0;
+
+  -- Existing active daily tasks are retained, never duplicated.
+  select count(*) into v_task_count from edulock.tasks t
+    where t.child_id = v_child.id and t.active = true
+      and t.title like 'Auto task • %'
+      and t.created_at >= (date_trunc('day', now() at time zone 'UTC') at time zone 'UTC');
+
+  -- Create tasks for saved subjects with a candidate pool; each question is a saved
+  -- child/family question, selected by current mastery and review scheduling.
+  if v_task_count = 0 then
+    for v_subject in
+      select distinct s.id, s.title, s.family_id
+      from edulock.subjects s
+      join edulock.tasks t on t.child_id = v_child.id and t.family_id = s.family_id
+      where s.family_id = v_child.family_id
+      order by s.title
+      limit 3
+    loop
+      select array_agg(candidate.question_id order by candidate.priority desc, candidate.question_id)
+        into v_ids
+        from edulock.adaptive_question_candidates(
+          v_child.id, array[v_subject.id], v_child.school_grade, v_child.age_years,
+          v_questions_per_task
+        ) candidate;
+
+      if coalesce(array_length(v_ids,1),0) = 0 then
+        select array_agg(q.id order by q.created_at desc, q.id)
+          into v_ids
+          from (
+            select q.id, q.created_at from edulock.questions q
+            where q.subject_id = v_subject.id and q.learning_mode = 'written'
+              and q.grade_level = v_child.school_grade
+              and v_child.age_years between q.age_min and q.age_max
+            order by q.created_at desc limit v_questions_per_task
+          ) q;
+      end if;
+      if coalesce(array_length(v_ids,1),0) = 0 then continue; end if;
+      v_title := left('Auto task • ' || v_subject.title, 160);
+      insert into edulock.tasks(
+        family_id, child_id, subject_id, title, question_count, pass_percent,
+        reward_minutes, daily_cap_minutes, active, target_grade_level, target_age_years,
+        task_portal, kindergarten_mode, reward_to_bank
+      ) values (
+        v_child.family_id, v_child.id, v_subject.id, v_title,
+        array_length(v_ids,1), v_pass, v_reward, v_cap, true,
+        v_child.school_grade, v_child.age_years, 'written', v_kinder, true
+      ) returning * into v_task;
+
+      for v_question in
+        select x.question_id, row_number() over(order by x.ordinality)::integer as order_index
+        from unnest(v_ids) with ordinality x(question_id, ordinality)
+      loop
+        insert into edulock.task_questions(task_id, question_id, sort_order)
+        values(v_task.id, v_question.question_id, v_question.order_index - 1)
+        on conflict(task_id, question_id) do nothing;
+      end loop;
+      v_task_count := v_task_count + 1;
+      v_question_count := v_question_count + array_length(v_ids,1);
+    end loop;
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', t.id, 'title', t.title, 'question_count', t.question_count,
+    'kindergarten_mode', coalesce(t.kindergarten_mode,false)
+  ) order by t.created_at desc), '[]'::jsonb)
+    into v_result
+    from edulock.tasks t
+    where t.child_id = v_child.id and t.active = true
+      and t.title like 'Auto task • %'
+      and t.created_at >= (date_trunc('day', now() at time zone 'UTC') at time zone 'UTC');
+
+  return jsonb_build_object(
+    'created_tasks', v_task_count,
+    'created_questions', v_question_count,
+    'kindergarten_mode', v_kinder,
+    'tasks', coalesce(v_result,'[]'::jsonb)
+  );
+end;
+$daily$;
+revoke all on function edulock.ensure_daily_tasks_for_child(uuid) from public, anon, authenticated;
+grant execute on function edulock.ensure_daily_tasks_for_child(uuid) to service_role;
+
 create index if not exists questions_subject_mode_difficulty_idx
   on edulock.questions(subject_id, learning_mode, difficulty_level, created_at);
 
