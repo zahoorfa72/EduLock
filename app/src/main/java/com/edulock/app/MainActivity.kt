@@ -3106,11 +3106,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             } else {
                                 repository.updateSubject(currentSubjectId, subjectTitle, subjectLanguage, subjectCountryCode, grade)
                             }
-                            val starterQuestions = fourDTemplatesForSubject(
-                                savedSubject.title, savedSubject.languageCode, grade,
-                                selectedChild?.ageYears ?: (grade + 5).coerceIn(3, 19)
-                            )
-                            val addedQuestionCount = repository.ensureTemplateQuestions(savedSubject.id, starterQuestions)
+                            val addedQuestionCount = 0
                             selectedSubject = savedSubject
                             questions = repository.loadQuestions(savedSubject.id)
                             questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
@@ -3119,9 +3115,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                             editingSubjectId = null
                             screen = AppScreen.QUESTIONS
                             notice = if (currentSubjectId == null) {
-                                "Subject created with " + addedQuestionCount + " starter questions. Add, review, or translate questions on this subject page."
+                                "Subject created. Add questions individually from this subject page."
                             } else {
-                                "Subject updated. " + addedQuestionCount + " missing starter questions added. You can manage its questions here."
+                                "Subject updated. Manage its questions here."
                             }
                         }
                     }, enabled = !busy && subjectTitle.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
@@ -3141,20 +3137,25 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         AppUiText("Group rewards are bonus minutes granted only when every question in that concept group assigned to the task is correct.")
                         questions.map { it.conceptKey.trim() }.filter { it.isNotBlank() }.distinct().sorted().forEach { concept ->
-                            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    AppUiText("Question group: " + concept, fontWeight = FontWeight.Bold)
+                            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                                Column(Modifier.padding(9.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    AppUiText("🏅 " + concept, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
                                     Field(
                                         questionGroupRewardEdits[concept] ?: questionRewardGroups.firstOrNull { it.conceptKey == concept }?.rewardMinutes?.toString() ?: "0",
                                         { value -> questionGroupRewardEdits = questionGroupRewardEdits + (concept to value.filter(Char::isDigit).take(4)) },
                                         "Bonus minutes when all group questions are correct",
                                         keyboardType = KeyboardType.Number
                                     )
-                                    OutlinedButton(onClick = { execute {
-                                        repository.saveQuestionRewardGroup(subject.id, concept, questionGroupRewardEdits[concept]?.toIntOrNull() ?: 0)
-                                        questionRewardGroups = repository.loadQuestionRewardGroups(subject.id)
-                                        notice = "Group bonus saved for " + concept + "."
-                                    } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Save group bonus") }
+                                    LaunchedEffect(concept, questionGroupRewardEdits[concept]) {
+                                        val value = questionGroupRewardEdits[concept]?.toIntOrNull() ?: return@LaunchedEffect
+                                        delay(700)
+                                        val previous = questionRewardGroups.firstOrNull { it.conceptKey == concept }?.rewardMinutes ?: 0
+                                        if (value !in 0..1440 || value == previous) return@LaunchedEffect
+                                        runCatching {
+                                            repository.saveQuestionRewardGroup(subject.id, concept, value)
+                                            questionRewardGroups = repository.loadQuestionRewardGroups(subject.id)
+                                        }.onFailure { notice = "Could not save group reward: " + (it.message ?: "Please retry.") }
+                                    }
                                 }
                             }
                         }
@@ -3252,16 +3253,18 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             "Reward minutes (blank = use task default; 0–1440)",
                                             keyboardType = KeyboardType.Number
                                         )
-                                        OutlinedButton(
-                                            onClick = { execute {
-                                                val rawReward = questionRewardEdits[question.id] ?: question.rewardMinutes?.toString().orEmpty()
-                                                repository.setQuestionReward(question.id, rawReward.toIntOrNull())
+                                        LaunchedEffect(question.id, questionRewardEdits[question.id]) {
+                                            val rawReward = questionRewardEdits[question.id] ?: question.rewardMinutes?.toString().orEmpty()
+                                            delay(700)
+                                            val parsed = rawReward.toIntOrNull()
+                                            if (rawReward.isNotBlank() && (parsed == null || parsed !in 0..1440)) return@LaunchedEffect
+                                            if (rawReward.isBlank() && question.rewardMinutes == null) return@LaunchedEffect
+                                            if (parsed == question.rewardMinutes) return@LaunchedEffect
+                                            runCatching {
+                                                repository.setQuestionReward(question.id, parsed)
                                                 questions = repository.loadQuestions(subject.id)
-                                                notice = "Individual question reward saved. Blank uses the task default; the server applies daily limits when grading."
-                                            } },
-                                            enabled = !busy,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) { AppUiText("Save question reward") }
+                                            }.onFailure { notice = "Could not save question reward: " + (it.message ?: "Please retry.") }
+                                        }
                                         val savedTranslationsForQuestion = questionTranslations[question.id].orEmpty()
                                         if (savedTranslationsForQuestion.isNotEmpty()) {
                                             savedTranslationsForQuestion.forEach { savedTranslation ->
@@ -3339,7 +3342,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             translationOptions = ""
                                             translationAcceptedAnswers = ""
                                             screen = AppScreen.ADD_TRANSLATION
-                                        }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Add / edit translation") }
+                                        }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Translate / edit translation") }
                                     }
                                 }
                             }
@@ -4119,19 +4122,19 @@ private fun EduLockApp(repository: EduLockRepository) {
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
-                            Column(Modifier.padding(horizontal = 7.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Column(Modifier.padding(horizontal = 6.dp, vertical = 3.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(7.dp)
                                 ) {
                                     Box(
-                                        Modifier.size(30.dp).background(
+                                        Modifier.size(26.dp).background(
                                             if (appIsEnabled) Color(0xFFE2F7EC) else Color(0xFFFDE8E8),
                                             RoundedCornerShape(10.dp)
                                         ),
                                         contentAlignment = Alignment.Center
-                                    ) { AppUiText(appGlyph, fontSize = 20.sp) }
+                                    ) { AppUiText(appGlyph, fontSize = 17.sp) }
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                         AppUiText(installed.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
                                         AppUiText(if (appIsEnabled) "Enabled" else "Disabled",
@@ -4148,9 +4151,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 }
                                             },
                                             enabled = !busy,
-                                            modifier = Modifier.size(width = 34.dp, height = 32.dp),
+                                            modifier = Modifier.size(width = 30.dp, height = 29.dp),
                                             contentPadding = PaddingValues(0.dp)
-                                        ) { AppUiText("🗓", fontSize = 15.sp) }
+                                        ) { AppUiText("🗓", fontSize = 13.sp) }
                                     }
                                     Switch(
                                         checked = appIsEnabled,
