@@ -256,6 +256,7 @@ as $daily$
 declare
   v_child edulock.children%rowtype;
   v_preferences edulock.child_learning_preferences%rowtype;
+  v_daily_settings edulock.daily_task_settings%rowtype;
   v_subject record;
   v_ids uuid[];
   v_question record;
@@ -265,6 +266,7 @@ declare
   v_created_questions integer := 0;
   v_question_limit integer := 8;
   v_task_count integer := 3;
+  v_daily_task_count integer := 1;
   v_pass_percent integer := 70;
   v_reward_minutes integer := 1;
   v_daily_cap integer := 30;
@@ -282,8 +284,18 @@ begin
     v_question_limit := greatest(1, least(coalesce(v_preferences.daily_written_question_limit,8),100));
     v_kindergarten := coalesce(v_preferences.kindergarten_mode,false);
   end if;
+
+  select * into v_daily_settings from edulock.daily_task_settings ds
+    where ds.child_id = v_child.id and ds.enabled = true;
+  if found then
+    v_daily_task_count := greatest(1, least(coalesce(v_daily_settings.daily_task_count,1),3));
+    v_question_limit := greatest(1, least(coalesce(v_daily_settings.questions_per_task,4),100));
+    v_pass_percent := greatest(0, least(coalesce(v_daily_settings.pass_percent,70),100));
+    v_reward_minutes := greatest(0, least(coalesce(v_daily_settings.reward_minutes,1),1440));
+    v_daily_cap := greatest(0, least(coalesce(v_daily_settings.daily_cap_minutes,30),1440));
+  end if;
   v_kindergarten := v_kindergarten or coalesce(v_child.age_years,8) <= 6 or coalesce(v_child.school_grade,1) <= 0;
-  v_task_count := case when v_kindergarten then 2 else 3 end;
+  v_task_count := case when v_kindergarten then least(v_daily_task_count,2) else least(v_daily_task_count,3) end;
   v_question_limit := case when v_kindergarten then least(v_question_limit,4) else least(v_question_limit,8) end;
 
   -- Do not duplicate today's auto tasks. If there are existing active tasks for today,
@@ -300,6 +312,8 @@ begin
       select s.id, s.title, s.family_id
       from edulock.subjects s
       where s.family_id = v_child.family_id
+        and (not exists (select 1 from edulock.child_subject_selections css where css.child_id = v_child.id)
+          or exists (select 1 from edulock.child_subject_selections css where css.child_id = v_child.id and css.subject_id = s.id))
         and exists (
           select 1 from edulock.questions q
           where q.subject_id = s.id and q.learning_mode = 'written'
