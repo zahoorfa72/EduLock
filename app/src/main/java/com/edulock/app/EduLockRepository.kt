@@ -41,7 +41,8 @@ data class ChildProfile(
     val avatarIcon: String = "🦊",
     val dailyGameLimitMinutes: Int = 20,
     val studyTrack: String = "none",
-    val kidsModeEnabled: Boolean = false
+    val kidsModeEnabled: Boolean = false,
+    val deviceLinked: Boolean = false
 )
 
 data class SubjectRow(
@@ -541,7 +542,7 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadChildren(familyId: String): List<ChildProfile> {
         requireSession("parent")
-        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes,study_track,kids_mode_enabled&family_id=eq.$familyId&order=created_at.desc")
+        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes,study_track,kids_mode_enabled,child_user_id&family_id=eq.$familyId&order=created_at.desc")
         return (0 until rows.length()).mapNotNull { i -> rows.optJSONObject(i)?.toChildProfile() }
     }
 
@@ -593,7 +594,19 @@ class EduLockRepository(context: Context) {
     suspend fun deactivateChildLink(childId: String) {
         requireSession("parent")
         require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
-        restArray("children?id=eq.$childId", "PATCH", JSONObject().put("child_user_id", JSONObject.NULL))
+        restArray(
+            "children?id=eq.$childId",
+            "PATCH",
+            JSONObject().put("child_user_id", JSONObject.NULL),
+            prefer = "return=representation"
+        )
+        val verified = restArray("children?select=id,child_user_id&id=eq.$childId&limit=1").optJSONObject(0)
+            ?: throw IOException("The child profile could not be found after delinking the device.")
+        val remainingLink = verified.opt("child_user_id")
+        if (remainingLink != null && remainingLink != JSONObject.NULL &&
+            remainingLink.toString().isNotBlank() && remainingLink.toString() != "null") {
+            throw IOException("The server did not confirm that the child device was delinked.")
+        }
     }
 
     suspend fun deleteChildProfile(childId: String) {
@@ -700,7 +713,7 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadCurrentChild(): ChildProfile? {
         val session = requireSession("child")
-        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes,study_track,kids_mode_enabled&child_user_id=eq.${session.userId}&limit=1")
+        val rows = restArray("children?select=id,family_id,display_name,preferred_language,daily_cap_minutes,country_code,school_grade,age_years,avatar_icon,daily_game_limit_minutes,study_track,kids_mode_enabled,child_user_id&child_user_id=eq.${session.userId}&limit=1")
         return rows.optJSONObject(0)?.toChildProfile()
     }
 
@@ -863,11 +876,10 @@ class EduLockRepository(context: Context) {
         val current = loadChildEmergencyAccess(childId)
         val code = randomEmergencyCode()
         val salt = randomEmergencySalt()
-        val expires = java.time.Instant.now().plusSeconds(10L * 60L).toString()
         upsertChildEmergencyAccess(current.copy(
             logoutCodeSalt = salt,
             logoutCodeHash = emergencyCodeHash(salt, code),
-            logoutCodeExpiresAt = expires,
+            logoutCodeExpiresAt = null,
             logoutFailedAttempts = 0,
             logoutLockedUntil = null
         ))
@@ -2673,7 +2685,8 @@ class EduLockRepository(context: Context) {
         studyTrack = optString("study_track", "none").lowercase(Locale.ROOT).takeIf {
             it in setOf("none", "islamic", "hindu", "christian", "sikh", "buddhist", "jewish", "jain", "other")
         } ?: "none",
-        kidsModeEnabled = optBoolean("kids_mode_enabled", false)
+        kidsModeEnabled = optBoolean("kids_mode_enabled", false),
+        deviceLinked = optString("child_user_id").takeIf { it.isNotBlank() && it != "null" } != null
     )
 
     private fun JSONObject.toTaskRow() = TaskRow(

@@ -96,12 +96,12 @@ Deno.serve(async (req) => {
 
     if (action === "logout") {
       if (isFuture(settings.logout_locked_until)) return json({ error: "Too many incorrect codes. Try again after 15 minutes." }, 429);
-      const valid = isFuture(settings.logout_code_expires_at) &&
-        typeof settings.logout_code_hash === "string" && settings.logout_code_hash.length > 0 &&
+      const valid = typeof settings.logout_code_hash === "string" && settings.logout_code_hash.length > 0 &&
+        typeof settings.logout_code_salt === "string" && settings.logout_code_salt.length > 0 &&
         safeEqual(await sha256(String(settings.logout_code_salt) + ":" + code), settings.logout_code_hash);
       if (!valid) {
         await recordFailure(admin, child.id, "logout", Number(settings.logout_failed_attempts) || 0);
-        return json({ error: "The parent code is incorrect or expired. Ask the parent to generate a new one." }, 403);
+        return json({ error: "The parent code is incorrect, already used, or replaced. Ask the parent to generate a new one." }, 403);
       }
       // Conditional update consumes a code exactly once, including concurrent requests.
       const { data: consumed, error: consumeError } = await admin.schema("edulock")

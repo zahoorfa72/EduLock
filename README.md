@@ -7,8 +7,9 @@ Native Android parental-control and learning app built with Kotlin, Jetpack Comp
 - Parent account registration/sign-in through Supabase Auth; child devices pair without email or password using Supabase Anonymous Sign-Ins.
 - Encrypted-at-rest session tokens using the Android Keystore; no saved passwords.
 - Parent-owned family and child profiles with Row Level Security.
-- One-time, six-digit child pairing codes; the server stores only a hash and expires codes after 10 minutes.
-- Parent-created subjects and multilingual questions. Unicode input supports Urdu, Sindhi, English and other languages; Urdu/Sindhi screens use right-to-left layout.
+- One-time, six-digit child pairing codes; the server stores only a hash and expires pairing codes after 10 minutes. Parent logout codes are eight digits, single-use, have no time expiry, and can be replaced by a parent at any time.
+- Delinking a child device preserves the child profile, questions, reward records and learning history; deleting the profile remains a separate explicit action.
+- Parent-created subjects and multilingual questions with searchable subject, question, child-profile, settings and app lists. Unicode input supports Urdu, Sindhi, English and other languages; Urdu/Sindhi screens use right-to-left layout.
 - Concept Bridge: each canonical question has a reusable concept tag and language code; parents can save translated prompts/options and accepted answers. Children can switch to an available translation while answering, and the parent report groups correctness by concept and language without exposing translation answer keys.
 - Task assignment, question answering, scores and reward ledger entries.
 - Server-side answer grading. Correct-answer keys are not granted to clients. Rewards are written by a trusted database function, not calculated by the client, with a per-child daily cap and a task cap enforced in the same transaction.
