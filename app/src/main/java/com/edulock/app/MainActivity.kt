@@ -5357,6 +5357,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     Button(
                                         onClick = {
                                             execute {
+                                                val launch = context.packageManager.getLaunchIntentForPackage(childEmergencyTargetPackage)
+                                                    ?: throw IllegalStateException("This app is not installed on this phone. Ask your parent to refresh the approved app list.")
                                                 val result = repository.redeemChildEmergencyAccess(
                                                     childEmergencyCodeInput, childEmergencyTargetPackage
                                                 )
@@ -5370,8 +5372,6 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 lockStatePreferences.edit().putStringSet("emergency_access_grants", entries).apply()
                                                 childEmergencyOptions = childEmergencyOptions.copy(lastUsedDate = result.usedDate)
                                                 childEmergencyCodeInput = ""
-                                                val launch = context.packageManager.getLaunchIntentForPackage(result.packageName)
-                                                    ?: throw IllegalStateException("This app is not installed on this phone.")
                                                 launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                                 context.startActivity(launch)
                                                 notice = "Emergency access enabled for " + (emergencyApps.firstOrNull { it.packageName == result.packageName }?.displayName ?: "the approved app") +
