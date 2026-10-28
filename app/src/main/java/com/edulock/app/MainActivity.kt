@@ -247,6 +247,38 @@ private fun religionTrackForSubject(title: String): String? = when {
     title.contains("World Religions", ignoreCase = true) -> "other"
     else -> null
 }
+private fun subjectsForChildContext(
+    allSubjects: List<SubjectRow>,
+    child: ChildProfile?,
+    childSelections: Map<String, Set<String>>,
+    defaultCountryCode: String
+): List<SubjectRow> {
+    val visible = allSubjects.filter { subject ->
+        val track = religionTrackForSubject(subject.title)
+        val countryAndGradeMatch = if (child == null) {
+            subject.countryCode.equals(defaultCountryCode, ignoreCase = true) ||
+                subject.countryCode.equals("ZZ", ignoreCase = true)
+        } else {
+            (subject.countryCode.equals(child.countryCode, ignoreCase = true) ||
+                subject.countryCode.equals("ZZ", ignoreCase = true)) &&
+                subject.gradeLevel == child.schoolGrade
+        }
+        val selectedIds = child?.id?.let { childSelections[it] }
+        val explicitlySelected = selectedIds == null || subject.id in selectedIds
+        val trackMatches = track == null || (child != null && child.studyTrack == track)
+        countryAndGradeMatch && explicitlySelected && trackMatches
+    }
+    return visible.distinctBy { subject ->
+        listOf(
+            subject.title.trim().lowercase(Locale.ROOT),
+            subject.languageCode.trim().lowercase(Locale.ROOT),
+            subject.countryCode.trim().uppercase(Locale.ROOT),
+            subject.gradeLevel.toString(),
+            subject.curriculumSubjectCode.trim().lowercase(Locale.ROOT)
+        ).joinToString("|")
+    }
+}
+
 
 private fun religiousSubjectTitle(track: String): String = when (track) {
     "islamic" -> "Islamic Studies"
@@ -1327,7 +1359,7 @@ private fun EduLockApp(repository: EduLockRepository) {
         context.getSharedPreferences("edulock_display_language", Context.MODE_PRIVATE)
             .edit().putString("language", parentDisplayLanguageCode).apply()
         children = repository.loadChildren(familyId)
-        subjects = repository.loadSubjects(familyId, parentCountryCode)
+        subjects = repository.loadSubjects(familyId)
     }
 
     suspend fun finishChildLogin(newSession: AuthSession, suppliedCode: String) {
@@ -1446,7 +1478,7 @@ private fun EduLockApp(repository: EduLockRepository) {
             context.getSharedPreferences("edulock_display_language", Context.MODE_PRIVATE)
                 .edit().putString("language", parentDisplayLanguageCode).apply()
             children = repository.loadChildren(familyId)
-            subjects = repository.loadSubjects(familyId, parentCountryCode)
+            subjects = repository.loadSubjects(familyId)
             LocationWatchdogWorker.schedule(context)
             screen = AppScreen.PARENT_HOME
         } else {
@@ -1970,7 +2002,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             if (familyId.isNotBlank() && session?.accountRole == "parent") {
                                                 execute {
                                                     repository.updateParentLearningSettings(familyId, parentCountryCode, parentLearningLanguageCode, parentStudyTrack, parentDisplayLanguageCode)
-                                                    subjects = repository.loadSubjects(familyId, parentCountryCode)
+                                                    subjects = repository.loadSubjects(familyId)
                                                     notice = "Country saved. The question bank now prioritizes this country's curriculum."
                                                 }
                                             }
@@ -2116,7 +2148,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             repository.ensureTemplateQuestions(religiousSubject.id, starterQuestions)
                                             }
                                             children = repository.loadChildren(familyId)
-                                            subjects = repository.loadSubjects(familyId, parentCountryCode)
+                                            subjects = repository.loadSubjects(familyId)
                                             notice = if (code == "none") "Religious education disabled for this child." else "$label is set for this child. Matching questions are available from Learning Templates."
                                         }
                                     }
@@ -2719,7 +2751,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         }
                                         "Question rewards" -> {
                                             screen = AppScreen.SUBJECTS
-                                            execute { subjects = repository.loadSubjects(familyId, parentCountryCode) }
+                                            execute { subjects = repository.loadSubjects(familyId) }
                                         }
                                         "Location & alerts" -> {
                                             screen = AppScreen.CHILD_LOCATIONS
@@ -2760,6 +2792,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 }
 
                 AppScreen.PARENT_HOME -> ScreenFrame("Parent dashboard", notice = notice, busy = busy) {
+                    val dashboardSubjects = subjectsForChildContext(subjects, selectedChild, childSubjectSelections, parentCountryCode)
                     AppUiText("Your family is protected by your signed-in parent account.")
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         DashboardIconTile(
@@ -2772,11 +2805,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                         )
                         DashboardIconTile(
                             icon = "📚",
-                            title = subjects.size.toString() + " subjects",
-                            subtitle = "Questions for " + displayCountryName(parentCountryCode),
+                            title = dashboardSubjects.size.toString() + if (dashboardSubjects.size == 1) " subject" else " subjects",
+                            subtitle = if (selectedChild != null) {
+                                "Subjects for " + selectedChild!!.displayName
+                            } else {
+                                "Questions for " + displayCountryName(parentCountryCode)
+                            },
                             modifier = Modifier.weight(1f),
                             accent = Color(0xFF079B91),
-                            onClick = { screen = AppScreen.SUBJECTS; execute { subjects = repository.loadSubjects(familyId, parentCountryCode) } }
+                            onClick = { screen = AppScreen.SUBJECTS; execute { subjects = repository.loadSubjects(familyId) } }
                         )
                     }
                     AppUiText("Your learning toolkit", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
@@ -2785,7 +2822,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             DashboardIconTile(
                                 icon = "🧪", title = "Subjects & questions", subtitle = "Create and manage question banks",
                                 modifier = Modifier.weight(1f), accent = Color(0xFF5147E8),
-                                onClick = { screen = AppScreen.SUBJECTS; execute { subjects = repository.loadSubjects(familyId, parentCountryCode) } }
+                                onClick = { screen = AppScreen.SUBJECTS; execute { subjects = repository.loadSubjects(familyId) } }
                             )
                             DashboardIconTile(
                                 icon = "🗂️", title = "Learning templates", subtitle = "Ready-made subjects and activities",
@@ -3058,7 +3095,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             selectedSubject = null
                                             questions = emptyList()
                                             execute {
-                                                subjects = repository.loadSubjects(familyId, child.countryCode)
+                                                subjects = repository.loadSubjects(familyId)
                                                 childSubjectSelections = repository.loadChildSubjectSelections(familyId)
                                                 screen = AppScreen.SUBJECTS
                                             }
@@ -3568,7 +3605,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             targetChild.id, curriculumCountryCode, grade, age,
                                             curriculumSubjectCode, curriculumLanguageCode, curriculumSelectedIds.toList()
                                         )
-                                        subjects = repository.loadSubjects(familyId, parentCountryCode)
+                                        subjects = repository.loadSubjects(familyId)
                                         selectedSubject = subjects.firstOrNull { it.id == imported.subjectId }
                                         val targetSubject = selectedSubject
                                             ?: throw IllegalStateException("Questions imported, but the subject could not be reloaded.")
@@ -3598,36 +3635,16 @@ private fun EduLockApp(repository: EduLockRepository) {
                     )
                     Button(onClick = {
                         editingSubjectId = null
-                        subjectTitle = ""; subjectLanguage = "en"
-                        subjectCountryCode = parentCountryCode
+                        subjectTitle = ""
+                        subjectLanguage = selectedChild?.preferredLanguage ?: parentLearningLanguageCode
+                        subjectCountryCode = selectedChild?.countryCode ?: parentCountryCode
                         subjectGradeLevel = (selectedChild?.schoolGrade ?: children.firstOrNull()?.schoolGrade ?: 1).toString()
                         screen = AppScreen.ADD_SUBJECT
                     }, modifier = Modifier.fillMaxWidth()) { AppUiText("Create subject") }
 
                     AppUiText("Your selected subjects", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     AppUiText(if (selectedChild != null) "Subjects for " + selectedChild!!.displayName + ". Each subject has its own questions." else "Open a subject to view its questions and translations.")
-                    val visibleSubjects = subjects
-                        .filter { subject ->
-                            val child = selectedChild
-                            val track = religionTrackForSubject(subject.title)
-                            val childContextMatches = child == null ||
-                                (subject.countryCode.equals(child.countryCode, ignoreCase = true) ||
-                                    subject.countryCode.equals("ZZ", ignoreCase = true)) &&
-                                subject.gradeLevel == child.schoolGrade
-                            val selectedIds = child?.id?.let { childSubjectSelections[it] }
-                            val explicitlySelected = selectedIds == null || subject.id in selectedIds
-                            val trackMatches = track == null || (child != null && child.studyTrack == track)
-                            childContextMatches && explicitlySelected && trackMatches
-                        }
-                        .distinctBy { subject ->
-                            listOf(
-                                subject.title.trim().lowercase(Locale.ROOT),
-                                subject.languageCode.trim().lowercase(Locale.ROOT),
-                                subject.countryCode.trim().uppercase(Locale.ROOT),
-                                subject.gradeLevel.toString(),
-                                subject.curriculumSubjectCode.trim().lowercase(Locale.ROOT)
-                            ).joinToString("|")
-                        }
+                    val visibleSubjects = subjectsForChildContext(subjects, selectedChild, childSubjectSelections, parentCountryCode)
                     val searchedSubjects = visibleSubjects.filter { subject ->
                         subjectSearchQuery.isBlank() ||
                             subject.title.contains(subjectSearchQuery, ignoreCase = true) ||
@@ -3636,8 +3653,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                             subject.curriculumSubjectCode.contains(subjectSearchQuery, ignoreCase = true) ||
                             subject.gradeLevel.toString().contains(subjectSearchQuery, ignoreCase = true)
                     }
-                    if (searchedSubjects.isEmpty()) {
-                        AppUiText(if (subjects.isEmpty()) "No subjects yet. Create a subject to begin." else "No subjects match '${subjectSearchQuery}'.")
+                    if (visibleSubjects.isEmpty() && subjectSearchQuery.isBlank()) {
+                        AppUiText(
+                            if (subjects.isEmpty()) "No subjects yet. Create a subject to begin."
+                            else if (selectedChild != null) "No subjects match ${selectedChild!!.displayName}'s country, grade and selected-subject settings yet. Create or choose a suggested subject below."
+                            else "No subjects available for ${displayCountryName(parentCountryCode)} yet. Create a subject to begin."
+                        )
+                    } else if (searchedSubjects.isEmpty()) {
+                        AppUiText("No subjects match '${subjectSearchQuery}'.")
                     }
                     searchedSubjects.forEach { subject ->
                         Card(
@@ -3730,7 +3753,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 onClick = {
                                                     execute {
                                                         repository.deleteSubject(subject.id)
-                                                        subjects = repository.loadSubjects(familyId, parentCountryCode)
+                                                        subjects = repository.loadSubjects(familyId)
                                                         if (selectedSubject?.id == subject.id) {
                                                             selectedSubject = null
                                                             questions = emptyList()
@@ -3947,7 +3970,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                     templateCountryCode
                                                 )
                                             }
-                                            subjects = repository.loadSubjects(familyId, templateCountryCode)
+                                            subjects = repository.loadSubjects(familyId)
                                             selectedSubject = targetSubject
                                             questions = repository.loadQuestions(targetSubject.id)
                                             questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
@@ -3996,43 +4019,143 @@ private fun EduLockApp(repository: EduLockRepository) {
                 }
 
                 AppScreen.ADD_SUBJECT -> ScreenFrame(if (editingSubjectId == null) "Create subject" else "Edit subject", onBack = { screen = AppScreen.SUBJECTS }, notice = notice, busy = busy) {
-                    Field(subjectTitle, { subjectTitle = it }, "Subject name")
-                    Field(subjectLanguage, { subjectLanguage = it.trim().take(16) }, "Language code (en, ur, sd, hi, or any language)")
-                    OutlinedButton(onClick = {
-                        countryPickerTarget = "subject"
-                        countrySearch = ""
-                        countryPickerOpen = true
-                    }, modifier = Modifier.fillMaxWidth()) {
-                        AppUiText("🌍 Subject country: " + displayCountryName(subjectCountryCode))
-                    }
-                    Field(subjectGradeLevel, { subjectGradeLevel = it.filter(Char::isDigit).take(2) }, "Grade level (0 = Kindergarten, 1–13)", keyboardType = KeyboardType.Number)
-                    Button(onClick = {
+                    val gradeForSubject = subjectGradeLevel.toIntOrNull()
+                    val normalizedSubjectCountry = subjectCountryCode.trim().uppercase(Locale.ROOT)
+                    val normalizedSubjectLanguage = subjectLanguage.trim().lowercase(Locale.ROOT)
+                    val canSaveSubject = !busy && subjectTitle.isNotBlank() &&
+                        normalizedSubjectLanguage.matches(Regex("[a-z][a-z0-9-]{1,15}")) &&
+                        normalizedSubjectCountry.matches(Regex("[A-Z]{2}")) &&
+                        gradeForSubject != null && gradeForSubject in 0..13
+                    val saveSubjectAction: () -> Unit = {
                         execute {
-                            val grade = subjectGradeLevel.toIntOrNull() ?: throw IllegalArgumentException("Enter a grade from 0 to 13.")
+                            val grade = subjectGradeLevel.toIntOrNull()
+                                ?: throw IllegalArgumentException("Enter a grade from 0 to 13.")
                             require(grade in 0..13) { "Grade must be between Kindergarten (0) and 13." }
-                            val currentSubjectId = editingSubjectId
-                            val savedSubject = if (currentSubjectId == null) {
-                                repository.addSubject(familyId, subjectTitle, subjectLanguage, subjectCountryCode, grade)
-                            } else {
-                                repository.updateSubject(currentSubjectId, subjectTitle, subjectLanguage, subjectCountryCode, grade)
+                            val title = subjectTitle.trim().take(160)
+                            require(title.isNotBlank()) { "Enter a subject name." }
+                            val language = subjectLanguage.trim().lowercase(Locale.ROOT)
+                            require(language.matches(Regex("[a-z][a-z0-9-]{1,15}"))) {
+                                "Use a valid language code such as en, ur or sd."
                             }
-                            val addedQuestionCount = 0
+                            val country = subjectCountryCode.trim().uppercase(Locale.ROOT)
+                            require(country.matches(Regex("[A-Z]{2}"))) { "Choose a valid country." }
+                            val childAtSave = selectedChild
+                            if (childAtSave != null) {
+                                require(
+                                    (country.equals(childAtSave.countryCode, ignoreCase = true) || country == "ZZ") &&
+                                        grade == childAtSave.schoolGrade
+                                ) {
+                                    "For ${childAtSave.displayName}, use their country and Grade ${childAtSave.schoolGrade}. You can create other subjects from the general Subjects screen."
+                                }
+                            }
+                            val currentSubjectId = editingSubjectId
+                            val allSubjectsBeforeSave = repository.loadSubjects(familyId)
+                            val normalizedTitle = title.substringBefore(" — Grade ").trim()
+                            val existingMatchingSubject = if (currentSubjectId == null) {
+                                allSubjectsBeforeSave.firstOrNull { existing ->
+                                    existing.title.trim().substringBefore(" — Grade ").trim()
+                                        .equals(normalizedTitle, ignoreCase = true) &&
+                                        existing.languageCode.equals(language, ignoreCase = true) &&
+                                        (existing.countryCode.equals(country, ignoreCase = true) ||
+                                            existing.countryCode.equals("ZZ", ignoreCase = true)) &&
+                                        existing.gradeLevel == grade
+                                }
+                            } else null
+                            val savedSubject = when {
+                                currentSubjectId != null ->
+                                    repository.updateSubject(currentSubjectId, title, language, country, grade)
+                                existingMatchingSubject != null -> existingMatchingSubject
+                                else -> repository.addSubject(familyId, title, language, country, grade)
+                            }
+                            var selectionWarning: String? = null
+                            if (childAtSave != null) {
+                                try {
+                                    val latestSelections = repository.loadChildSubjectSelections(familyId)
+                                    val configuredSelection = latestSelections[childAtSave.id]
+                                    if (configuredSelection != null && savedSubject.id !in configuredSelection) {
+                                        val updatedSelection = configuredSelection + savedSubject.id
+                                        repository.saveChildSubjectSelection(familyId, childAtSave.id, updatedSelection)
+                                        childSubjectSelections = latestSelections + (childAtSave.id to updatedSelection)
+                                    } else {
+                                        childSubjectSelections = latestSelections
+                                    }
+                                } catch (selectionError: Exception) {
+                                    selectionWarning = selectionError.message
+                                        ?: "Could not update the selected-subject list for this child."
+                                }
+                            }
                             selectedSubject = savedSubject
                             questions = repository.loadQuestions(savedSubject.id)
                             questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
                             questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
-                            subjects = repository.loadSubjects(familyId, parentCountryCode)
+                            subjects = repository.loadSubjects(familyId)
                             editingSubjectId = null
                             screen = AppScreen.QUESTIONS
-                            notice = if (currentSubjectId == null) {
-                                "Subject created. Add questions individually from this subject page."
-                            } else {
-                                "Subject updated. Manage its questions here."
+                            notice = when {
+                                selectionWarning != null ->
+                                    "Subject saved and opened, but it could not be added to ${childAtSave?.displayName}'s selected subjects: $selectionWarning"
+                                existingMatchingSubject != null ->
+                                    "This subject already existed, so EduLock reused it instead of creating a duplicate. You can now manage its questions."
+                                currentSubjectId == null ->
+                                    "Subject saved successfully. Add questions individually from this subject page."
+                                else ->
+                                    "Subject changes saved successfully. Manage its questions here."
                             }
                         }
-                    }, enabled = !busy && subjectTitle.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-                        AppUiText(if (editingSubjectId == null) "Save subject" else "Save subject changes")
                     }
+                    Button(
+                        onClick = saveSubjectAction,
+                        enabled = canSaveSubject,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { AppUiText(if (editingSubjectId == null) "Save subject" else "Save subject changes") }
+                    Field(subjectTitle, { subjectTitle = it }, "Subject name")
+                    OutlinedButton(onClick = {
+                        countryPickerTarget = "subject"
+                        countrySearch = ""
+                        countryPickerOpen = true
+                    }, modifier = Modifier.fillMaxWidth(), enabled = !busy) {
+                        AppUiText("🌍 Subject country: " + displayCountryName(subjectCountryCode))
+                    }
+                    Field(subjectGradeLevel, { subjectGradeLevel = it.filter(Char::isDigit).take(2) }, "Grade level (0 = Kindergarten, 1–13)", keyboardType = KeyboardType.Number)
+                    AppUiText("Suggested subjects", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    AppUiText(
+                        "Tap a suggestion to fill the subject name and language. Existing matching subjects are reused instead of duplicated.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    suggestedSubjectsForCountry(subjectCountryCode).chunked(2).forEach { suggestionRow ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            suggestionRow.forEach { suggestion ->
+                                val suggestionExists = subjects.any { existing ->
+                                    existing.title.trim().substringBefore(" — Grade ").trim()
+                                        .equals(suggestion.title, ignoreCase = true) &&
+                                        existing.languageCode.equals(suggestion.languageCode, ignoreCase = true) &&
+                                        (existing.countryCode.equals(subjectCountryCode, ignoreCase = true) ||
+                                            existing.countryCode.equals("ZZ", ignoreCase = true)) &&
+                                        existing.gradeLevel == (subjectGradeLevel.toIntOrNull() ?: -1)
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        subjectTitle = suggestion.title
+                                        subjectLanguage = suggestion.languageCode
+                                        notice = null
+                                    },
+                                    enabled = !busy,
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp)
+                                ) {
+                                    AppUiText((if (suggestionExists) "✓ " else "＋ ") + suggestion.title, fontSize = 12.sp)
+                                }
+                            }
+                            if (suggestionRow.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                    Field(subjectLanguage, { subjectLanguage = it.trim().take(16) }, "Language code (en, ur, sd, hi, or any language)")
+                    Button(
+                        onClick = saveSubjectAction,
+                        enabled = canSaveSubject,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { AppUiText(if (editingSubjectId == null) "Save subject" else "Save subject changes") }
                 }
 
                 AppScreen.QUESTIONS -> ScreenFrame(selectedSubject?.title ?: "Questions", onBack = { screen = AppScreen.SUBJECTS }, notice = notice, busy = busy) {
@@ -4798,7 +4921,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             taskRewardGroupId = ""
                             taskRewardToBank = true
                             execute {
-                                subjects = repository.loadSubjects(familyId, child.countryCode)
+                                subjects = repository.loadSubjects(familyId)
                                 allowedApps = repository.loadAllowedApps(child.id)
                                 appGroups = repository.loadAppGroups(child.id)
                             }
@@ -6767,7 +6890,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             execute {
                                 val targetSubject = repository.findOrCreateSubject(familyId, option.subject, "en", parentCountryCode)
                                 selectedSubject = targetSubject
-                                subjects = repository.loadSubjects(familyId, parentCountryCode)
+                                subjects = repository.loadSubjects(familyId)
                                 questions = repository.loadQuestions(targetSubject.id)
                                 questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
                                 questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
