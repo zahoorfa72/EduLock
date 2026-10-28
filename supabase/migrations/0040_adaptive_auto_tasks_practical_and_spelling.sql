@@ -96,6 +96,38 @@ create table if not exists edulock.child_learning_preferences (
   updated_at timestamptz not null default now()
 );
 
+-- Store written-answer breakdown for parent and child progress screens.
+create table if not exists edulock.attempt_answer_feedback (
+  id uuid primary key default gen_random_uuid(),
+  attempt_id uuid not null references edulock.attempts(id) on delete cascade,
+  question_id uuid not null references edulock.questions(id) on delete cascade,
+  child_id uuid not null references edulock.children(id) on delete cascade,
+  concept_key text not null default 'general',
+  supplied_answer text not null default '' check (char_length(supplied_answer) <= 10000),
+  expected_answer text not null default '' check (char_length(expected_answer) <= 10000),
+  accuracy_score integer not null default 0 check (accuracy_score between 0 and 100),
+  spelling_score integer not null default 0 check (spelling_score between 0 and 100),
+  final_score integer not null default 0 check (final_score between 0 and 100),
+  detected_errors jsonb not null default '[]'::jsonb,
+  feedback text not null default '',
+  created_at timestamptz not null default now(),
+  unique(attempt_id, question_id)
+);
+create index if not exists answer_feedback_child_recent_idx
+  on edulock.attempt_answer_feedback(child_id, created_at desc);
+alter table edulock.attempt_answer_feedback enable row level security;
+drop policy if exists answer_feedback_parent_read on edulock.attempt_answer_feedback;
+create policy answer_feedback_parent_read on edulock.attempt_answer_feedback
+  for select to authenticated using (edulock.owns_child(child_id));
+drop policy if exists answer_feedback_child_read on edulock.attempt_answer_feedback;
+create policy answer_feedback_child_read on edulock.attempt_answer_feedback
+  for select to authenticated using (
+    exists (select 1 from edulock.children c
+      where c.id = attempt_answer_feedback.child_id and c.child_user_id = (select auth.uid()))
+  );
+revoke insert, update, delete on edulock.attempt_answer_feedback from public, anon, authenticated;
+grant select on edulock.attempt_answer_feedback to authenticated;
+
 -- Parent policies and child self-read policies. Writes to progress/submissions are
 -- routed through trusted RPC/Edge Functions; clients cannot mint progress/approval.
 alter table edulock.practical_tasks enable row level security;
