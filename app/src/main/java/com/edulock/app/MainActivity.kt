@@ -275,7 +275,9 @@ private data class LocalTaskDraft(
     val expiredQuestionIds: Set<String> = emptySet(),
     val taskDeadlineAtMillis: Long? = null,
     val questionDeadlineAtMillis: Long? = null,
-    val questionDeadlineQuestionId: String? = null
+    val questionDeadlineQuestionId: String? = null,
+    val pausedTaskSecondsRemaining: Int? = null,
+    val pausedQuestionSecondsRemaining: Int? = null
 )
 
 private enum class AppScreen {
@@ -359,7 +361,9 @@ private fun EduLockApp(repository: EduLockRepository) {
         draftExpiredQuestionIds: Set<String> = expiredQuestionIds,
         taskDeadline: Long? = taskDeadlineAtMillis,
         questionDeadline: Long? = questionDeadlineAtMillis,
-        deadlineQuestionId: String? = questionDeadlineQuestionId
+        deadlineQuestionId: String? = questionDeadlineQuestionId,
+        pausedTaskSecondsRemaining: Int? = null,
+        pausedQuestionSecondsRemaining: Int? = null
     ) {
         val encodedAnswers = JSONObject()
         draftAnswers.forEach { (id, value) -> encodedAnswers.put(id, value) }
@@ -372,6 +376,8 @@ private fun EduLockApp(repository: EduLockRepository) {
             .put("task_deadline_at_ms", taskDeadline ?: JSONObject.NULL)
             .put("question_deadline_at_ms", questionDeadline ?: JSONObject.NULL)
             .put("question_deadline_question_id", deadlineQuestionId ?: JSONObject.NULL)
+            .put("paused_task_seconds_remaining", pausedTaskSecondsRemaining ?: JSONObject.NULL)
+            .put("paused_question_seconds_remaining", pausedQuestionSecondsRemaining ?: JSONObject.NULL)
             .put("updated_at", System.currentTimeMillis()).toString()).apply()
     }
     fun readTaskDraft(taskId: String): LocalTaskDraft {
@@ -395,7 +401,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                 taskDeadlineAtMillis = saved.optLong("task_deadline_at_ms", 0L).takeIf { it > 0L },
                 questionDeadlineAtMillis = saved.optLong("question_deadline_at_ms", 0L).takeIf { it > 0L },
                 questionDeadlineQuestionId = saved.optString("question_deadline_question_id")
-                    .takeIf { it.isNotBlank() && it != "null" }
+                    .takeIf { it.isNotBlank() && it != "null" },
+                pausedTaskSecondsRemaining = saved.optInt("paused_task_seconds_remaining", -1).takeIf { it >= 0 },
+                pausedQuestionSecondsRemaining = saved.optInt("paused_question_seconds_remaining", -1).takeIf { it >= 0 }
             )
         } catch (_: Exception) { LocalTaskDraft() }
     }
@@ -771,14 +779,20 @@ private fun EduLockApp(repository: EduLockRepository) {
             answers = draft.answers.filterKeys { key -> loadedQuestions.any { it.id == key } }
             questionIndex = draft.questionIndex.coerceIn(0, (loadedQuestions.size - 1).coerceAtLeast(0))
             expiredQuestionIds = draft.expiredQuestionIds.intersect(loadedQuestions.map { it.id }.toSet())
-            taskDeadlineAtMillis = draft.taskDeadlineAtMillis
-            questionDeadlineAtMillis = draft.questionDeadlineAtMillis
+            val now = System.currentTimeMillis()
+            val restoredQuestionId = loadedQuestions.getOrNull(questionIndex)?.id
+            taskDeadlineAtMillis = draft.pausedTaskSecondsRemaining?.let { now + it * 1000L }
+                ?: draft.taskDeadlineAtMillis
+            questionDeadlineAtMillis = if (draft.pausedQuestionSecondsRemaining != null &&
+                draft.questionDeadlineQuestionId == restoredQuestionId) {
+                now + draft.pausedQuestionSecondsRemaining * 1000L
+            } else draft.questionDeadlineAtMillis
             questionDeadlineQuestionId = draft.questionDeadlineQuestionId
-            taskSecondsRemaining = draft.taskDeadlineAtMillis?.let {
-                (((it - System.currentTimeMillis() + 999L) / 1000L).toInt()).coerceAtLeast(0)
+            taskSecondsRemaining = draft.pausedTaskSecondsRemaining ?: draft.taskDeadlineAtMillis?.let {
+                (((it - now + 999L) / 1000L).toInt()).coerceAtLeast(0)
             } ?: 0
-            questionSecondsRemaining = draft.questionDeadlineAtMillis?.let {
-                (((it - System.currentTimeMillis() + 999L) / 1000L).toInt()).coerceAtLeast(0)
+            questionSecondsRemaining = draft.pausedQuestionSecondsRemaining ?: draft.questionDeadlineAtMillis?.let {
+                (((it - now + 999L) / 1000L).toInt()).coerceAtLeast(0)
             } ?: 0
             taskResult = null
             screen = AppScreen.PLAY_TASK
