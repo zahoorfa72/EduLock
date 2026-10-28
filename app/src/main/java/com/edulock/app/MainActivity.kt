@@ -4096,14 +4096,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
-                            Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Column(Modifier.padding(horizontal = 8.dp, vertical = 5.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(7.dp)
                                 ) {
                                     Box(
-                                        Modifier.size(36.dp).background(
+                                        Modifier.size(30.dp).background(
                                             if (appIsEnabled) Color(0xFFE2F7EC) else Color(0xFFFDE8E8),
                                             RoundedCornerShape(10.dp)
                                         ),
@@ -4156,10 +4156,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     OutlinedTextField(
                                         value = limitText,
                                         onValueChange = { value -> installedAppLimitEdits = installedAppLimitEdits + (installed.packageName to value.filter(Char::isDigit).take(4)) },
-                                        modifier = Modifier.weight(1f).height(56.dp),
+                                        modifier = Modifier.weight(1f).height(48.dp),
                                         singleLine = true,
-                                        label = { AppUiText("Daily limit (min)") },
-                                        placeholder = { AppUiText("0 = no limit") },
+                                        label = { AppUiText("Daily limit · min") },
+                                        placeholder = { AppUiText("0 = unlimited") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                                     )
                                     AppUiText("0 / blank\n= no cap", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
@@ -4257,7 +4257,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                                     Box(
-                                        Modifier.size(36.dp).background(if (app.enabled) Color(0xFFE2F7EC) else Color(0xFFFDE8E8), RoundedCornerShape(10.dp)),
+                                        Modifier.size(30.dp).background(if (app.enabled) Color(0xFFE2F7EC) else Color(0xFFFDE8E8), RoundedCornerShape(10.dp)),
                                         contentAlignment = Alignment.Center
                                     ) { AppUiText("📱", fontSize = 20.sp) }
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -4303,8 +4303,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             }
                                         },
                                         enabled = !busy,
-                                        modifier = Modifier.height(40.dp)
-                                    ) { AppUiText("Remove") }
+                                        modifier = Modifier.size(width = 38.dp, height = 36.dp),
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) { AppUiText("🗑", fontSize = 16.sp) }
                                 }
                                 if (app.id in weeklyScheduleEditIds) {
                                     val schedule = weeklyScheduleEdits[app.id] ?: AppWeeklySchedule.parse(app.weeklyScheduleJson)
