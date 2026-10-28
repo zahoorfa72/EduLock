@@ -1243,8 +1243,10 @@ private fun EduLockApp(repository: EduLockRepository) {
         tasks = repository.loadChildTasks(linked.id, linked.schoolGrade, linked.ageYears)
         try {
             childEmergencyOptions = repository.loadChildEmergencyOptions()
+            childEmergencyTargetPackage = childEmergencyOptions.allowedPackages.firstOrNull().orEmpty()
         } catch (_: Exception) {
             childEmergencyOptions = ChildEmergencyOptions()
+            childEmergencyTargetPackage = ""
         }
         try {
             earnedToday = repository.refreshChildDeviceRestrictions(linked)
@@ -5261,6 +5263,89 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         Column(Modifier.weight(1f)) {
                             SummaryCard("Task streak", "$childStreakDays day${if (childStreakDays == 1) "" else "s"}", "Pass at least one task each day to build your streak.")
+                        }
+                    }
+                    if (childEmergencyOptions.enabled) {
+                        val emergencyApps = allowedApps
+                            .filter { it.enabled && it.packageName in childEmergencyOptions.allowedPackages }
+                            .distinctBy { it.packageName.lowercase(Locale.ROOT) }
+                            .sortedBy { it.displayName.lowercase(Locale.ROOT) }
+                        val todayInPakistan = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Karachi")).toString()
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(22.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD))
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                AppUiText("🆘 Emergency app access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = Color(0xFF72500A))
+                                AppUiText("One approved app can be opened for " + childEmergencyOptions.accessMinutes + " minutes, once per Pakistan calendar day.", color = Color(0xFF72500A))
+                                AppUiText("Your parent does not need to be online, but this phone needs internet to verify the code.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF72500A))
+                                if (childEmergencyOptions.lastUsedDate == todayInPakistan) {
+                                    AppUiText("Emergency access has already been used today.", fontWeight = FontWeight.SemiBold, color = Color(0xFF9A3412))
+                                } else if (emergencyApps.isEmpty()) {
+                                    AppUiText("No emergency apps are currently enabled. Ask your parent to refresh the app settings.", color = Color(0xFF9A3412))
+                                } else {
+                                    Box(Modifier.fillMaxWidth()) {
+                                        OutlinedButton(
+                                            onClick = { childEmergencyAppMenuExpanded = true },
+                                            enabled = !busy,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            val selectedEmergencyApp = emergencyApps.firstOrNull { it.packageName == childEmergencyTargetPackage }
+                                            AppUiText((selectedEmergencyApp?.displayName ?: "Choose approved app") + "  ▾")
+                                        }
+                                        androidx.compose.material3.DropdownMenu(
+                                            expanded = childEmergencyAppMenuExpanded,
+                                            onDismissRequest = { childEmergencyAppMenuExpanded = false },
+                                            modifier = Modifier.heightIn(max = 300.dp)
+                                        ) {
+                                            emergencyApps.forEach { app ->
+                                                androidx.compose.material3.DropdownMenuItem(
+                                                    text = { AppUiText((if (app.packageName == childEmergencyTargetPackage) "✓  " else "") + app.displayName) },
+                                                    onClick = {
+                                                        childEmergencyTargetPackage = app.packageName
+                                                        childEmergencyAppMenuExpanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Field(
+                                        childEmergencyCodeInput,
+                                        { childEmergencyCodeInput = it.filter(Char::isDigit).take(8) },
+                                        "8-digit parent emergency code",
+                                        keyboardType = KeyboardType.Number
+                                    )
+                                    Button(
+                                        onClick = {
+                                            execute {
+                                                val result = repository.redeemChildEmergencyAccess(
+                                                    childEmergencyCodeInput, childEmergencyTargetPackage
+                                                )
+                                                val bootCount = try {
+                                                    Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1)
+                                                } catch (_: Exception) { -1 }
+                                                val deadline = android.os.SystemClock.elapsedRealtime() + result.expiresInSeconds * 1000L
+                                                val entries = lockStatePreferences.getStringSet("emergency_access_grants", emptySet()).orEmpty().toMutableSet()
+                                                entries.removeAll { it.substringBefore("=").equals(result.packageName, ignoreCase = true) }
+                                                entries.add(result.packageName + "=" + deadline + "=" + bootCount)
+                                                lockStatePreferences.edit().putStringSet("emergency_access_grants", entries).apply()
+                                                childEmergencyOptions = childEmergencyOptions.copy(lastUsedDate = result.usedDate)
+                                                childEmergencyCodeInput = ""
+                                                val launch = context.packageManager.getLaunchIntentForPackage(result.packageName)
+                                                    ?: throw IllegalStateException("This app is not installed on this phone.")
+                                                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                context.startActivity(launch)
+                                                notice = "Emergency access enabled for " + (emergencyApps.firstOrNull { it.packageName == result.packageName }?.displayName ?: "the approved app") +
+                                                    " for " + result.accessMinutes + " minutes. Today's emergency use has been recorded."
+                                            }
+                                        },
+                                        enabled = !busy && childEmergencyCodeInput.length == 8 &&
+                                            emergencyApps.any { it.packageName == childEmergencyTargetPackage },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { AppUiText("Unlock approved app once today") }
+                                }
+                            }
                         }
                     }
                     RewardBankPanel(
