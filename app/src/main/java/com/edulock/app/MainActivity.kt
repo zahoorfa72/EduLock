@@ -70,6 +70,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -4053,13 +4054,63 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                     filteredInstalledApps.forEach { installed ->
                         val existingRule = allowedApps.firstOrNull { it.packageName == installed.packageName }
+                        val appIsEnabled = existingRule?.enabled ?: (child?.kidsModeEnabled != true)
+                        val appGlyph = when {
+                            installed.packageName.contains("chrome", true) || installed.displayName.contains("browser", true) -> "🌐"
+                            installed.packageName.contains("youtube", true) || installed.displayName.contains("video", true) -> "▶️"
+                            installed.packageName.contains("camera", true) || installed.displayName.contains("photo", true) -> "📷"
+                            installed.packageName.contains("whatsapp", true) || installed.displayName.contains("message", true) -> "💬"
+                            installed.packageName.contains("phone", true) || installed.displayName.contains("dialer", true) -> "📞"
+                            installed.packageName.contains("game", true) -> "🎮"
+                            installed.packageName.contains("maps", true) -> "📍"
+                            installed.packageName.contains("music", true) || installed.packageName.contains("spotify", true) -> "🎵"
+                            installed.packageName.contains("edu", true) || installed.displayName.contains("learn", true) -> "📚"
+                            else -> "📱"
+                        }
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
-                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                AppUiText(installed.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
-                                AppUiText(installed.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(9.dp)
+                                ) {
+                                    Box(
+                                        Modifier.size(40.dp).background(
+                                            if (appIsEnabled) Color(0xFFE2F7EC) else Color(0xFFFDE8E8),
+                                            RoundedCornerShape(12.dp)
+                                        ),
+                                        contentAlignment = Alignment.Center
+                                    ) { AppUiText(appGlyph, fontSize = 21.sp) }
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        AppUiText(installed.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
+                                        AppUiText(if (appIsEnabled) "Enabled" else "Disabled",
+                                            color = if (appIsEnabled) Color(0xFF16804A) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            style = MaterialTheme.typography.labelSmall)
+                                    }
+                                    Switch(
+                                        checked = appIsEnabled,
+                                        onCheckedChange = { checked ->
+                                            execute {
+                                                val selected = child ?: throw IllegalStateException("Select a child profile first.")
+                                                if (existingRule == null) {
+                                                    repository.allowInstalledApp(selected.id, installed, 1440)
+                                                    val created = repository.loadAllowedApps(selected.id).firstOrNull { it.packageName == installed.packageName }
+                                                        ?: throw IllegalStateException("App rule was not confirmed by Supabase.")
+                                                    if (!checked) repository.updateAllowedAppEnabled(created.id, false)
+                                                } else repository.updateAllowedAppEnabled(existingRule.id, checked)
+                                                allowedApps = repository.loadAllowedApps(selected.id)
+                                                notice = if (checked) "${installed.displayName} enabled; applies after child sync."
+                                                    else "${installed.displayName} disabled; applies after child sync."
+                                            }
+                                        },
+                                        enabled = !busy
+                                    )
+                                }
+                                AppUiText(installed.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
                                 if (existingRule == null) {
                                     var limitText = installedAppLimitEdits[installed.packageName] ?: ""
                                     Field(limitText, { value ->
@@ -4099,16 +4150,6 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             notice = "Daily limit saved. The child's phone applies it after syncing."
                                         }
                                     }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Save limit") }
-                                    OutlinedButton(onClick = {
-                                        execute {
-                                            repository.updateAllowedAppEnabled(existingRule.id, !existingRule.enabled)
-                                            allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
-                                            notice = if (existingRule.enabled) "App disabled for child after the next sync." else "App enabled for child after the next sync."
-                                        }
-                                    }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                                        AppUiText(if (existingRule.enabled) "Disable on child's phone" else "Enable on child's phone")
-                                    }
-
                                     OutlinedButton(
                                         onClick = {
                                             weeklyScheduleEditIds = if (existingRule.id in weeklyScheduleEditIds)
