@@ -3119,14 +3119,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                         AppUiText((index + 1).toString() + ". " + question.prompt, fontWeight = FontWeight.SemiBold)
                                         Field(
-                                            questionRewardEdits[question.id] ?: "0",
+                                            questionRewardEdits[question.id] ?: question.rewardMinutes.toString(),
                                             { value -> questionRewardEdits = questionRewardEdits + (question.id to value.filter(Char::isDigit).take(4)) },
                                             "Reward minutes for this correct answer (0–1440)",
                                             keyboardType = KeyboardType.Number
                                         )
                                         OutlinedButton(
                                             onClick = { execute {
-                                                repository.setQuestionReward(question.id, questionRewardEdits[question.id]?.toIntOrNull() ?: 0)
+                                                repository.setQuestionReward(question.id, questionRewardEdits[question.id]?.toIntOrNull() ?: question.rewardMinutes)
+                                                questions = repository.loadQuestions(subject.id)
                                                 notice = "Individual question reward saved. The server applies daily limits when grading."
                                             } },
                                             enabled = !busy,
