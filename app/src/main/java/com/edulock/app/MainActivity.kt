@@ -435,6 +435,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var subjects by remember { mutableStateOf(emptyList<SubjectRow>()) }
     var selectedChild by remember { mutableStateOf<ChildProfile?>(null) }
     var selectedSubject by remember { mutableStateOf<SubjectRow?>(null) }
+    var subjectDeleteConfirmation by remember { mutableStateOf<SubjectRow?>(null) }
     var questions by remember { mutableStateOf(emptyList<QuestionRow>()) }
     var questionTranslations by remember { mutableStateOf<Map<String, List<QuestionTranslation>>>(emptyMap()) }
     var answerLanguages by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
@@ -1714,12 +1715,12 @@ private fun EduLockApp(repository: EduLockRepository) {
         }
         if (languagePickerOpen) {
             val languageOptions = remember(languageSearch, languagePickerTarget) {
-                val supportedUiLanguages = listOf("en", "ur", "sd", "hi", "af", "sq", "be", "bg", "bn", "ca", "zh", "hr", "cs", "da", "nl", "et", "fi", "fr", "gl", "ka", "de", "el", "gu", "ht", "he", "hu", "is", "id", "ga", "it", "ja", "kn", "ko", "lv", "lt", "mk", "ms", "ml", "mt", "mr", "ne", "no", "fa", "pl", "pt", "ro", "ru", "sr", "sk", "sl", "es", "sw", "sv", "tl", "ta", "te", "th", "tr", "uk", "vi", "cy", "ar", "pa")
+                val supportedUiLanguages = (TranslateLanguage.getAllLanguages() + listOf("en", "ur", "sd", "ps")).distinct()
                 val optionCodes = when (languagePickerTarget) {
                     "display" -> supportedUiLanguages.filter { code ->
                         code == "en" || code == "sd" || TranslateLanguage.fromLanguageTag(code) != null
                     }
-                    "translation" -> supportedUiLanguages.filter { code -> TranslateLanguage.fromLanguageTag(code) != null }
+                    "translation" -> supportedUiLanguages.filter { code -> code == "sd" || TranslateLanguage.fromLanguageTag(code) != null }
                     else -> Locale.getISOLanguages().distinct()
                 }
                 optionCodes.map { code ->
@@ -2311,20 +2312,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 )
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (child.kidsModeEnabled) Color(0xFFFFE8B8) else Color(0xFFEAF5FF)
-                                    )
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                                 ) {
-                                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         AppUiText(
                                             if (child.kidsModeEnabled) "🔒 Kids Mode: ON" else "🔓 Kids Mode: OFF",
                                             fontWeight = FontWeight.Bold
-                                        )
-                                        AppUiText(
-                                            if (child.kidsModeEnabled)
-                                                "Only parent-approved apps can open after the child device syncs. Accessibility is required; full kiosk enforcement also needs device-owner setup."
-                                            else
-                                                "Block apps that the parent has not explicitly allowed."
                                         )
                                         OutlinedButton(
                                             onClick = {
@@ -2354,9 +2347,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 }
                                             },
                                             enabled = !busy,
-                                            modifier = Modifier.fillMaxWidth()
+                                            modifier = Modifier.fillMaxWidth().height(38.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
                                         ) {
-                                            AppUiText(if (child.kidsModeEnabled) "Turn Kids Mode OFF" else "Enable Kids Mode • block unapproved apps")
+                                            AppUiText(if (child.kidsModeEnabled) "Turn off" else "Enable")
                                         }
                                     }
                                 }
@@ -2812,6 +2806,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                         Card(
                             modifier = Modifier.fillMaxWidth().clickable {
                                 selectedSubject = subject
+                                questions = emptyList()
+                                questionTranslations = emptyMap()
+                                questionSolutions = emptyMap()
                                 expandedFourDQuestionId = null
                                 translationEditorQuestionId = null
                                 questionEditExpandedId = null
@@ -2837,6 +2834,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 OutlinedButton(
                                     onClick = {
                                         selectedSubject = subject
+                                        questions = emptyList()
+                                        questionTranslations = emptyMap()
+                                        questionSolutions = emptyMap()
                                         expandedFourDQuestionId = null
                                         translationEditorQuestionId = null
                                         questionEditExpandedId = null
@@ -2864,6 +2864,42 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     subjectGradeLevel = subject.gradeLevel.toString()
                                     screen = AppScreen.ADD_SUBJECT
                                 }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("✏️ Edit subject") }
+                                OutlinedButton(
+                                    onClick = { subjectDeleteConfirmation = subject },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp)
+                                ) { AppUiText("Delete subject", color = MaterialTheme.colorScheme.error) }
+                                if (subjectDeleteConfirmation?.id == subject.id) {
+                                    AlertDialog(
+                                        onDismissRequest = { subjectDeleteConfirmation = null },
+                                        title = { AppUiText("Delete subject?") },
+                                        text = { AppUiText("This removes “${subject.title}” and may also remove its questions and translations. This cannot be undone.") },
+                                        confirmButton = {
+                                            TextButton(
+                                                enabled = !busy,
+                                                onClick = {
+                                                    execute {
+                                                        repository.deleteSubject(subject.id)
+                                                        subjects = repository.loadSubjects(familyId, parentCountryCode)
+                                                        if (selectedSubject?.id == subject.id) {
+                                                            selectedSubject = null
+                                                            questions = emptyList()
+                                                            questionTranslations = emptyMap()
+                                                            questionSolutions = emptyMap()
+                                                            screen = AppScreen.SUBJECTS
+                                                        }
+                                                        subjectDeleteConfirmation = null
+                                                        notice = "Subject deleted."
+                                                    }
+                                                }
+                                            ) { AppUiText("Delete permanently", color = MaterialTheme.colorScheme.error) }
+                                        },
+                                        dismissButton = {
+                                            TextButton(onClick = { subjectDeleteConfirmation = null }) { AppUiText("Cancel") }
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -2956,8 +2992,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                         onClick = {
                             execute {
                                 val targetCode = templateTranslationLanguage.trim().lowercase(Locale.ROOT)
-                                require(TranslateLanguage.fromLanguageTag(targetCode) != null) {
-                                    "That language code is not supported by the on-device translator. Choose a supported language code such as ur, hi, ar, fr or es."
+                                require(targetCode != "sd" && TranslateLanguage.fromLanguageTag(targetCode) != null) {
+                                    if (targetCode == "sd") "Automatic on-device translation to Sindhi is not supported by Google's model. Choose Sindhi in the question's Add / edit translation editor to enter a Sindhi version manually."
+                                    else "That language code is not supported by the on-device translator. Choose a supported language from the list."
                                 }
                                 val translated = translatedTemplateRows.toMutableMap()
                                 filteredTemplates.distinctBy { templateTranslationKey(it) }.forEach { template ->
@@ -3116,9 +3153,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.QUESTIONS -> ScreenFrame(selectedSubject?.title ?: "Questions", onBack = { screen = AppScreen.SUBJECTS }, notice = notice, busy = busy) {
                     val subject = selectedSubject
                     if (subject != null) {
+                        val subjectQuestions = questions.filter { it.subjectId == subject.id }
                         AppUiText("Create a question in " + subject.languageCode + " and give related questions the same concept tag. The tag lets Concept Bridge report understanding separately from language.")
                         AppUiText("Questions are added one at a time. Choosing a template only fills the form; it is not saved until you press Save question.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        val eligibleRewardConcepts = questions
+                        val eligibleRewardConcepts = subjectQuestions
                             .map { it.conceptKey.trim() }
                             .filter { it.isNotBlank() }
                             .distinct()
@@ -3170,7 +3208,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         ) {
                                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                                 AppUiText(concept, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                                AppUiText("Group bonus · " + questions.count { it.conceptKey.trim() == concept } + (if (questions.count { it.conceptKey.trim() == concept } == 1) " question" else " questions"),
+                                                AppUiText("Group bonus · " + subjectQuestions.count { it.conceptKey.trim() == concept } + (if (subjectQuestions.count { it.conceptKey.trim() == concept } == 1) " question" else " questions"),
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     style = MaterialTheme.typography.labelSmall)
                                             }
@@ -3207,7 +3245,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         Field(
                             bulkTranslationLanguage,
                             { bulkTranslationLanguage = it.trim().lowercase(Locale.ROOT).take(16) },
-                            "Translate every question to language code (e.g. en, ur, sd, ar, hi, fr, es)"
+                            "Translate every question to language code (e.g. en, ur, ar, hi, fr, es)"
                         )
                         OutlinedButton(onClick = {
                             languagePickerTarget = "translation"
@@ -3218,13 +3256,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                             onClick = {
                                 execute {
                                     val targetCode = bulkTranslationLanguage.trim().lowercase(Locale.ROOT)
-                                    require(TranslateLanguage.fromLanguageTag(targetCode) != null) {
-                                        "That language code is not supported by the on-device translator. Choose a supported language code such as ur, hi, ar, fr or es."
+                                    require(targetCode != "sd" && TranslateLanguage.fromLanguageTag(targetCode) != null) {
+                                        if (targetCode == "sd") "Automatic on-device translation to Sindhi is not supported by Google's model. Choose Sindhi in the question's Add / edit translation editor to enter a Sindhi version manually."
+                                        else "That language code is not supported by the on-device translator. Choose a supported language from the list."
                                     }
-                                    val answerKeys = repository.loadQuestionAnswerKeys(questions.map { it.id })
+                                    val answerKeys = repository.loadQuestionAnswerKeys(subjectQuestions.map { it.id })
                                     var saved = 0
                                     var skipped = 0
-                                    questions.forEach { question ->
+                                    subjectQuestions.forEach { question ->
                                         if (question.languageCode.equals(targetCode, ignoreCase = true)) {
                                             skipped++
                                         } else {
@@ -3250,12 +3289,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         ". Skipped same-language questions: " + skipped + ". Existing original questions were preserved."
                                 }
                             },
-                            enabled = !busy && questions.isNotEmpty(),
+                            enabled = !busy && subjectQuestions.isNotEmpty(),
                             modifier = Modifier.fillMaxWidth()
-                        ) { AppUiText("🌐 Auto-translate all " + questions.size + " questions") }
-                        AppUiText("Uses Google's on-device translation models. The first use downloads language models; internet is needed for that download. Available languages depend on the installed model.")
+                        ) { AppUiText("🌐 Auto-translate all " + subjectQuestions.size + " questions") }
+                        AppUiText("Automatic translation uses Google's supported on-device languages. Sindhi (sd) is available for manually entered translations; Google's on-device model does not currently provide automatic Sindhi translation.")
                         AppUiText(
-                            questions.size.toString() + " saved questions in this subject",
+                            subjectQuestions.size.toString() + " saved questions in this subject",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -3289,8 +3328,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                             enabled = !busy,
                             modifier = Modifier.fillMaxWidth()
                         ) { AppUiText("✨ Create a custom interactive 4D question") }
-                        if (questions.isEmpty()) AppUiText("No questions yet.")
-                        questions.forEachIndexed { index, question ->
+                        if (subjectQuestions.isEmpty()) AppUiText("No questions yet.")
+                        subjectQuestions.forEachIndexed { index, question ->
                             CompositionLocalProvider(LocalLayoutDirection provides directionFor(question.languageCode)) {
                                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -4245,108 +4284,6 @@ private fun EduLockApp(repository: EduLockRepository) {
                             )
                         }
                     }
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF3F0FF))
-                    ) {
-                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            AppUiText("App groups", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            AppUiText("Group approved apps together, then assign one multi-question task that awards shared time to the group.")
-                            OutlinedTextField(
-                                value = appGroupName,
-                                onValueChange = { appGroupName = it.take(80) },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                label = { AppUiText("Group name") },
-                                placeholder = { AppUiText("For example, Study break") }
-                            )
-                            AppUiText("Select allowed apps for this group", fontWeight = FontWeight.SemiBold)
-                            val groupEligibleApps = allowedApps.filter { it.childId == child?.id && it.enabled }
-                            if (groupEligibleApps.isEmpty()) AppUiText("Enable an app below first, then refresh the app list before adding it to a group.")
-                            groupEligibleApps.forEach { app ->
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Checkbox(
-                                        checked = app.packageName in appGroupSelectedPackages,
-                                        onCheckedChange = { checked ->
-                                            appGroupSelectedPackages = if (checked) appGroupSelectedPackages + app.packageName
-                                            else appGroupSelectedPackages - app.packageName
-                                        },
-                                        enabled = !busy
-                                    )
-                                    Column(Modifier.weight(1f)) {
-                                        AppUiText(app.displayName, fontWeight = FontWeight.SemiBold)
-                                        AppUiText(app.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(
-                                    onClick = {
-                                        execute {
-                                            val selected = child ?: throw IllegalStateException("Select a child profile first.")
-                                            val group = repository.saveAppGroup(selected.id, appGroupName, appGroupSelectedPackages, appGroupEditingId)
-                                            appGroups = repository.loadAppGroups(selected.id)
-                                            appGroupEditingId = group.id
-                                            appGroupName = group.name
-                                            appGroupSelectedPackages = group.packageNames
-                                            notice = "App group “${group.name}” saved and verified with ${group.packageNames.size} apps."
-                                        }
-                                    },
-                                    enabled = !busy && child != null && appGroupName.isNotBlank() && appGroupSelectedPackages.isNotEmpty(),
-                                    modifier = Modifier.weight(1f)
-                                ) { AppUiText(if (appGroupEditingId == null) "Save group" else "Update group") }
-                                OutlinedButton(
-                                    onClick = {
-                                        appGroupEditingId = null
-                                        appGroupName = ""
-                                        appGroupSelectedPackages = emptySet()
-                                    },
-                                    enabled = !busy,
-                                    modifier = Modifier.weight(1f)
-                                ) { AppUiText("New group") }
-                            }
-                            if (appGroups.isNotEmpty()) {
-                                AppUiText("Saved groups", fontWeight = FontWeight.SemiBold)
-                                appGroups.filter { it.childId == child?.id }.forEach { group ->
-                                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                                        Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                            AppUiText(group.name, fontWeight = FontWeight.Bold)
-                                            AppUiText(group.packageNames.joinToString { pkg ->
-                                                allowedApps.firstOrNull { it.packageName == pkg }?.displayName ?: pkg
-                                            })
-                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                OutlinedButton(
-                                                    onClick = {
-                                                        appGroupEditingId = group.id
-                                                        appGroupName = group.name
-                                                        appGroupSelectedPackages = group.packageNames
-                                                    },
-                                                    enabled = !busy,
-                                                    modifier = Modifier.weight(1f)
-                                                ) { AppUiText("Edit") }
-                                                OutlinedButton(
-                                                    onClick = {
-                                                        execute {
-                                                            repository.deleteAppGroup(group.id)
-                                                            appGroups = repository.loadAppGroups(group.childId)
-                                                            if (appGroupEditingId == group.id) {
-                                                                appGroupEditingId = null
-                                                                appGroupName = ""
-                                                                appGroupSelectedPackages = emptySet()
-                                                            }
-                                                            notice = "App group removed."
-                                                        }
-                                                    },
-                                                    enabled = !busy,
-                                                    modifier = Modifier.weight(1f)
-                                                ) { AppUiText("Delete") }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
                     OutlinedTextField(
                         value = appSearchQuery,
                         onValueChange = { appSearchQuery = it.take(120) },
@@ -4676,6 +4613,108 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         enabled = !busy,
                                         modifier = Modifier.fillMaxWidth()
                                     ) { AppUiText("Save weekly timetable") }
+                                }
+                            }
+                        }
+                    }
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF3F0FF))
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            AppUiText("App groups", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            AppUiText("Group approved apps together, then assign one multi-question task that awards shared time to the group.")
+                            OutlinedTextField(
+                                value = appGroupName,
+                                onValueChange = { appGroupName = it.take(80) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                label = { AppUiText("Group name") },
+                                placeholder = { AppUiText("For example, Study break") }
+                            )
+                            AppUiText("Select allowed apps for this group", fontWeight = FontWeight.SemiBold)
+                            val groupEligibleApps = allowedApps.filter { it.childId == child?.id && it.enabled }
+                            if (groupEligibleApps.isEmpty()) AppUiText("Enable an app below first, then refresh the app list before adding it to a group.")
+                            groupEligibleApps.forEach { app ->
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Checkbox(
+                                        checked = app.packageName in appGroupSelectedPackages,
+                                        onCheckedChange = { checked ->
+                                            appGroupSelectedPackages = if (checked) appGroupSelectedPackages + app.packageName
+                                            else appGroupSelectedPackages - app.packageName
+                                        },
+                                        enabled = !busy
+                                    )
+                                    Column(Modifier.weight(1f)) {
+                                        AppUiText(app.displayName, fontWeight = FontWeight.SemiBold)
+                                        AppUiText(app.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = {
+                                        execute {
+                                            val selected = child ?: throw IllegalStateException("Select a child profile first.")
+                                            val group = repository.saveAppGroup(selected.id, appGroupName, appGroupSelectedPackages, appGroupEditingId)
+                                            appGroups = repository.loadAppGroups(selected.id)
+                                            appGroupEditingId = group.id
+                                            appGroupName = group.name
+                                            appGroupSelectedPackages = group.packageNames
+                                            notice = "App group “${group.name}” saved and verified with ${group.packageNames.size} apps."
+                                        }
+                                    },
+                                    enabled = !busy && child != null && appGroupName.isNotBlank() && appGroupSelectedPackages.isNotEmpty(),
+                                    modifier = Modifier.weight(1f)
+                                ) { AppUiText(if (appGroupEditingId == null) "Save group" else "Update group") }
+                                OutlinedButton(
+                                    onClick = {
+                                        appGroupEditingId = null
+                                        appGroupName = ""
+                                        appGroupSelectedPackages = emptySet()
+                                    },
+                                    enabled = !busy,
+                                    modifier = Modifier.weight(1f)
+                                ) { AppUiText("New group") }
+                            }
+                            if (appGroups.isNotEmpty()) {
+                                AppUiText("Saved groups", fontWeight = FontWeight.SemiBold)
+                                appGroups.filter { it.childId == child?.id }.forEach { group ->
+                                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                                        Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                            AppUiText(group.name, fontWeight = FontWeight.Bold)
+                                            AppUiText(group.packageNames.joinToString { pkg ->
+                                                allowedApps.firstOrNull { it.packageName == pkg }?.displayName ?: pkg
+                                            })
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        appGroupEditingId = group.id
+                                                        appGroupName = group.name
+                                                        appGroupSelectedPackages = group.packageNames
+                                                    },
+                                                    enabled = !busy,
+                                                    modifier = Modifier.weight(1f)
+                                                ) { AppUiText("Edit") }
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        execute {
+                                                            repository.deleteAppGroup(group.id)
+                                                            appGroups = repository.loadAppGroups(group.childId)
+                                                            if (appGroupEditingId == group.id) {
+                                                                appGroupEditingId = null
+                                                                appGroupName = ""
+                                                                appGroupSelectedPackages = emptySet()
+                                                            }
+                                                            notice = "App group removed."
+                                                        }
+                                                    },
+                                                    enabled = !busy,
+                                                    modifier = Modifier.weight(1f)
+                                                ) { AppUiText("Delete") }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
