@@ -5400,10 +5400,63 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 execute {
                                     val child = targetChild ?: throw IllegalStateException("Select a child first.")
                                     practicalTasks = repository.loadPracticalTasksForParent(familyId, child.id)
+                                    practicalSubmissions = repository.loadPracticalSubmissionsForParent(familyId, child.id)
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { AppUiText("Refresh saved practical tasks") }
+                        ) { AppUiText("Refresh saved practical tasks & submissions") }
+                        AppUiText("Completed practical tasks • parent review", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        if (practicalSubmissions.isEmpty()) {
+                            AppUiText("No completed practical tasks to review yet.")
+                        } else {
+                            practicalSubmissions.forEach { submission ->
+                                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        AppUiText(submission.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        AppUiText("Status: " + submission.status.replace('_',' '))
+                                        if (submission.completionNote.isNotBlank()) AppUiText("Child's note: " + submission.completionNote)
+                                        if (submission.parentFeedback.isNotBlank()) AppUiText("Parent feedback: " + submission.parentFeedback)
+                                        if (submission.status == "submitted") {
+                                            OutlinedTextField(
+                                                value = practicalReviewNotes[submission.id].orEmpty(),
+                                                onValueChange = { practicalReviewNotes = practicalReviewNotes + (submission.id to it.take(1000)) },
+                                                label = { AppUiText("Encouraging feedback for the child") },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                minLines = 2
+                                            )
+                                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        execute {
+                                                            repository.reviewPracticalTaskSubmission(
+                                                                submission.id, false, practicalReviewNotes[submission.id].orEmpty()
+                                                            )
+                                                            practicalSubmissions = repository.loadPracticalSubmissionsForParent(familyId, targetChild?.id)
+                                                            notice = "Sent back for more practice with feedback."
+                                                        }
+                                                    },
+                                                    enabled = !busy,
+                                                    modifier = Modifier.weight(1f)
+                                                ) { AppUiText("Needs practice") }
+                                                Button(
+                                                    onClick = {
+                                                        execute {
+                                                            repository.reviewPracticalTaskSubmission(
+                                                                submission.id, true, practicalReviewNotes[submission.id].orEmpty()
+                                                            )
+                                                            practicalSubmissions = repository.loadPracticalSubmissionsForParent(familyId, targetChild?.id)
+                                                            notice = "Practical task approved."
+                                                        }
+                                                    },
+                                                    enabled = !busy,
+                                                    modifier = Modifier.weight(1f)
+                                                ) { AppUiText("Approve") }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     } else {
                         AppUiText(
                             "Try a hands-on activity. Follow the safety notes and ask a parent for help when needed.",
