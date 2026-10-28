@@ -1171,13 +1171,22 @@ class EduLockRepository(context: Context) {
         val existing = restArray(
             "question_translations?select=id&question_id=eq.${question.id}&language_code=eq.$lang&limit=1"
         )
-        if (existing.length() > 0) {
+        val written = if (existing.length() > 0) {
             restArray(
                 "question_translations?select=id,question_id,language_code,prompt,options,created_at,updated_at&question_id=eq.${question.id}&language_code=eq.$lang",
                 "PATCH", body
             )
         } else {
-            restArray("question_translations?select=id", "POST", body)
+            restArray("question_translations?select=id,question_id,language_code,prompt", "POST", body)
+        }
+        val saved = written.optJSONObject(0)
+        require(
+            written.length() == 1 &&
+                saved?.optString("question_id") == question.id &&
+                saved.optString("language_code").equals(lang, ignoreCase = true) &&
+                saved.optString("prompt") == prompt.trim().take(10000)
+        ) {
+            "Supabase did not confirm that the translation was saved. Check your connection and parent permissions, then try again."
         }
     }
 
@@ -1544,15 +1553,28 @@ class EduLockRepository(context: Context) {
     suspend fun setQuestionReward(questionId: String, minutes: Int?) {
         requireSession("parent")
         require((minutes == null || minutes in 0..1440) && questionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Reward must be blank (use task default) or 0–1440 minutes." }
-        restArray("questions?id=eq.$questionId","PATCH",JSONObject().put("reward_minutes",minutes ?: JSONObject.NULL))
+        val changed = restArray(
+            "questions?id=eq.$questionId",
+            "PATCH",
+            JSONObject().put("reward_minutes", minutes ?: JSONObject.NULL)
+        )
+        val row = changed.optJSONObject(0)
+        require(
+            changed.length() == 1 && row?.optString("id") == questionId &&
+                if (minutes == null) row.isNull("reward_minutes") else row.optInt("reward_minutes", -1) == minutes
+        ) {
+            "Supabase did not confirm that this question reward was saved. Check your connection and parent permissions, then try again."
+        }
     }
 
     suspend fun deleteQuestion(questionId: String) {
         requireSession("parent")
         require(questionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid question." }
-        // The database cascades dependent translations and private solution rows.
-        // Parent ownership is enforced by the questions table RLS policy.
-        restArray("questions?id=eq.$questionId", "DELETE")
+        // Request the deleted row so RLS-filtered no-op deletes cannot be reported as success.
+        val deleted = restArray("questions?id=eq.$questionId", "DELETE")
+        require(deleted.any { it is JSONObject && it.optString("id") == questionId }) {
+            "Supabase did not confirm that this question was removed. Check your connection and parent permissions, then try again."
+        }
     }
 
     suspend fun loadQuestionRewardGroups(subjectId: String): List<QuestionRewardGroup> {
@@ -1568,9 +1590,21 @@ class EduLockRepository(context: Context) {
         require(subjectId.matches(Regex("[0-9a-fA-F-]{36}")) && conceptKey.isNotBlank() && conceptKey.length<=120 && minutes in 0..1440) {
             "Enter a valid concept group and reward (0–1440 minutes)."
         }
-        restArray("question_reward_groups?on_conflict=subject_id,concept_key","POST",
-            JSONObject().put("subject_id",subjectId).put("concept_key",conceptKey.trim()).put("reward_minutes",minutes)
-                .put("updated_at",java.time.Instant.now().toString()),prefer="resolution=merge-duplicates,return=representation")
+        val expectedConcept = conceptKey.trim()
+        val saved = restArray(
+            "question_reward_groups?on_conflict=subject_id,concept_key",
+            "POST",
+            JSONObject().put("subject_id",subjectId).put("concept_key",expectedConcept).put("reward_minutes",minutes)
+                .put("updated_at",java.time.Instant.now().toString()),
+            prefer="resolution=merge-duplicates,return=representation"
+        )
+        val row = saved.optJSONObject(0)
+        require(
+            saved.length() == 1 && row?.optString("subject_id") == subjectId &&
+                row.optString("concept_key") == expectedConcept && row.optInt("reward_minutes", -1) == minutes
+        ) {
+            "Supabase did not confirm that the group bonus was saved. Check your connection and parent permissions, then try again."
+        }
     }
 
 
