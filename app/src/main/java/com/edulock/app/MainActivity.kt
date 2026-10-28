@@ -376,8 +376,8 @@ private fun EduLockApp(repository: EduLockRepository) {
             .put("task_deadline_at_ms", taskDeadline ?: JSONObject.NULL)
             .put("question_deadline_at_ms", questionDeadline ?: JSONObject.NULL)
             .put("question_deadline_question_id", deadlineQuestionId ?: JSONObject.NULL)
-            .put("paused_task_seconds_remaining", pausedTaskSecondsRemaining ?: JSONObject.NULL)
-            .put("paused_question_seconds_remaining", pausedQuestionSecondsRemaining ?: JSONObject.NULL)
+            .put("paused_task_seconds_remaining", pausedTaskSecondsRemaining ?: -1)
+            .put("paused_question_seconds_remaining", pausedQuestionSecondsRemaining ?: -1)
             .put("updated_at", System.currentTimeMillis()).toString()).apply()
     }
     fun readTaskDraft(taskId: String): LocalTaskDraft {
@@ -3392,7 +3392,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                         execute {
                             val child = selectedChild ?: throw IllegalArgumentException("Select a child.")
                             val chosenSubjects = assignableSubjects.filter { it.id in selectedTaskSubjectIds }
-                            if (chosenSubjects.isEmpty()) throw IllegalArgumentException("Select at least one subject.")
+                            if (chosenSubjects.size != 1) throw IllegalArgumentException("Choose exactly one subject for this task.")
+                            val totalTimeLimit = taskTimeLimitSeconds.toIntOrNull() ?: 0
+                            require(totalTimeLimit == 0 || totalTimeLimit in 10..3600) {
+                                "Total task time must be 0 (off) or between 10 and 3600 seconds."
+                            }
+                            val perQuestionTimeLimit = taskQuestionTimeLimitSeconds.toIntOrNull() ?: 0
+                            require(perQuestionTimeLimit == 0 || perQuestionTimeLimit in 5..600) {
+                                "Question time must be 0 (off) or between 5 and 600 seconds."
+                            }
                             repository.addTask(
                                 familyId, child, chosenSubjects, taskTitle,
                                 taskQuestionCount.toIntOrNull() ?: 0,
@@ -3401,9 +3409,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 taskDailyCapMinutes.toIntOrNull() ?: -1,
                                 taskRewardPackageName.takeIf { it.isNotBlank() },
                                 taskRewardGroupId.takeIf { it.isNotBlank() },
-                                taskTimeLimitSeconds.toIntOrNull()?.takeIf { it in 10..3600 },
+                                totalTimeLimit.takeIf { it in 10..3600 },
                                 taskRewardToBank,
-                                taskQuestionTimeLimitSeconds.toIntOrNull()?.takeIf { it in 5..600 }
+                                perQuestionTimeLimit.takeIf { it in 5..600 }
                             )
                             tasks = emptyList()
                             screen = AppScreen.PARENT_HOME
