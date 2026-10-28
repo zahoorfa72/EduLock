@@ -1131,7 +1131,10 @@ class EduLockRepository(context: Context) {
     ) {
         requireSession("parent")
         val selectedSubjects = subjects.distinctBy { it.id }.take(20)
-        require(selectedSubjects.isNotEmpty()) { "Choose at least one subject." }
+        require(selectedSubjects.isNotEmpty()) { "Choose one subject for this task." }
+        require(selectedSubjects.size == 1) {
+            "Each task must contain questions from exactly one subject. Create a separate task for each subject."
+        }
         require(title.trim().isNotEmpty()) { "Enter a task title" }
         require(questionCount in 1..500) { "Question count must be from 1 to 500" }
         require(passPercent in 0..100) { "Passing score must be from 0 to 100 percent" }
