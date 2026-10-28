@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -4303,30 +4304,48 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 Field(answers[question.id].orEmpty(), { answers = answers + (question.id to it) }, if (question.questionType == "numeric") "Your numeric answer" else "Your answer")
                             }
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            OutlinedButton(onClick = { questionIndex = (questionIndex - 1).coerceAtLeast(0) }, enabled = !busy && questionIndex > 0, modifier = Modifier.weight(1f)) {
-                                AppUiText("Previous")
-                            }
-                            if (questionIndex < questions.lastIndex) {
-                                Button(onClick = { questionIndex = (questionIndex + 1).coerceAtMost(questions.lastIndex) }, enabled = !busy, modifier = Modifier.weight(1f)) {
-                                    AppUiText("Next")
-                                }
-                            } else {
-                                Button(onClick = {
-                                    execute {
-                                        val unanswered = questions.firstOrNull { answers[it.id].isNullOrBlank() }
-                                        if (unanswered != null) throw IllegalArgumentException("Please answer every question before submitting.")
-                                        val submitted = repository.submitTask(task.id, answers, answerLanguages)
-                                        taskResult = submitted
-                                        val linked = childProfile
-                                        if (linked != null) {
-                                            try { earnedToday = repository.refreshChildDeviceRestrictions(linked) }
-                                            catch (_: Exception) { earnedToday = submitted.dailyUsedMinutes }
-                                        }
-                                        screen = AppScreen.TASK_RESULT
+                        if (questionIndex > 0) {
+                            OutlinedButton(
+                                onClick = { questionIndex = (questionIndex - 1).coerceAtLeast(0) },
+                                enabled = !busy,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { AppUiText("Previous question") }
+                        }
+                        if (questionIndex < questions.lastIndex) {
+                            Button(
+                                onClick = { questionIndex = (questionIndex + 1).coerceAtMost(questions.lastIndex) },
+                                enabled = !busy,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { AppUiText("Next question") }
+                        }
+                        val allAnswered = questions.isNotEmpty() && questions.all { !answers[it.id].isNullOrBlank() }
+                        Button(
+                            onClick = {
+                                execute {
+                                    val unanswered = questions.firstOrNull { answers[it.id].isNullOrBlank() }
+                                    if (unanswered != null) {
+                                        questionIndex = questions.indexOf(unanswered).coerceAtLeast(0)
+                                        throw IllegalArgumentException("Please answer every question before submitting.")
                                     }
-                                }, enabled = !busy && questions.isNotEmpty() && questions.all { !answers[it.id].isNullOrBlank() }, modifier = Modifier.weight(1f)) { AppUiText("Submit answers") }
-                            }
+                                    val submitted = repository.submitTask(task.id, answers, answerLanguages)
+                                    taskResult = submitted
+                                    val linked = childProfile
+                                    if (linked != null) {
+                                        try {
+                                            earnedToday = repository.refreshChildDeviceRestrictions(linked)
+                                            rewardBankMinutes = repository.loadChildRewardBankMinutes(linked.id)
+                                        } catch (_: Exception) {
+                                            earnedToday = submitted.dailyUsedMinutes
+                                            notice = "Your answers were submitted, but the updated reward balance could not be refreshed. Open the learning space while connected and sync again."
+                                        }
+                                    }
+                                    screen = AppScreen.TASK_RESULT
+                                }
+                            },
+                            enabled = !busy && allAnswered,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            AppUiText(if (busy) "Submitting answers…" else "Submit answers (" + answers.count { it.value.isNotBlank() } + "/" + questions.size + ")")
                         }
                     } else {
                         AppUiText("No question is available. Return to your task list and sync again.")
@@ -4661,8 +4680,9 @@ private fun ScreenFrame(
     Column(
         modifier = Modifier.fillMaxSize()
             .background(Brush.verticalGradient(listOf(Color(0xFFF4F5FF), Color(0xFFF4FFFC), Color(0xFFFFFAEF))))
-            .imePadding()
             .verticalScroll(rememberScrollState())
+            .imePadding()
+            .navigationBarsPadding()
             .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -4765,7 +4785,12 @@ private fun Field(
         modifier = Modifier.fillMaxWidth(),
         singleLine = !label.contains("prompt", true) && !label.contains("options", true),
         visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        keyboardOptions = KeyboardOptions(
+            keyboardType = keyboardType,
+            imeAction = if (label.contains("answer", true) || label.contains("numeric", true))
+                androidx.compose.ui.text.input.ImeAction.Done
+            else androidx.compose.ui.text.input.ImeAction.Default
+        ),
         shape = MaterialTheme.shapes.medium
     )
 }
