@@ -1834,9 +1834,20 @@ class EduLockRepository(context: Context) {
                     ?: throw IOException("Session refresh failed")
                 sessionStore.save(session)
                 result = perform(path, method, body, session.accessToken, profile, prefer)
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                // A temporary connection failure must not erase a child's saved session.
+                // Only clear it when the server actually rejects the refresh token.
+                val message = error.message.orEmpty()
+                val isNetworkFailure = error is IOException &&
+                    !message.contains("Session refresh failed", ignoreCase = true) &&
+                    !message.contains("invalid refresh token", ignoreCase = true) &&
+                    !message.contains("refresh_token_not_found", ignoreCase = true) &&
+                    !message.contains("Invalid Refresh Token", ignoreCase = true)
+                if (isNetworkFailure) {
+                    throw IOException("Connection unavailable. Your saved session is kept; reconnect and try again.", error)
+                }
                 signOut()
-                throw IOException("Your session expired. Sign in again.")
+                throw IOException("Your session expired. Sign in again.", error)
             }
         }
         if (result.status !in 200..299) throw IOException(extractError(result.text, result.status))
