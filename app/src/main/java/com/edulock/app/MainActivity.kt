@@ -2815,22 +2815,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 expandedFourDQuestionId = null
                                 screen = AppScreen.QUESTIONS
                                 execute {
-                                    // Repair existing subjects created before the full starter bank was seeded.
-                                    val addedStarterCount = repository.ensureTemplateQuestions(
-                                        subject.id,
-                                        fourDTemplatesForSubject(
-                                            subject.title, subject.languageCode, subject.gradeLevel,
-                                            selectedChild?.ageYears ?: (subject.gradeLevel + 5).coerceIn(3, 19)
-                                        )
-                                    )
                                     questions = repository.loadQuestions(subject.id)
                                     questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
                                     questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
-                                    notice = if (addedStarterCount > 0) {
-                                        "Added " + addedStarterCount + " missing 4D starter questions to " + subject.title + ". Existing questions were kept."
-                                    } else {
-                                        null
-                                    }
+                                    notice = null
                                 }
                             },
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -2845,19 +2833,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         expandedFourDQuestionId = null
                                         screen = AppScreen.QUESTIONS
                                         execute {
-                                            val addedStarterCount = repository.ensureTemplateQuestions(
-                                                subject.id,
-                                                fourDTemplatesForSubject(
-                                                    subject.title, subject.languageCode, subject.gradeLevel,
-                                                    selectedChild?.ageYears ?: (subject.gradeLevel + 5).coerceIn(3, 19)
-                                                )
-                                            )
                                             questions = repository.loadQuestions(subject.id)
                                             questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
                                             questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
-                                            notice = if (addedStarterCount > 0) {
-                                                "Added " + addedStarterCount + " missing starter questions to " + subject.title + ". Existing questions were kept."
-                                            } else null
+                                            notice = null
                                         }
                                     },
                                     enabled = !busy,
@@ -3192,18 +3171,21 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             )
                                         }
                                     }
-                                    LaunchedEffect(subject.id, concept, questionGroupRewardEdits[concept], groupRewardsExpanded) {
-                                        if (!groupRewardsExpanded) return@LaunchedEffect
-                                        val raw = questionGroupRewardEdits[concept] ?: return@LaunchedEffect
-                                        val value = raw.toIntOrNull() ?: return@LaunchedEffect
-                                        delay(700)
-                                        val previous = questionRewardGroups.firstOrNull { it.conceptKey == concept }?.rewardMinutes ?: 0
-                                        if (value !in 0..1440 || value == previous) return@LaunchedEffect
-                                        runCatching {
-                                            repository.saveQuestionRewardGroup(subject.id, concept, value)
-                                            questionRewardGroups = repository.loadQuestionRewardGroups(subject.id)
-                                        }.onFailure { notice = "Could not save group reward: " + (it.message ?: "Please retry.") }
-                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            execute {
+                                                val value = (questionGroupRewardEdits[concept] ?: savedGroupMinutes.toString()).toIntOrNull()
+                                                    ?: throw IllegalArgumentException("Enter a group bonus from 0 to 1440 minutes.")
+                                                require(value in 0..1440) { "Group bonus must be between 0 and 1440 minutes." }
+                                                repository.saveQuestionRewardGroup(subject.id, concept, value)
+                                                questionRewardGroups = repository.loadQuestionRewardGroups(subject.id)
+                                                questionGroupRewardEdits = questionGroupRewardEdits + (concept to value.toString())
+                                                notice = "Group bonus saved for " + concept + "."
+                                            }
+                                        },
+                                        enabled = !busy,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { AppUiText("Save group bonus") }
                                 }
                             }
                         }
