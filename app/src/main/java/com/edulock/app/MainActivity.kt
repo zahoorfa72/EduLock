@@ -1889,7 +1889,7 @@ private fun EduLockApp(repository: EduLockRepository) {
             }
         }
         if (linked != null && session?.accountRole == "child" &&
-            (screen == AppScreen.CHILD_HOME || screen == AppScreen.TASK_RESULT))
+            (screen == AppScreen.CHILD_HOME || screen == AppScreen.TASK_RESULT)) {
             try {
                 rewardBankMinutes = repository.loadChildRewardBankMinutes(linked.id)
                 val approved = allowedApps.filter { it.enabled }
