@@ -259,6 +259,12 @@ private fun religiousSubjectTitle(track: String): String = when (track) {
     else -> ""
 }
 
+private fun compactAppLabel(value: String, maxChars: Int = 24): String {
+    val clean = value.trim()
+    if (clean.length <= maxChars) return clean
+    return clean.take((maxChars - 1).coerceAtLeast(1)).trimEnd() + "…"
+}
+
 private fun appIconGlyph(packageName: String, displayName: String): String = when {
     packageName.contains("chrome", true) || packageName.contains("browser", true) || displayName.contains("browser", true) -> "🌐"
     packageName.contains("youtube", true) || packageName.contains("video", true) -> "▶️"
@@ -2445,6 +2451,21 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         app.displayName.contains(childSecurityAppSearchQuery, ignoreCase = true) ||
                                         app.packageName.contains(childSecurityAppSearchQuery, ignoreCase = true)
                                 }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(
+                                        onClick = { childEmergencyAllowedPackages = childEmergencyAllowedPackages + visibleChildSecurityApps.map { it.packageName } },
+                                        enabled = visibleChildSecurityApps.isNotEmpty(),
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                                    ) { AppUiText("Select shown", fontSize = 12.sp) }
+                                    OutlinedButton(
+                                        onClick = { childEmergencyAllowedPackages = emptySet() },
+                                        enabled = childEmergencyAllowedPackages.isNotEmpty(),
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                                    ) { AppUiText("Clear", fontSize = 12.sp) }
+                                }
+                                AppUiText("${childEmergencyAllowedPackages.size} app(s) selected", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                                 if (childSecurityApps.isEmpty()) {
                                     AppUiText("No parent-approved apps are enabled yet. Enable apps in Apps & limits first.")
                                 } else if (visibleChildSecurityApps.isEmpty()) {
@@ -2472,8 +2493,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 }
                                             )
                                             Column(Modifier.weight(1f)) {
-                                                AppUiText(app.displayName, fontWeight = FontWeight.SemiBold)
-                                                AppUiText(app.packageName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                AppUiText(compactAppLabel(app.displayName, 23), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                                AppUiText(compactAppLabel(app.packageName, 25), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                         }
                                     }
@@ -2537,6 +2558,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     AppUiText(childSecurityCodeType, fontWeight = FontWeight.SemiBold)
                                     AppUiText(childSecurityCodeDisplay, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
                                     AppUiText("This code is shown only now. It stays valid until used or replaced by a parent; it does not expire by time.", style = MaterialTheme.typography.bodySmall)
+                                    OutlinedButton(
+                                        onClick = {
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            clipboard.setPrimaryClip(ClipData.newPlainText("EduLock security code", childSecurityCodeDisplay))
+                                            notice = "Security code copied. Share it privately with the child."
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { AppUiText("Copy code") }
                                     OutlinedButton(
                                         onClick = { childSecurityCodeDisplay = ""; childSecurityCodeType = "" },
                                         modifier = Modifier.fillMaxWidth()
@@ -4951,7 +4980,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         val rewardAppsForChild = allowedApps.filter { it.childId == selectedChild?.id && it.enabled }
                         rewardAppsForChild.forEach { app ->
                             OutlinedButton(onClick = { taskRewardToBank = false; taskRewardPackageName = app.packageName; taskRewardGroupId = "" }, modifier = Modifier.fillMaxWidth()) {
-                                AppUiText((if (taskRewardPackageName == app.packageName && taskRewardGroupId.isBlank()) "✓ " else "") + app.displayName + " only")
+                                AppUiText((if (taskRewardPackageName == app.packageName && taskRewardGroupId.isBlank()) "✓ " else "") + compactAppLabel(app.displayName, 22) + " only")
                             }
                         }
                         val rewardGroupsForChild = appGroups.filter { it.childId == selectedChild?.id && it.packageNames.isNotEmpty() }
@@ -5352,7 +5381,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
-                            Column(Modifier.padding(horizontal = 6.dp, vertical = 3.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Column(Modifier.padding(horizontal = 6.dp, vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -5366,7 +5395,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         contentAlignment = Alignment.Center
                                     ) { AppUiText(appGlyph, fontSize = 17.sp) }
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                                        AppUiText(installed.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
+                                        AppUiText(compactAppLabel(installed.displayName, 24), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
                                         AppUiText(if (appIsEnabled) "Enabled" else "Disabled",
                                             color = if (appIsEnabled) Color(0xFF16804A) else MaterialTheme.colorScheme.onSurfaceVariant,
                                             style = MaterialTheme.typography.labelSmall)
@@ -5471,8 +5500,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                     if (childInstalledApps.isNotEmpty() && allowedApps.isEmpty()) AppUiText("No saved app rules were returned. Apps remain allowed by default; check the database migration if you cannot save a limit.")
                     allowedApps.filter { app ->
-                        (app.packageName == "com.android.settings" || childInstalledApps.any { it.packageName == app.packageName }) &&
-                            childInstalledApps.none { it.packageName == app.packageName } &&
+                        childInstalledApps.none { it.packageName == app.packageName } &&
                             (appSearchQuery.isBlank() || app.displayName.contains(appSearchQuery, ignoreCase = true) || app.packageName.contains(appSearchQuery, ignoreCase = true)) &&
                             when (appStatusFilter) {
                                 "Allowed" -> app.enabled
@@ -5513,11 +5541,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                             Column(Modifier.padding(horizontal = 6.dp, vertical = 3.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                                     Box(
-                                        Modifier.size(27.dp).background(if (app.enabled) Color(0xFFE2F7EC) else Color(0xFFFDE8E8), RoundedCornerShape(9.dp)),
+                                        Modifier.size(24.dp).background(if (app.enabled) Color(0xFFE2F7EC) else Color(0xFFFDE8E8), RoundedCornerShape(9.dp)),
                                         contentAlignment = Alignment.Center
                                     ) { AppUiText(appIconGlyph(app.packageName, app.displayName), fontSize = 18.sp) }
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                                        AppUiText(app.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
+                                        AppUiText(compactAppLabel(app.displayName, 24), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
                                         AppUiText(if (app.enabled) "Enabled" else "Disabled", color = if (app.enabled) Color(0xFF16804A) else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
                                     }
                                     OutlinedButton(
@@ -5642,8 +5670,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         enabled = !busy
                                     )
                                     Column(Modifier.weight(1f)) {
-                                        AppUiText(app.displayName, fontWeight = FontWeight.SemiBold)
-                                        AppUiText(app.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        AppUiText(compactAppLabel(app.displayName, 23), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                        AppUiText(compactAppLabel(app.packageName, 25), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
                                     }
                                 }
                             }
@@ -5895,7 +5923,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             val selectedEmergencyApp = emergencyApps.firstOrNull { it.packageName == childEmergencyTargetPackage }
-                                            AppUiText((selectedEmergencyApp?.displayName ?: "Choose approved app") + "  ▾")
+                                            AppUiText(compactAppLabel(selectedEmergencyApp?.displayName ?: "Choose approved app", 22) + "  ▾")
                                         }
                                         androidx.compose.material3.DropdownMenu(
                                             expanded = childEmergencyAppMenuExpanded,
@@ -5904,7 +5932,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         ) {
                                             emergencyApps.forEach { app ->
                                                 androidx.compose.material3.DropdownMenuItem(
-                                                    text = { AppUiText((if (app.packageName == childEmergencyTargetPackage) "✓  " else "") + app.displayName) },
+                                                    text = { AppUiText((if (app.packageName == childEmergencyTargetPackage) "✓  " else "") + compactAppLabel(app.displayName, 22)) },
                                                     onClick = {
                                                         childEmergencyTargetPackage = app.packageName
                                                         childEmergencyAppMenuExpanded = false
@@ -5983,8 +6011,33 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                     )
                     AppUiText("My apps", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    var childAppSearchQuery by remember { mutableStateOf("") }
+                    var childAppFilter by remember { mutableStateOf("All") }
+                    OutlinedTextField(
+                        value = childAppSearchQuery,
+                        onValueChange = { childAppSearchQuery = it.take(100) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        singleLine = true,
+                        label = { AppUiText("Search my apps") },
+                        placeholder = { AppUiText("Find an app by name") }
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("All", "Time left", "Locked").forEach { filter ->
+                            if (childAppFilter == filter) {
+                                Button(onClick = { childAppFilter = filter }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 4.dp)) {
+                                    AppUiText(filter, fontSize = 12.sp)
+                                }
+                            } else {
+                                OutlinedButton(onClick = { childAppFilter = filter }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 4.dp)) {
+                                    AppUiText(filter, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
                     val uniqueChildApps = allowedApps.filter { app ->
-                        app.enabled && if (app.packageName == "com.android.settings") true else {
+                        app.enabled &&
+                            (childAppSearchQuery.isBlank() || app.displayName.contains(childAppSearchQuery, ignoreCase = true) || app.packageName.contains(childAppSearchQuery, ignoreCase = true)) &&
+                            if (app.packageName == "com.android.settings") true else {
                             val info = try { context.packageManager.getApplicationInfo(app.packageName, 0) } catch (_: Exception) { null }
                             info != null &&
                                 (info.flags and ApplicationInfo.FLAG_SYSTEM) == 0 &&
@@ -6018,16 +6071,22 @@ private fun EduLockApp(repository: EduLockRepository) {
                             val hasTask = tasks.any { it.rewardPackageName == app.packageName } ||
                                 tasks.any { task -> !task.rewardGroupId.isNullOrBlank() && appGroups.any { it.id == task.rewardGroupId && app.packageName in it.packageNames } }
                             val status = when {
-                                emergencyGrantActive -> "Emergency access • temporary"
-                                app.dailyLimitMinutes <= 0 -> "No app-specific daily cap"
-                                remaining <= 0 -> "Time's up • answer to unlock"
+                                emergencyGrantActive -> "Emergency access"
+                                app.dailyLimitMinutes <= 0 -> "No app-specific cap"
+                                remaining <= 0 -> "Time's up • complete a task"
                                 else -> "$remaining min left"
                             }
+                            val passesChildAppFilter = when (childAppFilter) {
+                                "Locked" -> remaining <= 0 && !emergencyGrantActive
+                                "Time left" -> remaining > 0 || emergencyGrantActive
+                                else -> true
+                            }
+                            if (!passesChildAppFilter) return@forEach
                             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(15.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                                 Row(Modifier.fillMaxWidth().padding(horizontal = 9.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                         AppUiText(app.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                        AppUiText(status, color = if (remaining <= 0) Color(0xFFB45309) else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                        AppUiText(compactAppLabel(status, 24), color = if (remaining <= 0) Color(0xFFB45309) else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                                         if (hasTask) AppUiText("A learning task unlocks this app.", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
                                     }
                                     Button(
@@ -6929,7 +6988,7 @@ private fun RewardBankPanel(
                     ) {
                         uniqueApprovedApps.forEach { app ->
                             androidx.compose.material3.DropdownMenuItem(
-                                text = { AppUiText((if (selectedPackage == app.packageName) "✓  " else "") + app.displayName) },
+                                text = { AppUiText((if (selectedPackage == app.packageName) "✓  " else "") + compactAppLabel(app.displayName, 22)) },
                                 onClick = {
                                     onSelectPackage(app.packageName)
                                     rewardAppsExpanded = false
