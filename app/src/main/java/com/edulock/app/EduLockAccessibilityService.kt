@@ -3,6 +3,7 @@ package com.edulock.app
 import android.accessibilityservice.AccessibilityService
 import android.graphics.PixelFormat
 import android.graphics.Typeface
+import android.os.SystemClock
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
@@ -170,6 +171,13 @@ class EduLockAccessibilityService : AccessibilityService() {
             isInternalSystemPackage(packageName)) {
             return
         }
+        val currentlyBlocked = prefs.getStringSet(KEY_BLOCKED_PACKAGES, emptySet()).orEmpty()
+        if (packageName !in currentlyBlocked && hasActiveEmergencyGrant(packageName)) {
+            // A server-verified, parent-created emergency code grants only this app,
+            // for a short monotonic duration and only until the current device boot ends.
+            hideBlocker()
+            return
+        }
         val allowedPackages = prefs.getStringSet(KEY_ALLOWED_PACKAGES, emptySet()).orEmpty()
         val blockedByKidsMode = kidsModeEnabled && packageName !in allowedPackages
         val explicitlyBlocked = prefs.getStringSet(KEY_BLOCKED_PACKAGES, emptySet()).orEmpty().contains(packageName)
@@ -236,6 +244,35 @@ class EduLockAccessibilityService : AccessibilityService() {
             lastBlockedPackageName = ""
             hideBlocker()
         }
+    }
+
+    private fun hasActiveEmergencyGrant(packageName: String): Boolean {
+        val prefs = lockPrefs()
+        val currentBoot = try {
+            android.provider.Settings.Global.getInt(contentResolver, android.provider.Settings.Global.BOOT_COUNT, -1)
+        } catch (_: Exception) { -1 }
+        val nowElapsed = SystemClock.elapsedRealtime()
+        val entries = prefs.getStringSet(KEY_EMERGENCY_ACCESS_GRANTS, emptySet()).orEmpty().toMutableSet()
+        var active = false
+        val iterator = entries.iterator()
+        while (iterator.hasNext()) {
+            val row = iterator.next()
+            val parts = row.split("=")
+            if (parts.size != 3) {
+                iterator.remove()
+                continue
+            }
+            val target = parts[0]
+            val expiresElapsed = parts[1].toLongOrNull() ?: 0L
+            val savedBoot = parts[2].toIntOrNull() ?: -2
+            if (savedBoot != currentBoot || expiresElapsed <= nowElapsed) {
+                iterator.remove()
+                continue
+            }
+            if (target == packageName) active = true
+        }
+        prefs.edit().putStringSet(KEY_EMERGENCY_ACCESS_GRANTS, entries).apply()
+        return active
     }
 
     private fun isKeyboardPackage(packageName: String): Boolean = try {
@@ -487,6 +524,7 @@ class EduLockAccessibilityService : AccessibilityService() {
         const val KEY_USED_MS = "used_millis_today"
         const val KEY_DAY = "budget_day"
         const val KEY_APP_DAILY_LIMITS = "app_daily_limits"
+        const val KEY_EMERGENCY_ACCESS_GRANTS = "emergency_access_grants"
         const val KEY_APP_EARNED_MINUTES = "app_earned_minutes"
         const val KEY_APP_EARNED_GROUPS = "app_earned_groups"
         const val KEY_APP_GROUP_PACKAGES = "app_group_packages"
