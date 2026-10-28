@@ -427,12 +427,13 @@ private fun EduLockApp(repository: EduLockRepository) {
     val devicePreferences = remember { context.getSharedPreferences("edulock_device_mode", Context.MODE_PRIVATE) }
     var deviceMode by remember { mutableStateOf(devicePreferences.getString("mode", "unknown") ?: "unknown") }
     var screen by remember { mutableStateOf(if (deviceMode == "unknown") AppScreen.DEVICE_SETUP else AppScreen.AUTH) }
+    var isRestoringSession by remember { mutableStateOf(true) }
     var solarQuizReturnScreen by remember { mutableStateOf(AppScreen.PARENT_HOME) }
     var selected3DModel by remember { mutableStateOf("solar-system") }
     // Never populate the UI from an unverified cached session.
     var session by remember { mutableStateOf<AuthSession?>(null) }
     var accountRole by remember { mutableStateOf("parent") }
-    var isRegistering by remember { mutableStateOf(true) }
+    var isRegistering by remember { mutableStateOf(false) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
@@ -1778,6 +1779,7 @@ private fun EduLockApp(repository: EduLockRepository) {
 
     LaunchedEffect(Unit) {
         if (deviceMode == "unknown") {
+            isRestoringSession = false
             screen = AppScreen.DEVICE_SETUP
             if (!repository.isConfigured) {
                 notice = "App setup is incomplete. Ask the app administrator to finish the connection settings before building."
@@ -1807,6 +1809,7 @@ private fun EduLockApp(repository: EduLockRepository) {
         if (!repository.isConfigured) {
             notice = "The app connection is not configured yet. Ask the app administrator to finish setup before building."
         }
+        isRestoringSession = false
     }
     BackHandler(enabled = screen != AppScreen.AUTH) {
         if (screen == AppScreen.PLAY_TASK) {
@@ -2184,7 +2187,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                         modifier = Modifier.fillMaxWidth()
                     ) { AppUiText("This is the child's phone — pair with code") }
                 }
-                AppScreen.AUTH -> ScreenFrame(if (isRegistering) "Create your parent account" else "Welcome back", notice = notice, busy = busy) {
+                AppScreen.AUTH -> if (isRestoringSession) {
+                    ScreenFrame("Welcome back", busy = true) {
+                        CircularProgressIndicator()
+                        AppUiText("Restoring your signed-in account…")
+                    }
+                } else ScreenFrame(if (isRegistering) "Create your parent account" else "Welcome back", notice = notice, busy = busy) {
                     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F0FF))) {
                         Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Box(Modifier.size(68.dp).background(Brush.linearGradient(listOf(Color(0xFF5B4CE8), Color(0xFF00A99D))), RoundedCornerShape(24.dp)), contentAlignment = Alignment.Center) {
@@ -2216,7 +2224,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             AppUiText("Passwords do not match yet.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
                         }
                     }
-                    Button(
+                    if (isRegistering) Button(
                         onClick = {
                             execute {
                                 require(password == confirmPassword || !isRegistering) { "Passwords do not match. Please confirm your password." }
@@ -2236,14 +2244,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                         enabled = !busy && isRegistering,
                         modifier = Modifier.fillMaxWidth()
                     ) { AppUiText("Create parent account") }
-                    Button(
+                    if (!isRegistering) Button(
                         onClick = {
                             execute {
                                 val signedIn = repository.signIn(email, password, "parent")
                                 resolveSignedIn(signedIn)
                             }
                         },
-                        enabled = !busy && !isRegistering,
+                        enabled = !busy,
                         modifier = Modifier.fillMaxWidth()
                     ) { AppUiText("Sign in as parent") }
                     TextButton(onClick = {
