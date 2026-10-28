@@ -98,7 +98,7 @@ data class QuestionRow(
     val gradeLevel: Int = 1,
     val ageMin: Int = 3,
     val ageMax: Int = 19,
-    val rewardMinutes: Int = 0
+    val rewardMinutes: Int? = null
 )
 
 data class QuestionTranslation(
@@ -1481,10 +1481,10 @@ class EduLockRepository(context: Context) {
             .put("approve",approve).put("review_note",note.take(500)))
     }
 
-    suspend fun setQuestionReward(questionId: String, minutes: Int) {
+    suspend fun setQuestionReward(questionId: String, minutes: Int?) {
         requireSession("parent")
-        require(minutes in 0..1440 && questionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Reward must be 0–1440 minutes." }
-        restArray("questions?id=eq.$questionId","PATCH",JSONObject().put("reward_minutes",minutes))
+        require((minutes == null || minutes in 0..1440) && questionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Reward must be blank (use task default) or 0–1440 minutes." }
+        restArray("questions?id=eq.$questionId","PATCH",JSONObject().put("reward_minutes",minutes ?: JSONObject.NULL))
     }
 
     suspend fun loadQuestionRewardGroups(subjectId: String): List<QuestionRewardGroup> {
@@ -2306,7 +2306,7 @@ class EduLockRepository(context: Context) {
             gradeLevel = optInt("grade_level", 1),
             ageMin = optInt("age_min", 3),
             ageMax = optInt("age_max", 19),
-            rewardMinutes = optInt("reward_minutes", 0).coerceIn(0,1440)
+            rewardMinutes = if (isNull("reward_minutes")) null else optInt("reward_minutes", 0).coerceIn(0,1440)
         )
     }
 
