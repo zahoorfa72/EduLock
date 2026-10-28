@@ -105,9 +105,30 @@ private suspend fun translateManyOnDevice(texts: List<String>, sourceCode: Strin
     val translator = Translation.getClient(
         TranslatorOptions.Builder().setSourceLanguage(source).setTargetLanguage(target).build()
     )
+    // Keep equations, units, variables and LaTeX outside the translator. Translating these
+    // tokens changes the meaning of physics and mathematics questions and their answer keys.
+    val mathExpression = Regex(
+        """\$\$[\s\S]*?\$\$|\$[^$\n]+\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]|(?<![\p{L}\p{N}])(?:[A-Za-zΑ-ω][A-Za-z0-9₀-₉²³]*(?:_[A-Za-z0-9]+)?|\d+(?:\.\d+)?)(?:\s*(?:=|≈|≠|≤|≥|±|×|÷|\+|−|-|\*|/|\^|√)\s*(?:[A-Za-zΑ-ω][A-Za-z0-9₀-₉²³]*(?:_[A-Za-z0-9]+)?|\d+(?:\.\d+)?))+(?:\s*(?:kg|g|cm|mm|km|m/s(?:²|\^2)?|°C|°F|N|J|W|Pa|Hz|V|A|Ω|mol|s|min|h))?|(?<![\p{L}\p{N}])\d+(?:\.\d+)?\s*(?:m/s(?:²|\^2)?|kg|g|cm|mm|km|°C|°F|N|J|W|Pa|Hz|V|A|Ω|mol|s|min|h)\b""",
+        RegexOption.IGNORE_CASE
+    )
     return try {
         translator.downloadModelIfNeeded(DownloadConditions.Builder().build()).await()
-        texts.map { value -> if (value.isBlank()) value else translator.translate(value).await() }
+        suspend fun translateProse(value: String): String =
+            if (value.isBlank()) value else translator.translate(value).await()
+        suspend fun translatePreservingMath(value: String): String {
+            val result = StringBuilder()
+            var cursor = 0
+            mathExpression.findAll(value).forEach { match ->
+                if (match.range.first > cursor) {
+                    result.append(translateProse(value.substring(cursor, match.range.first)))
+                }
+                result.append(match.value)
+                cursor = match.range.last + 1
+            }
+            if (cursor < value.length) result.append(translateProse(value.substring(cursor)))
+            return result.toString()
+        }
+        texts.map { value -> if (value.isBlank()) value else translatePreservingMath(value) }
     } finally {
         translator.close()
     }
