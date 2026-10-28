@@ -2931,6 +2931,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         screen = AppScreen.PRACTICAL_TASKS
                                         execute {
                                             practicalTasks = repository.loadPracticalTasksForParent(familyId, child.id)
+                                            practicalSubmissions = repository.loadPracticalSubmissionsForParent(familyId, child.id)
                                         }
                                     }
                                 }
