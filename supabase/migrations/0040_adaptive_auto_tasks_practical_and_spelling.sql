@@ -263,14 +263,11 @@ declare
   v_ids uuid[];
   v_question record;
   v_title text;
-  v_daily_count integer := 1;
   v_questions_per_task integer := 4;
   v_pass integer := 70;
   v_reward integer := 1;
   v_cap integer := 30;
   v_kinder boolean := false;
-  v_focus integer;
-  v_today date := (now() at time zone 'UTC')::date;
 begin
   select * into v_child from edulock.children c where c.child_user_id = p_user_id for update;
   if not found then raise exception 'No linked child profile was found'; end if;
@@ -279,7 +276,7 @@ begin
   select coalesce(p.daily_written_question_limit,8), coalesce(p.kindergarten_mode,false)
     into v_questions_per_task, v_kinder
     from edulock.child_learning_preferences p where p.child_id = v_child.id;
-  v_questions_per_task := greatest(1, least(v_questions_per_task, if(v_kinder,4,12)));
+  v_questions_per_task := greatest(1, least(v_questions_per_task, case when v_kinder then 4 else 12 end));
   v_kinder := v_kinder or coalesce(v_child.age_years,8) <= 6 or coalesce(v_child.school_grade,1) <= 0;
 
   -- Existing active daily tasks are retained, never duplicated.
@@ -294,7 +291,6 @@ begin
     for v_subject in
       select distinct s.id, s.title, s.family_id
       from edulock.subjects s
-      join edulock.tasks t on t.child_id = v_child.id and t.family_id = s.family_id
       where s.family_id = v_child.family_id
       order by s.title
       limit 3
