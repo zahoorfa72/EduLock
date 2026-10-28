@@ -757,7 +757,7 @@ private fun EduLockApp(repository: EduLockRepository) {
 
     fun openChildTask(task: TaskRow) {
         execute {
-            val loadedQuestions = repository.loadQuestionsForTask(task.id, task.subjectId, task.questionCount)
+            val loadedQuestions = repository.loadQuestionsForTask(task.id, task.subjectId, task.questionCount, task.targetGradeLevel, task.targetAgeYears)
             if (loadedQuestions.isEmpty()) {
                 throw IllegalStateException("This task has no linked questions. Ask your parent to repair it.")
             }
@@ -878,7 +878,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 notice = "The requested task is no longer available. Ask your parent to assign an active task."
             } else {
                 execute {
-                    val loadedQuestions = repository.loadQuestionsForTask(target.id, target.subjectId, target.questionCount)
+                    val loadedQuestions = repository.loadQuestionsForTask(target.id, target.subjectId, target.questionCount, target.targetGradeLevel, target.targetAgeYears)
                     if (loadedQuestions.isEmpty()) {
                         throw IllegalStateException("This task has no linked questions. Ask your parent to repair it.")
                     }
@@ -985,7 +985,7 @@ private fun EduLockApp(repository: EduLockRepository) {
         } else {
             childLocationSharing = locationPrefs.getBoolean(ChildLocationService.KEY_SHARING_ENABLED, false)
         }
-        tasks = repository.loadChildTasks(linked.id)
+        tasks = repository.loadChildTasks(linked.id, linked.schoolGrade, linked.ageYears)
         try {
             earnedToday = repository.refreshChildDeviceRestrictions(linked)
             childRulesLastSyncedAt = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
@@ -1137,7 +1137,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     try {
                                         earnedToday = repository.refreshChildDeviceRestrictions(linked)
                                         rewardBankMinutes = repository.loadChildRewardBankMinutes(linked.id)
-                                        tasks = repository.loadChildTasks(linked.id)
+                                        tasks = repository.loadChildTasks(linked.id, linked.schoolGrade, linked.ageYears)
                                     } catch (_: Exception) { earnedToday = submitted.dailyUsedMinutes }
                                 }
                                 taskDeadlineAtMillis = null
@@ -1206,7 +1206,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         try {
                                             earnedToday = repository.refreshChildDeviceRestrictions(linked)
                                             rewardBankMinutes = repository.loadChildRewardBankMinutes(linked.id)
-                                            tasks = repository.loadChildTasks(linked.id)
+                                            tasks = repository.loadChildTasks(linked.id, linked.schoolGrade, linked.ageYears)
                                         } catch (_: Exception) { earnedToday = submitted.dailyUsedMinutes }
                                     }
                                     taskDeadlineAtMillis = null
@@ -1284,7 +1284,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         // Refresh tasks, profile limits and parental rules; updated game allowances apply without sign-out.
                         val currentProfile = repository.loadCurrentChild() ?: linked
                         childProfile = currentProfile
-                        tasks = repository.loadChildTasks(activeChildId)
+                        tasks = repository.loadChildTasks(activeChildId, currentProfile.schoolGrade, currentProfile.ageYears)
                         allowedApps = repository.loadAllowedApps(activeChildId)
                         appGroups = repository.loadAppGroups(activeChildId)
                         earnedToday = repository.refreshChildDeviceRestrictions(currentProfile)
@@ -2598,7 +2598,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Button(onClick = {
                         editingSubjectId = null
                         subjectTitle = ""; subjectLanguage = "en"
-                        subjectCountryCode = parentCountryCode; subjectGradeLevel = "1"
+                        subjectCountryCode = parentCountryCode
+                        subjectGradeLevel = (selectedChild?.schoolGrade ?: children.firstOrNull()?.schoolGrade ?: 1).toString()
                         screen = AppScreen.ADD_SUBJECT
                     }, modifier = Modifier.fillMaxWidth()) { AppUiText("Create subject") }
 
@@ -3251,8 +3252,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                     val selectedTaskCountry = selectedChild?.countryCode ?: parentCountryCode
                     val selectedChildTrack = selectedChild?.studyTrack ?: "none"
                     AppUiText(
-                        "Country curriculum: " + displayCountryName(selectedTaskCountry) +
-                            " • Child's religious education: " + studyTrackLabel(selectedChildTrack),
+                        "Learner level: Grade " + (selectedChild?.schoolGrade ?: 1) +
+                            " • Age " + (selectedChild?.ageYears ?: 8) + " • " + displayCountryName(selectedTaskCountry) +
+                            " • Religious education: " + studyTrackLabel(selectedChildTrack),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -3261,13 +3263,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                         val religionTrack = religionTrackForSubject(subject.title)
                         val isCountrySubject = subject.countryCode.equals(selectedTaskCountry, ignoreCase = true) ||
                             subject.countryCode.equals("ZZ", ignoreCase = true)
-                        isCountrySubject && (religionTrack == null ||
-                            (selectedChildTrack != "none" && religionTrack == selectedChildTrack))
+                        isCountrySubject &&
+                            subject.gradeLevel == selectedChild?.schoolGrade &&
+                            (religionTrack == null || (selectedChildTrack != "none" && religionTrack == selectedChildTrack))
                     }
                     val selectedTaskSubjects = assignableSubjects.filter { it.id in selectedTaskSubjectIds }
                     AppUiText("Choose one subject bank per task. Create separate Mathematics, Physics, and other subject tasks so each task contains questions from only its selected subject.")
                     if (assignableSubjects.isEmpty()) {
-                        AppUiText("No matching subjects yet. Open the country-specific learning templates, add a subject, then return here to assign its task.")
+                        AppUiText("No subject is available for this child's Grade " + (selectedChild?.schoolGrade ?: 1) + " and age " + (selectedChild?.ageYears ?: 8) + ". Create a subject for the correct class or import matching curriculum questions.")
                         OutlinedButton(
                             onClick = {
                                 templateCategory = if (selectedChildTrack == "none") "Mathematics" else "Religious Education"
@@ -3284,7 +3287,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             selectedSubject = subject
                             notice = "Selected " + subject.title + ". Only its questions will be assigned to this task."
                         }, modifier = Modifier.fillMaxWidth()) {
-                            AppUiText((if (subject.id in selectedTaskSubjectIds) "✓ Selected • " else "") + subject.title + " (" + subject.languageCode + ")")
+                            AppUiText((if (subject.id in selectedTaskSubjectIds) "✓ Selected • " else "") + subject.title + " • Grade " + subject.gradeLevel + " (" + subject.languageCode + ")")
                         }
                     }
                     Field(taskTitle, { taskTitle = it }, "Task title")
@@ -4203,7 +4206,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Button(onClick = {
                         execute {
                             val linked = childProfile ?: throw IllegalStateException("Sign in to your child account again.")
-                            tasks = repository.loadChildTasks(linked.id)
+                            tasks = repository.loadChildTasks(linked.id, linked.schoolGrade, linked.ageYears)
                             earnedToday = repository.refreshChildDeviceRestrictions(linked)
                             childRulesLastSyncedAt = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
                                 .getLong("rules_synced_at", System.currentTimeMillis())
@@ -4610,7 +4613,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             earnedToday = submitted.dailyUsedMinutes
                                             notice = "Your answers were submitted, but the updated reward balance could not be refreshed. Open the learning space while connected and sync again."
                                         }
-                                        try { tasks = repository.loadChildTasks(linked.id) } catch (_: Exception) { /* preserve current list if the network is unavailable */ }
+                                        try { tasks = repository.loadChildTasks(linked.id, linked.schoolGrade, linked.ageYears) } catch (_: Exception) { /* preserve current list if the network is unavailable */ }
                                     }
                                     screen = AppScreen.TASK_RESULT
                                 }
