@@ -290,7 +290,6 @@ declare
   v_errors jsonb;
   v_feedback text;
   v_concept text;
-  v_diff integer;
   v_focus numeric;
   v_old_attempts integer;
   v_old_correct integer;
