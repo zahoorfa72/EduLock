@@ -1182,8 +1182,8 @@ private fun EduLockApp(repository: EduLockRepository) {
             ChildDeviceKioskPolicy.enterOrExitLockTask(context, linked.kidsModeEnabled)
             repository.syncAppUsage(linked.id)
         } catch (e: Exception) {
-            childRulesSyncError = e.message ?: "Supabase did not confirm the child-device rules sync."
-            notice = "Signed in, but device settings or usage did not sync: " + childRulesSyncError
+            childRulesSyncError = e.message ?: "The child-device rules could not be confirmed by the server."
+            notice = "Signed in, but device settings or usage could not sync: " + childRulesSyncError
         }
         screen = AppScreen.CHILD_HOME
     }
@@ -2807,10 +2807,20 @@ private fun EduLockApp(repository: EduLockRepository) {
 
                     AppUiText("Your selected subjects", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     AppUiText("Only subjects saved to your family are shown. Open a subject to view its questions, add questions, and manage translations.")
-                    val visibleSubjects = subjects.filter { subject ->
-                        val track = religionTrackForSubject(subject.title)
-                        track == null || children.any { child -> child.studyTrack == track }
-                    }
+                    val visibleSubjects = subjects
+                        .filter { subject ->
+                            val track = religionTrackForSubject(subject.title)
+                            track == null || children.any { child -> child.studyTrack == track }
+                        }
+                        .distinctBy { subject ->
+                            listOf(
+                                subject.title.trim().lowercase(Locale.ROOT),
+                                subject.languageCode.trim().lowercase(Locale.ROOT),
+                                subject.countryCode.trim().uppercase(Locale.ROOT),
+                                subject.gradeLevel.toString(),
+                                subject.curriculumSubjectCode.trim().lowercase(Locale.ROOT)
+                            ).joinToString("|")
+                        }
                     if (visibleSubjects.isEmpty()) AppUiText("No subjects yet. Create a subject to begin.")
                     visibleSubjects.forEach { subject ->
                         Card(
@@ -2896,7 +2906,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     AlertDialog(
                                         onDismissRequest = { subjectDeleteConfirmation = null },
                                         title = { AppUiText("Delete subject?") },
-                                        text = { AppUiText("This removes “${subject.title}” and may also remove its questions and translations. This cannot be undone.") },
+                                        text = { AppUiText("This removes “${subject.title}” and its questions and translations. This cannot be undone.") },
                                         confirmButton = {
                                             TextButton(
                                                 enabled = !busy,
@@ -2966,7 +2976,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                         modifier = Modifier.fillMaxWidth()
                     ) { AppUiText("🌌 Preview all interactive 4D learning models") }
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        learningTemplateCategories(templateCountryCode)
+                        val templateCategoriesForContext = if (selectedSubject != null) {
+                            LearningTemplates.all
+                                .filter { it.subjectTitle.equals(selectedSubject!!.title, ignoreCase = true) }
+                                .map { it.category }
+                                .distinct()
+                        } else learningTemplateCategories(templateCountryCode)
+                        templateCategoriesForContext
                             .filter { it != "Religious Education" || templateStudyTrack != "none" }
                             .chunked(2).forEach { categories ->
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2982,6 +2998,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                     val countryTemplates = LearningTemplates.all.filter { template ->
                         template.category == templateCategory &&
+                            (selectedSubject == null || template.subjectTitle.equals(selectedSubject!!.title, ignoreCase = true)) &&
                             (template.countryCode == "ZZ" || template.countryCode.equals(templateCountryCode, ignoreCase = true)) &&
                             (templateCategory != "Religious Education" ||
                                 (templateStudyTrack != "none" &&
@@ -3078,12 +3095,18 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 Button(
                                     onClick = {
                                         execute {
-                                            val targetSubject = repository.findOrCreateSubject(
-                                                familyId,
-                                                template.subjectTitle,
-                                                template.languageCode,
-                                                templateCountryCode
-                                            )
+                                            val currentSubject = selectedSubject
+                                            val targetSubject = if (currentSubject != null &&
+                                                currentSubject.title.equals(template.subjectTitle, ignoreCase = true)) {
+                                                currentSubject
+                                            } else {
+                                                repository.findOrCreateSubject(
+                                                    familyId,
+                                                    template.subjectTitle,
+                                                    template.languageCode,
+                                                    templateCountryCode
+                                                )
+                                            }
                                             subjects = repository.loadSubjects(familyId, templateCountryCode)
                                             selectedSubject = targetSubject
                                             questions = repository.loadQuestions(targetSubject.id)
@@ -3919,17 +3942,6 @@ private fun EduLockApp(repository: EduLockRepository) {
                     AppUiText("Choose one subject bank per task. Create separate Mathematics, Physics, and other subject tasks so each task contains questions from only its selected subject.")
                     if (assignableSubjects.isEmpty()) {
                         AppUiText("No subject is available for this child's Grade " + (selectedChild?.schoolGrade ?: 1) + " and age " + (selectedChild?.ageYears ?: 8) + ". Create a subject for the correct class or import matching curriculum questions.")
-                        OutlinedButton(
-                            onClick = {
-                                editingSubjectId = null
-                                subjectTitle = ""
-                                subjectLanguage = selectedChild?.preferredLanguage ?: "en"
-                                subjectCountryCode = selectedTaskCountry
-                                subjectGradeLevel = (selectedChild?.schoolGrade ?: 1).toString()
-                                screen = AppScreen.ADD_SUBJECT
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { AppUiText("＋ Create a subject for this child's grade") }
                         OutlinedButton(
                             onClick = {
                                 templateCategory = if (selectedChildTrack == "none") "Mathematics" else "Religious Education"
