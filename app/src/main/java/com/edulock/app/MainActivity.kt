@@ -2813,6 +2813,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                             modifier = Modifier.fillMaxWidth().clickable {
                                 selectedSubject = subject
                                 expandedFourDQuestionId = null
+                                translationEditorQuestionId = null
+                                questionEditExpandedId = null
+                                questionEditDrafts = emptyMap()
+                                questionRewardEdits = emptyMap()
+                                questionRewardGroups = emptyList()
+                                questionGroupRewardEdits = emptyMap()
+                                groupRewardsExpanded = false
                                 screen = AppScreen.QUESTIONS
                                 execute {
                                     questions = repository.loadQuestions(subject.id)
@@ -2831,6 +2838,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     onClick = {
                                         selectedSubject = subject
                                         expandedFourDQuestionId = null
+                                        translationEditorQuestionId = null
+                                        questionEditExpandedId = null
+                                        questionEditDrafts = emptyMap()
+                                        questionRewardEdits = emptyMap()
+                                        questionRewardGroups = emptyList()
+                                        questionGroupRewardEdits = emptyMap()
+                                        groupRewardsExpanded = false
                                         screen = AppScreen.QUESTIONS
                                         execute {
                                             questions = repository.loadQuestions(subject.id)
@@ -3016,6 +3030,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             questions = repository.loadQuestions(targetSubject.id)
                                             questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
                                             questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
+                                            questionPictureUri = null; questionPictureBytes = null; questionPicturePreview = null; questionPictureError = null
                                             questionPrompt = template.prompt
                                             question3DModel = if ((template.conceptKey.startsWith("4d:") || template.conceptKey.startsWith("3d:")))
                                                 template.conceptKey.removePrefix("4d:").removePrefix("3d:").substringBefore(":") else "none"
@@ -3138,7 +3153,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         if (groupRewardsExpanded) {
                             AppUiText(
-                                "Set the bonus for each concept tag below. A tag shared by multiple questions earns its bonus only when every assigned question with that tag is correct. Changes save automatically.",
+                                "Set a bonus for each concept tag, then press Save group bonus. The bonus is awarded only when every question in that concept group assigned to a task is correct.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -3254,6 +3269,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                             questionLanguage = subject.languageCode
                             questionConceptKey = ""
                             questionSolution = ""
+                            question3DModel = "none"
+                            questionPictureUri = null; questionPictureBytes = null; questionPicturePreview = null; questionPictureError = null
                             screen = AppScreen.ADD_QUESTION
                         }, modifier = Modifier.fillMaxWidth()) { AppUiText("Add question") }
                         OutlinedButton(
@@ -3265,6 +3282,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 questionConceptKey = "custom-3d-question"
                                 questionLanguage = subject.languageCode
                                 question3DModel = "atom"
+                                questionPictureUri = null; questionPictureBytes = null; questionPicturePreview = null; questionPictureError = null
                                 questionType = "multiple_choice"
                                 screen = AppScreen.ADD_QUESTION
                             },
@@ -3283,18 +3301,29 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             "Reward minutes (blank = use task default; 0–1440)",
                                             keyboardType = KeyboardType.Number
                                         )
-                                        LaunchedEffect(question.id, questionRewardEdits[question.id]) {
-                                            val rawReward = questionRewardEdits[question.id] ?: question.rewardMinutes?.toString().orEmpty()
-                                            delay(700)
-                                            val parsed = rawReward.toIntOrNull()
-                                            if (rawReward.isNotBlank() && (parsed == null || parsed !in 0..1440)) return@LaunchedEffect
-                                            if (rawReward.isBlank() && question.rewardMinutes == null) return@LaunchedEffect
-                                            if (parsed == question.rewardMinutes) return@LaunchedEffect
-                                            runCatching {
-                                                repository.setQuestionReward(question.id, parsed)
-                                                questions = repository.loadQuestions(subject.id)
-                                            }.onFailure { notice = "Could not save question reward: " + (it.message ?: "Please retry.") }
-                                        }
+                                        OutlinedButton(
+                                            onClick = {
+                                                execute {
+                                                    val rawReward = (questionRewardEdits[question.id]
+                                                        ?: question.rewardMinutes?.toString().orEmpty()).trim()
+                                                    val parsed = if (rawReward.isBlank()) null else rawReward.toIntOrNull()
+                                                        ?: throw IllegalArgumentException("Enter a whole-number reward from 0 to 1440, or leave it blank to use the task default.")
+                                                    require(parsed == null || parsed in 0..1440) {
+                                                        "Question reward must be between 0 and 1440 minutes."
+                                                    }
+                                                    repository.setQuestionReward(question.id, parsed)
+                                                    questions = repository.loadQuestions(subject.id)
+                                                    questionRewardEdits = questionRewardEdits - question.id
+                                                    notice = if (parsed == null) {
+                                                        "Question reward cleared. This question will use the task default."
+                                                    } else {
+                                                        "Question reward saved: " + parsed + " minutes."
+                                                    }
+                                                }
+                                            },
+                                            enabled = !busy,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) { AppUiText("Save question reward") }
                                         val savedTranslationsForQuestion = questionTranslations[question.id].orEmpty()
                                         if (savedTranslationsForQuestion.isNotEmpty()) {
                                             savedTranslationsForQuestion.forEach { savedTranslation ->
@@ -3320,6 +3349,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                                 }
                                                                 TextButton(
                                                                     onClick = {
+                                                                        questionEditExpandedId = null
+                                                                        questionEditDrafts = questionEditDrafts - question.id
                                                                         translationEditorQuestionId = question.id
                                                                         translationLanguage = savedTranslation.languageCode
                                                                         translationPrompt = savedTranslation.prompt
@@ -3418,6 +3449,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                     if (translationEditorQuestionId == question.id) {
                                                         translationEditorQuestionId = null
                                                     } else {
+                                                        questionEditExpandedId = null
+                                                        questionEditDrafts = questionEditDrafts - question.id
                                                         translationEditorQuestionId = question.id
                                                         val existingTranslation = savedTranslationsForQuestion.firstOrNull()
                                                         translationLanguage = existingTranslation?.languageCode ?: when (question.languageCode.lowercase()) {
