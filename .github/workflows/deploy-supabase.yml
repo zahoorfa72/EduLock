@@ -62,6 +62,10 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase functions deploy submit-task-attempt --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+      - name: Deploy automatic daily task function
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy ensure-daily-tasks --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
       - name: Deploy reward bank redemption function
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
