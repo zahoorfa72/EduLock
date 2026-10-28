@@ -1106,40 +1106,29 @@ private fun EduLockApp(repository: EduLockRepository) {
     }
 
     val launchPreferences = remember { context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE) }
-    LaunchedEffect(childProfile?.id, screen) {
+    LaunchedEffect(childProfile?.id, screen, tasks.map { it.id }, busy) {
         val requestedTaskId = launchPreferences.getString("pending_task_id", null)
-        if (requestedTaskId != null && childProfile != null && screen == AppScreen.CHILD_HOME &&
-            repository.currentSession()?.accountRole == "child" && !busy) {
-            // Keep the pending request until loading succeeds so offline/temporary errors can retry.
-            val target = tasks.firstOrNull { it.id == requestedTaskId && it.active }
-            if (target == null) {
-                launchPreferences.edit().remove("pending_task_id").apply()
-                notice = "The requested task is no longer available. Ask your parent to assign an active task."
-            } else {
-                execute {
-                    val loadedQuestions = repository.loadQuestionsForTask(target.id, target.subjectId, target.questionCount, target.targetGradeLevel, target.targetAgeYears)
-                    if (loadedQuestions.isEmpty()) {
-                        throw IllegalStateException("This task has no linked questions. Ask your parent to repair it.")
-                    }
-                    if (loadedQuestions.size != target.questionCount) {
-                        throw IllegalStateException("This task needs " + target.questionCount + " questions, but only " + loadedQuestions.size + " are available. Ask your parent to repair the task.")
-                    }
-                    val loadedTranslations = repository.loadQuestionTranslations(loadedQuestions.map { it.id })
-                    questions = loadedQuestions
-                    questionTranslations = loadedTranslations
-                    answerLanguages = loadedQuestions.associate { item ->
-                        val preferred = childProfile?.preferredLanguage ?: item.languageCode
-                        val translated = loadedTranslations[item.id].orEmpty().any { it.languageCode.equals(preferred, ignoreCase = true) }
-                        item.id to if (translated) preferred.lowercase() else item.languageCode
-                    }
-                    activeTask = target
-                    questionIndex = 0
-                    answers = emptyMap()
-                    launchPreferences.edit().remove("pending_task_id").apply()
-                    notice = "Screen-time target reached. Answer the learning task to earn more time."
-                    screen = AppScreen.PLAY_TASK
-                }
+        val openAnyTask = launchPreferences.getBoolean("pending_open_any_task", false)
+        val linkedChild = childProfile
+        if ((requestedTaskId != null || openAnyTask) && linkedChild != null &&
+            screen == AppScreen.CHILD_HOME && repository.currentSession()?.accountRole == "child" && !busy) {
+            val targeted = requestedTaskId?.let { id -> tasks.firstOrNull { it.id == id && it.active } }
+            val target = targeted ?: tasks.firstOrNull { it.active }
+            if (target != null) {
+                launchPreferences.edit()
+                    .remove("pending_task_id")
+                    .remove("pending_open_any_task")
+                    .apply()
+                notice = "This app is blocked. Complete this learning task first."
+                openChildTask(target)
+            } else if (tasks.isNotEmpty()) {
+                launchPreferences.edit()
+                    .remove("pending_task_id")
+                    .remove("pending_open_any_task")
+                    .apply()
+                notice = "This app is blocked, but no active learning task is ready. Ask your parent to assign one."
             }
+            // When the task list is still loading, keep the request. The effect runs again after sync.
         }
     }
 
@@ -1889,7 +1878,17 @@ private fun EduLockApp(repository: EduLockRepository) {
         if (linked != null && session?.accountRole == "child" && screen == AppScreen.CHILD_HOME) {
             try {
                 repository.ensureDailyTasks()
-                tasks = repository.loadChildTasks(linked.id, linked.schoolGrade, linked.ageYears)
+                val refreshedTasks = repository.loadChildTasks(linked.id, linked.schoolGrade, linked.ageYears)
+                tasks = refreshedTasks
+                val hasPendingRedirect = launchPreferences.getString("pending_task_id", null) != null ||
+                    launchPreferences.getBoolean("pending_open_any_task", false)
+                if (refreshedTasks.isEmpty() && hasPendingRedirect) {
+                    launchPreferences.edit()
+                        .remove("pending_task_id")
+                        .remove("pending_open_any_task")
+                        .apply()
+                    notice = "This app is blocked. No learning task is ready yet; ask your parent to create tasks or enable daily tasks."
+                }
             } catch (_: Exception) {
                 // Keep the previous task list visible. The next home entry retries generation.
             }
@@ -5658,7 +5657,22 @@ private fun EduLockApp(repository: EduLockRepository) {
                             )
                             AppUiText("Select allowed apps for this group", fontWeight = FontWeight.SemiBold)
                             val groupEligibleApps = allowedApps.filter { it.childId == child?.id && it.enabled }
-                            if (groupEligibleApps.isEmpty()) AppUiText("Enable an app below first, then refresh the app list before adding it to a group.")
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(
+                                    onClick = { appGroupSelectedPackages = appGroupSelectedPackages + groupEligibleApps.map { it.packageName } },
+                                    enabled = groupEligibleApps.isNotEmpty(),
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                                ) { AppUiText("Select all", fontSize = 12.sp) }
+                                OutlinedButton(
+                                    onClick = { appGroupSelectedPackages = emptySet() },
+                                    enabled = appGroupSelectedPackages.isNotEmpty(),
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                                ) { AppUiText("Clear", fontSize = 12.sp) }
+                            }
+                            AppUiText("${appGroupSelectedPackages.size} app(s) selected", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            if (groupEligibleApps.isEmpty()) AppUiText("Enable an app above first, then refresh the app list before adding it to a group.")
                             groupEligibleApps.forEach { app ->
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Checkbox(

@@ -233,12 +233,12 @@ class EduLockAccessibilityService : AccessibilityService() {
             // Every blocked-app attempt should take the child back to learning. When a current
             // task is available, open it directly; the child-home daily-task generator fills gaps.
             val taskId = taskIdForPackage(packageName)
-            if (taskId != null) {
-                prefs.edit()
-                    .putString(KEY_PENDING_TASK_ID, taskId)
-                    .putString("pending_reward_package", packageName)
-                    .apply()
-            }
+            val pendingEditor = prefs.edit()
+                .putBoolean("pending_open_any_task", true)
+                .putString("pending_reward_package", packageName)
+            if (taskId != null) pendingEditor.putString(KEY_PENDING_TASK_ID, taskId)
+            else pendingEditor.remove(KEY_PENDING_TASK_ID)
+            pendingEditor.apply()
             redirectToEduLockIfNeeded(packageName)
         } else {
             lastBlockedPackageName = ""
