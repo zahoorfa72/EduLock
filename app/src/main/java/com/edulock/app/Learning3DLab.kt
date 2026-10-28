@@ -119,9 +119,11 @@ fun Learning4DLabScreen(
         "Hindi" -> "hi"
         else -> "en"
     }
+    // Keep multiple questions for the selected subject. Concept tags group related
+    // questions for reporting/rewards; they must not collapse the question bank to one item.
     val bankQuestions = FourDQuestionBanks.forLearningContext(
         questionBankSubject, requestedQuestionLanguage, gradeLevel, ageYears
-    ).distinctBy { it.conceptKey }.take(10)
+    ).take(20)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Card(
             modifier = Modifier.fillMaxWidth(),
