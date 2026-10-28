@@ -4739,6 +4739,73 @@ private fun EduLockApp(repository: EduLockRepository) {
 
                 AppScreen.ADD_QUESTION -> ScreenFrame("Add question", onBack = { screen = AppScreen.QUESTIONS }, notice = notice, busy = busy) {
                     val lang = questionLanguage
+                    val currentQuestionOptions = questionOptions.lines().map { it.trim() }.filter { it.isNotEmpty() }
+                    val answerFieldsValid = when (questionType) {
+                        "multiple_choice" -> questionAnswer.isNotBlank() &&
+                            currentQuestionOptions.size >= 2 &&
+                            currentQuestionOptions.any { it.equals(questionAnswer.trim(), ignoreCase = true) }
+                        "true_false" -> questionAnswer.trim().equals("true", ignoreCase = true) ||
+                            questionAnswer.trim().equals("false", ignoreCase = true)
+                        "matching" -> {
+                            val pairs = currentQuestionOptions.map { it.split("|", limit = 2) }
+                            pairs.size >= 2 &&
+                                pairs.all { it.size == 2 && it[0].isNotBlank() && it[1].isNotBlank() } &&
+                                pairs.map { it[0].trim() }.distinct().size == pairs.size &&
+                                pairs.map { it[1].trim() }.distinct().size == pairs.size
+                        }
+                        "picture" -> questionAnswer.isNotBlank() && questionPictureBytes != null
+                        else -> questionAnswer.isNotBlank()
+                    }
+                    val canSaveQuestion = !busy && selectedSubject != null &&
+                        questionPrompt.isNotBlank() && questionConceptKey.isNotBlank() &&
+                        questionLanguage.trim().matches(Regex("[A-Za-z][A-Za-z0-9-]{1,15}")) &&
+                        answerFieldsValid
+                    val saveQuestionAction: () -> Unit = {
+                        execute {
+                            val subject = selectedSubject ?: throw IllegalStateException("Choose a subject first.")
+                            val options = questionOptions.lines().map { it.trim() }.filter { it.isNotEmpty() }
+                            val savedConceptKey = if (question3DModel == "none") questionConceptKey else "4d:$question3DModel:$questionConceptKey"
+                            val canonicalAnswer = if (questionType == "matching") {
+                                options.mapNotNull { raw ->
+                                    val pair = raw.split("|", limit = 2)
+                                    if (pair.size == 2 && pair[0].isNotBlank() && pair[1].isNotBlank()) pair[0].trim() + "=" + pair[1].trim() else null
+                                }.joinToString(";")
+                            } else questionAnswer
+                            val pictureBytes = if (questionType == "picture") {
+                                questionPictureBytes ?: throw IllegalArgumentException("Choose a picture before saving this picture question.")
+                            } else null
+                            val newQuestionId = repository.addQuestion(
+                                subject.id, questionPrompt, questionType, options, canonicalAnswer,
+                                questionLanguage, savedConceptKey, questionSolution
+                            )
+                            if (pictureBytes != null) {
+                                try {
+                                    repository.uploadQuestionImage(subject.familyId, newQuestionId, pictureBytes)
+                                } catch (error: Exception) {
+                                    questionPictureError = error.message ?: "Picture upload failed."
+                                    try {
+                                        repository.deleteQuestion(newQuestionId)
+                                    } catch (_: Exception) {
+                                        // Keep the original upload error visible; the cleanup is best-effort.
+                                    }
+                                    throw error
+                                }
+                            }
+                            val refreshedQuestions = repository.loadQuestions(subject.id)
+                            questions = refreshedQuestions
+                            questionTranslations = repository.loadQuestionTranslations(refreshedQuestions.map { it.id })
+                            questionSolutions = repository.loadQuestionSolutions(refreshedQuestions.map { it.id })
+                            questionSolution = ""
+                            screen = AppScreen.QUESTIONS
+                            notice = "Question and parent-only worked solution saved. The solution is not sent to the child."
+                        }
+                    }
+                    AppUiText("Fill in the question below, then use Save question here or at the bottom. For multiple choice, the correct answer must match one of the options.")
+                    Button(
+                        onClick = saveQuestionAction,
+                        enabled = canSaveQuestion,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { AppUiText("Save question") }
                     AppUiText("Question language: " + lang + ". Type in Urdu, Sindhi, English or another Unicode language.")
                     AppUiText("Optional interactive 4D model", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     AppUiText("Choose a model to attach a touch-friendly learning visual to your question.")
@@ -4817,36 +4884,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                         Field(questionSolution, { questionSolution = it }, "Parent-only worked solution / experiment explanation")
                         AppUiText("Worked solutions are stored separately from child-visible questions.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Button(onClick = {
-                        execute {
-                            val subject = selectedSubject ?: throw IllegalStateException("Choose a subject first.")
-                            val options = questionOptions.lines().map { it.trim() }.filter { it.isNotEmpty() }
-                            val savedConceptKey = if (question3DModel == "none") questionConceptKey else "4d:$question3DModel:$questionConceptKey"
-                            val canonicalAnswer = if (questionType == "matching") {
-                                options.mapNotNull { raw ->
-                                    val pair = raw.split("|", limit = 2)
-                                    if (pair.size == 2 && pair[0].isNotBlank() && pair[1].isNotBlank()) pair[0].trim() + "=" + pair[1].trim() else null
-                                }.joinToString(";")
-                            } else questionAnswer
-                            val newQuestionId = repository.addQuestion(subject.id, questionPrompt, questionType, options, canonicalAnswer, questionLanguage, savedConceptKey, questionSolution)
-                            if (questionType == "picture") {
-                                val bytes = questionPictureBytes ?: throw IllegalArgumentException("Choose a picture before saving this picture question.")
-                                val parentChild = selectedChild ?: throw IllegalStateException("Choose the child profile for this question.")
-                                try {
-                                    repository.uploadQuestionImage(parentChild.familyId, newQuestionId, bytes)
-                                } catch (error: Exception) {
-                                    questionPictureError = error.message ?: "Picture upload failed."
-                                    throw error
-                                }
-                            }
-                            questions = repository.loadQuestions(subject.id)
-                            questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
-                            questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
-                            questionSolution = ""
-                            screen = AppScreen.QUESTIONS
-                            notice = "Question and parent-only worked solution saved. The solution is not sent to the child."
-                        }
-                    }, enabled = !busy && questionPrompt.isNotBlank() && (questionAnswer.isNotBlank() || (questionType == "matching" && questionOptions.isNotBlank())) && questionConceptKey.isNotBlank(), modifier = Modifier.fillMaxWidth()) { AppUiText("Save question") }
+                    Button(
+                        onClick = saveQuestionAction,
+                        enabled = canSaveQuestion,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { AppUiText("Save question") }
                 }
 
                 AppScreen.ADD_TRANSLATION -> ScreenFrame("Concept Bridge — translation", onBack = { screen = AppScreen.QUESTIONS }, notice = notice, busy = busy) {
