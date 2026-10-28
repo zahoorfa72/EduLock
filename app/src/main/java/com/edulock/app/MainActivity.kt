@@ -1045,11 +1045,20 @@ private fun EduLockApp(repository: EduLockRepository) {
                             try {
                                 val submitted = repository.submitTask(task.id, filledAnswers, answerLanguages)
                                 taskResult = submitted
+                                taskDraftPrefs.edit().remove(task.id).apply()
                                 val linked = childProfile
                                 if (linked != null) {
-                                    try { earnedToday = repository.refreshChildDeviceRestrictions(linked) }
-                                    catch (_: Exception) { earnedToday = submitted.dailyUsedMinutes }
+                                    try {
+                                        earnedToday = repository.refreshChildDeviceRestrictions(linked)
+                                        rewardBankMinutes = repository.loadChildRewardBankMinutes(linked.id)
+                                        tasks = repository.loadChildTasks(linked.id)
+                                    } catch (_: Exception) { earnedToday = submitted.dailyUsedMinutes }
                                 }
+                                taskDeadlineAtMillis = null
+                                questionDeadlineAtMillis = null
+                                questionDeadlineQuestionId = null
+                                questionSecondsRemaining = 0
+                                expiredQuestionIds = emptySet()
                                 screen = AppScreen.TASK_RESULT
                                 notice = "Time is up. Your answers were submitted automatically."
                             } catch (error: Exception) {
@@ -1062,9 +1071,78 @@ private fun EduLockApp(repository: EduLockRepository) {
                 }
                 delay(250)
             }
-        } else if (screen != AppScreen.PLAY_TASK) {
-            taskDeadlineAtMillis = null
+        } else if (activeTask == null) {
             taskSecondsRemaining = 0
+        }
+    }
+
+    // A separate countdown can be configured for each question. The deadline and
+    // expired-question set are saved in the task draft so leaving the task does not reset them.
+    LaunchedEffect(
+        screen, activeTask?.id, questions.getOrNull(questionIndex)?.id,
+        activeTask?.questionTimeLimitSeconds
+    ) {
+        val task = activeTask
+        val question = questions.getOrNull(questionIndex)
+        val perQuestionLimit = task?.questionTimeLimitSeconds
+        if (screen == AppScreen.PLAY_TASK && task != null && question != null &&
+            perQuestionLimit != null && question.id !in expiredQuestionIds) {
+            if (questionDeadlineQuestionId != question.id || questionDeadlineAtMillis == null) {
+                questionDeadlineQuestionId = question.id
+                questionDeadlineAtMillis = System.currentTimeMillis() + perQuestionLimit * 1000L
+            }
+            while (screen == AppScreen.PLAY_TASK &&
+                activeTask?.id == task.id &&
+                questions.getOrNull(questionIndex)?.id == question.id) {
+                val deadline = questionDeadlineAtMillis ?: (System.currentTimeMillis() + perQuestionLimit * 1000L)
+                val remaining = (((deadline - System.currentTimeMillis() + 999L) / 1000L))
+                    .toInt().coerceAtLeast(0)
+                questionSecondsRemaining = remaining
+                if (remaining <= 0) {
+                    expiredQuestionIds = expiredQuestionIds + question.id
+                    questionDeadlineAtMillis = null
+                    questionDeadlineQuestionId = null
+                    if (questionIndex < questions.lastIndex) {
+                        questionIndex = (questionIndex + 1).coerceAtMost(questions.lastIndex)
+                        notice = "Question time ended. That question is locked; continue with the next one."
+                    } else {
+                        execute {
+                            if (screen == AppScreen.PLAY_TASK && activeTask?.id == task.id) {
+                                try {
+                                    val filledAnswers = questions.associate { item ->
+                                        item.id to answers[item.id].orEmpty()
+                                    }
+                                    val submitted = repository.submitTask(task.id, filledAnswers, answerLanguages)
+                                    taskResult = submitted
+                                    taskDraftPrefs.edit().remove(task.id).apply()
+                                    val linked = childProfile
+                                    if (linked != null) {
+                                        try {
+                                            earnedToday = repository.refreshChildDeviceRestrictions(linked)
+                                            rewardBankMinutes = repository.loadChildRewardBankMinutes(linked.id)
+                                            tasks = repository.loadChildTasks(linked.id)
+                                        } catch (_: Exception) { earnedToday = submitted.dailyUsedMinutes }
+                                    }
+                                    taskDeadlineAtMillis = null
+                                    questionDeadlineAtMillis = null
+                                    questionDeadlineQuestionId = null
+                                    questionSecondsRemaining = 0
+                                    expiredQuestionIds = emptySet()
+                                    screen = AppScreen.TASK_RESULT
+                                    notice = "The last question's time ended. Your answers were submitted."
+                                } catch (error: Exception) {
+                                    notice = "The last question timed out, but submission failed: " +
+                                        (error.message ?: "reconnect and retry.")
+                                }
+                            }
+                        }
+                    }
+                    break
+                }
+                delay(250)
+            }
+        } else {
+            questionSecondsRemaining = 0
         }
     }
 
