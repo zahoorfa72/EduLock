@@ -653,7 +653,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var templateTranslationLanguage by remember { mutableStateOf("ur") }
     var translatedTemplateRows by remember { mutableStateOf<Map<String, ParentLearningTemplate>>(emptyMap()) }
     var taskTitle by remember { mutableStateOf("") }
-    var taskQuestionCount by remember { mutableStateOf("5") }
+    var taskQuestionCount by remember { mutableStateOf("4") }
     var taskPassPercent by remember { mutableStateOf("70") }
     var taskRewardMinutes by remember { mutableStateOf("3") }
     var taskDailyCapMinutes by remember { mutableStateOf("60") }
@@ -6099,7 +6099,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(15.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                                 Row(Modifier.fillMaxWidth().padding(horizontal = 9.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        AppUiText(app.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                        AppUiText(compactAppLabel(app.displayName, 22), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
                                         AppUiText(compactAppLabel(status, 24), color = if (remaining <= 0) Color(0xFFB45309) else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                                         if (hasTask) AppUiText("A learning task unlocks this app.", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
                                     }
@@ -6993,7 +6993,7 @@ private fun RewardBankPanel(
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !busy && uniqueApprovedApps.isNotEmpty()
                     ) {
-                        AppUiText((selectedRewardApp?.displayName ?: "Choose an approved app") + "  ▾")
+                        AppUiText(compactAppLabel(selectedRewardApp?.displayName ?: "Choose an approved app", 22) + "  ▾")
                     }
                     androidx.compose.material3.DropdownMenu(
                         expanded = rewardAppsExpanded,
