@@ -3475,7 +3475,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 contentPadding = PaddingValues(horizontal = 7.dp, vertical = 5.dp)
                                             ) {
                                                 AppUiText(
-                                                    if (translationEditorQuestionId == question.id) "Close translation editor" else "🌐 Translate / edit",
+                                                    if (translationEditorQuestionId == question.id) "Close translation editor" else "🌐 Add / edit translation inline",
                                                     fontSize = 12.sp
                                                 )
                                             }
@@ -4481,10 +4481,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     OutlinedTextField(
                                         value = limitText,
                                         onValueChange = { value -> installedAppLimitEdits = installedAppLimitEdits + (installed.packageName to value.filter(Char::isDigit).take(4)) },
-                                        modifier = Modifier.width(154.dp).height(48.dp),
+                                        modifier = Modifier.weight(1f).height(44.dp),
                                         singleLine = true,
-                                        label = { AppUiText("Daily min") },
-                                        placeholder = { AppUiText("0 = unlimited") },
+                                        label = { AppUiText("Daily limit (min)") },
+                                        placeholder = { AppUiText("0 / blank = no cap") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                                     )
                                     }
@@ -4578,10 +4578,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                             }
                         }
                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                            Column(Modifier.padding(horizontal = 7.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Column(Modifier.padding(horizontal = 6.dp, vertical = 3.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                                     Box(
-                                        Modifier.size(30.dp).background(if (app.enabled) Color(0xFFE2F7EC) else Color(0xFFFDE8E8), RoundedCornerShape(10.dp)),
+                                        Modifier.size(27.dp).background(if (app.enabled) Color(0xFFE2F7EC) else Color(0xFFFDE8E8), RoundedCornerShape(9.dp)),
                                         contentAlignment = Alignment.Center
                                     ) { AppUiText(appIconGlyph(app.packageName, app.displayName), fontSize = 18.sp) }
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -4594,9 +4594,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             if (app.id !in weeklyScheduleEdits) weeklyScheduleEdits = weeklyScheduleEdits + (app.id to AppWeeklySchedule.parse(app.weeklyScheduleJson))
                                         },
                                         enabled = !busy,
-                                        modifier = Modifier.size(width = 34.dp, height = 32.dp),
+                                        modifier = Modifier.size(width = 30.dp, height = 30.dp),
                                         contentPadding = PaddingValues(0.dp)
-                                    ) { AppUiText("🗓", fontSize = 15.sp) }
+                                    ) { AppUiText("🗓", fontSize = 14.sp) }
                                     Switch(
                                         checked = app.enabled,
                                         onCheckedChange = { checked ->
