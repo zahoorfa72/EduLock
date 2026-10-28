@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -513,6 +514,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var evidenceNote by remember { mutableStateOf("") }
     var questionRewardEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var questionGroupRewardEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var questionRewardGroups by remember { mutableStateOf(emptyList<QuestionRewardGroup>()) }
     var selectedTaskSubjectIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var appGroups by remember { mutableStateOf(emptyList<AppGroup>()) }
     var appGroupName by remember { mutableStateOf("") }
@@ -3003,6 +3005,31 @@ private fun EduLockApp(repository: EduLockRepository) {
                     val subject = selectedSubject
                     if (subject != null) {
                         AppUiText("Create a question in " + subject.languageCode + " and give related questions the same concept tag. The tag lets Concept Bridge report understanding separately from language.")
+                        OutlinedButton(onClick = { execute {
+                            questionRewardGroups = repository.loadQuestionRewardGroups(subject.id)
+                            questionGroupRewardEdits = questionRewardGroups.associate { it.conceptKey to it.rewardMinutes.toString() }
+                        } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                            AppUiText("🏅 Load group reward settings")
+                        }
+                        AppUiText("Group rewards are bonus minutes granted only when every question in that concept group assigned to the task is correct.")
+                        questions.map { it.conceptKey.trim() }.filter { it.isNotBlank() }.distinct().sorted().forEach { concept ->
+                            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    AppUiText("Question group: " + concept, fontWeight = FontWeight.Bold)
+                                    Field(
+                                        questionGroupRewardEdits[concept] ?: questionRewardGroups.firstOrNull { it.conceptKey == concept }?.rewardMinutes?.toString() ?: "0",
+                                        { value -> questionGroupRewardEdits = questionGroupRewardEdits + (concept to value.filter(Char::isDigit).take(4)) },
+                                        "Bonus minutes when all group questions are correct",
+                                        keyboardType = KeyboardType.Number
+                                    )
+                                    OutlinedButton(onClick = { execute {
+                                        repository.saveQuestionRewardGroup(subject.id, concept, questionGroupRewardEdits[concept]?.toIntOrNull() ?: 0)
+                                        questionRewardGroups = repository.loadQuestionRewardGroups(subject.id)
+                                        notice = "Group bonus saved for " + concept + "."
+                                    } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Save group bonus") }
+                                }
+                            }
+                        }
                         Field(
                             bulkTranslationLanguage,
                             { bulkTranslationLanguage = it.trim().lowercase(Locale.ROOT).take(16) },
