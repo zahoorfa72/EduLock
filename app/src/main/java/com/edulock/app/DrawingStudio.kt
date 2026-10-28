@@ -49,9 +49,11 @@ fun DrawingStudioScreen(onBack: () -> Unit) {
     var strokeWidth by remember { mutableStateOf(8f) }
     var guide by remember { mutableStateOf("Free draw") }
     val palette = listOf(
-        Color(0xFFEF476F), Color(0xFFFF8C42), Color(0xFFFFD166), Color(0xFF06D6A0),
-        Color(0xFF118AB2), Color(0xFF635BEE), Color(0xFF9B5DE5), Color(0xFF20243A),
-        Color(0xFF8D5524), Color(0xFFFFFFFF)
+        Color(0xFFE53935), Color(0xFFFF7043), Color(0xFFFF9800), Color(0xFFFFC107),
+        Color(0xFFFFEB3B), Color(0xFF8BC34A), Color(0xFF4CAF50), Color(0xFF009688),
+        Color(0xFF00BCD4), Color(0xFF2196F3), Color(0xFF3F51B5), Color(0xFF673AB7),
+        Color(0xFF9C27B0), Color(0xFFE91E63), Color(0xFF795548), Color(0xFF607D8B),
+        Color(0xFF20243A), Color(0xFF9E9E9E), Color(0xFFFFFFFF), Color(0xFFFFB6C1)
     )
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF0F7))) {
@@ -62,7 +64,7 @@ fun DrawingStudioScreen(onBack: () -> Unit) {
         }
         AppUiText("Choose a drawing challenge", fontWeight = FontWeight.Bold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("Free draw", "Sun & sky", "House", "Flower").forEach { item ->
+            listOf("Free draw", "Sun & sky", "House", "Flower", "Rainbow", "Tree", "Butterfly", "Boat", "Star").forEach { item ->
                 OutlinedButton(onClick = { guide = item }, modifier = Modifier.weight(1f)) {
                     AppUiText(if (guide == item) "✓ $item" else item)
                 }
@@ -70,7 +72,7 @@ fun DrawingStudioScreen(onBack: () -> Unit) {
         }
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Canvas(
-                modifier = Modifier.fillMaxWidth().height(330.dp)
+                modifier = Modifier.fillMaxWidth().height(460.dp)
                     .background(Color.White, RoundedCornerShape(18.dp))
                     .pointerInput(selectedColor, strokeWidth, guide) {
                         detectDragGestures(
@@ -98,10 +100,15 @@ fun DrawingStudioScreen(onBack: () -> Unit) {
                 rowColors.forEach { color ->
                     OutlinedButton(
                         onClick = { selectedColor = color },
-                        modifier = Modifier.weight(1f).height(42.dp),
+                        modifier = Modifier.weight(1f).height(44.dp).background(color, RoundedCornerShape(12.dp)),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        AppUiText(if (selectedColor == color) "✓" else "●", color = color, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
+                        AppUiText(
+                            if (selectedColor == color) "✓" else "",
+                            color = if (color == Color(0xFFFFFFFF) || color == Color(0xFFFFEB3B) || color == Color(0xFFFFC107)) Color(0xFF20243A) else Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
                     }
                 }
             }
@@ -137,6 +144,56 @@ private fun DrawScope.drawGuide(type: String) {
     val w = size.width
     val h = size.height
     when (type) {
+        "Rainbow" -> {
+            val rainbow = listOf(
+                Color(0xFFE53935), Color(0xFFFF9800), Color(0xFFFFEB3B),
+                Color(0xFF4CAF50), Color(0xFF2196F3), Color(0xFF673AB7)
+            )
+            rainbow.forEachIndexed { index, color ->
+                drawArc(
+                    color = color,
+                    startAngle = 180f,
+                    sweepAngle = 180f,
+                    useCenter = false,
+                    topLeft = Offset(w * .12f, h * (.18f + index * .035f)),
+                    size = androidx.compose.ui.geometry.Size(w * .76f, h * .68f - index * h * .07f),
+                    style = Stroke(width = 5f)
+                )
+            }
+            drawLine(ink, Offset(w * .08f, h * .78f), Offset(w * .92f, h * .78f), 3f)
+        }
+        "Tree" -> {
+            drawRect(Color(0xFF8D5524), Offset(w * .44f, h * .48f), androidx.compose.ui.geometry.Size(w * .12f, h * .36f), style = Stroke(4f))
+            drawCircle(Color(0xFF81C784), w * .16f, Offset(w * .5f, h * .32f), style = Stroke(4f))
+            drawCircle(Color(0xFF81C784), w * .12f, Offset(w * .38f, h * .4f), style = Stroke(4f))
+            drawCircle(Color(0xFF81C784), w * .12f, Offset(w * .62f, h * .4f), style = Stroke(4f))
+        }
+        "Butterfly" -> {
+            drawOval(ink, Offset(w * .46f, h * .32f), androidx.compose.ui.geometry.Size(w * .08f, h * .34f), style = Stroke(4f))
+            drawOval(ink, Offset(w * .22f, h * .28f), androidx.compose.ui.geometry.Size(w * .27f, h * .22f), style = Stroke(4f))
+            drawOval(ink, Offset(w * .51f, h * .28f), androidx.compose.ui.geometry.Size(w * .27f, h * .22f), style = Stroke(4f))
+            drawOval(ink, Offset(w * .28f, h * .49f), androidx.compose.ui.geometry.Size(w * .2f, h * .18f), style = Stroke(4f))
+            drawOval(ink, Offset(w * .52f, h * .49f), androidx.compose.ui.geometry.Size(w * .2f, h * .18f), style = Stroke(4f))
+            drawLine(ink, Offset(w * .49f, h * .33f), Offset(w * .42f, h * .2f), 3f)
+            drawLine(ink, Offset(w * .51f, h * .33f), Offset(w * .58f, h * .2f), 3f)
+        }
+        "Boat" -> {
+            val p = Path().apply { moveTo(w * .2f, h * .62f); lineTo(w * .8f, h * .62f); lineTo(w * .68f, h * .78f); lineTo(w * .32f, h * .78f); close() }
+            drawPath(p, ink, style = Stroke(4f))
+            drawLine(ink, Offset(w * .5f, h * .22f), Offset(w * .5f, h * .62f), 4f)
+            drawLine(ink, Offset(w * .47f, h * .28f), Offset(w * .28f, h * .54f), 4f)
+            drawLine(ink, Offset(w * .53f, h * .3f), Offset(w * .72f, h * .54f), 4f)
+            drawLine(ink, Offset(w * .12f, h * .84f), Offset(w * .88f, h * .84f), 3f)
+        }
+        "Star" -> {
+            val points = (0 until 10).map { index ->
+                val radius = if (index % 2 == 0) min(w, h) * .22f else min(w, h) * .1f
+                val angle = -Math.PI / 2 + index * Math.PI / 5
+                Offset(w * .5f + kotlin.math.cos(angle).toFloat() * radius, h * .48f + kotlin.math.sin(angle).toFloat() * radius)
+            }
+            val star = Path().apply { moveTo(points.first().x, points.first().y); points.drop(1).forEach { lineTo(it.x, it.y) }; close() }
+            drawPath(star, ink, style = Stroke(4f))
+        }
         "Sun & sky" -> {
             drawCircle(ink, radius = min(w, h) * .09f, center = Offset(w * .28f, h * .28f), style = Stroke(4f))
             for (i in 0 until 8) {
