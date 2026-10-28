@@ -2056,6 +2056,26 @@ class EduLockRepository(context: Context) {
         )
     }
 
+    suspend fun loadCurrentChildLearningPreferences(childId: String): ChildLearningPreferences {
+        requireSession("child")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        val currentSession = sessionStore.read() ?: throw IOException("Sign in again to load learning preferences.")
+        val linkedChild = restArray(
+            "children?select=id&child_user_id=eq.${currentSession.userId}&limit=1"
+        ).optJSONObject(0)?.optString("id")
+        require(linkedChild == childId) { "A child can only load their own learning preferences." }
+        val row = restArray(
+            "child_learning_preferences?select=child_id,kindergarten_mode,gentle_reminders,daily_written_question_limit,practical_tasks_enabled&child_id=eq.$childId&limit=1"
+        ).optJSONObject(0)
+        return ChildLearningPreferences(
+            childId = childId,
+            kindergartenMode = row?.optBoolean("kindergarten_mode", false) ?: false,
+            gentleReminders = row?.optBoolean("gentle_reminders", true) ?: true,
+            dailyWrittenQuestionLimit = (row?.optInt("daily_written_question_limit", 8) ?: 8).coerceIn(1,100),
+            practicalTasksEnabled = row?.optBoolean("practical_tasks_enabled", true) ?: true
+        )
+    }
+
     suspend fun saveChildLearningPreferences(preferences: ChildLearningPreferences) {
         requireSession("parent")
         require(preferences.childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
