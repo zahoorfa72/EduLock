@@ -29,6 +29,14 @@ data class ParentLearningSettings(
     val displayLanguageCode: String = "en"
 )
 
+data class ChildLearningPreferences(
+    val childId: String,
+    val kindergartenMode: Boolean = false,
+    val gentleReminders: Boolean = true,
+    val dailyWrittenQuestionLimit: Int = 8,
+    val practicalTasksEnabled: Boolean = true
+)
+
 data class PracticalTaskRow(
     val id: String,
     val childId: String,
