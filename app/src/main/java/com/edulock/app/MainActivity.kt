@@ -2013,7 +2013,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             DashboardIconTile(
-                                icon = "🎯", title = "Assign learning", subtitle = "Build tasks and learning rewards",
+                                icon = "🎯", title = "Tasks & rewards", subtitle = "Create tasks, set limits and manage learning rewards",
                                 modifier = Modifier.weight(1f), accent = Color(0xFFE19B32),
                                 onClick = { selectedChild = null; selectedSubject = null; screen = AppScreen.ASSIGN_TASK }
                             )
@@ -2695,7 +2695,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.QUESTIONS -> ScreenFrame(selectedSubject?.title ?: "Questions", onBack = { screen = AppScreen.SUBJECTS }, notice = notice, busy = busy) {
                     val subject = selectedSubject
                     if (subject != null) {
-                        AppUiText("Create a question in " + subject.languageCode + " and give related questions the same concept tag. The tag lets Concept Bridge report understanding separately from language.")
+                        AppUiText("Create questions in " + languageLabel(subject.languageCode) + " (" + subject.languageCode + "). Give related questions the same concept tag so learning progress is tracked separately from language.")
                         Field(
                             bulkTranslationLanguage,
                             { bulkTranslationLanguage = it.trim().lowercase(Locale.ROOT).take(16) },
@@ -2785,7 +2785,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                         AppUiText((index + 1).toString() + ". " + question.prompt, fontWeight = FontWeight.SemiBold)
                                         AppUiText("Type: " + readableQuestionType(question.questionType))
-                                        AppUiText("Language: " + question.languageCode + " • Concept tag: " + question.conceptKey)
+                                        AppUiText("Language: " + languageLabel(question.languageCode) + " (" + question.languageCode + ") • Concept tag: " + question.conceptKey)
                                         val fourDModel = when {
                                             question.conceptKey.startsWith("4d:", ignoreCase = true) ->
                                                 question.conceptKey.substringAfter("4d:").substringBefore(":").takeIf { it.isNotBlank() }
