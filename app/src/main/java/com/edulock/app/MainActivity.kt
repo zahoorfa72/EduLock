@@ -3134,10 +3134,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                         AppUiText("Create a question in " + subject.languageCode + " and give related questions the same concept tag. The tag lets Concept Bridge report understanding separately from language.")
                         AppUiText("Questions are added one at a time. Choosing a template only fills the form; it is not saved until you press Save question.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         val eligibleRewardConcepts = questions
-                            .groupingBy { it.conceptKey.trim() }
-                            .eachCount()
-                            .filter { (concept, count) -> concept.isNotBlank() && count >= 2 }
-                            .keys.sorted()
+                            .map { it.conceptKey.trim() }
+                            .filter { it.isNotBlank() }
+                            .distinct()
+                            .sorted()
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -3146,7 +3146,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 AppUiText("🏅 Concept group rewards", fontWeight = FontWeight.Bold)
                                 AppUiText(
-                                    "Bonus minutes when every assigned question sharing a concept tag is correct.",
+                                    "Bonus minutes when every assigned question with a concept tag is correct.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -3168,12 +3168,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         if (groupRewardsExpanded) {
                             AppUiText(
-                                "Only concepts used by two or more questions are listed. Type a reward from 0–1440 minutes; changes save automatically. To group questions, give them the same concept tag.",
+                                "Set the bonus for each concept tag below. A tag shared by multiple questions earns its bonus only when every assigned question with that tag is correct. Changes save automatically.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             if (eligibleRewardConcepts.isEmpty()) {
-                                AppUiText("No question groups yet. Add at least two questions with the same concept tag to configure a group bonus.")
+                                AppUiText("No concept tags are available yet. Add questions with a concept tag to configure group bonuses.")
                             } else {
                                 eligibleRewardConcepts.forEach { concept ->
                                     val savedGroupMinutes = questionRewardGroups.firstOrNull { it.conceptKey == concept }?.rewardMinutes ?: 0
@@ -3185,7 +3185,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         ) {
                                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                                 AppUiText(concept, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                                AppUiText("Group bonus · " + questions.count { it.conceptKey.trim() == concept } + " questions",
+                                                AppUiText("Group bonus · " + questions.count { it.conceptKey.trim() == concept } + (if (questions.count { it.conceptKey.trim() == concept } == 1) " question" else " questions"),
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     style = MaterialTheme.typography.labelSmall)
                                             }
