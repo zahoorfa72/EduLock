@@ -4794,9 +4794,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.TASK_RESULT -> ScreenFrame("Task result", onBack = { screen = AppScreen.CHILD_HOME }, notice = notice, busy = busy) {
                     val result = taskResult
                     if (result != null) {
-                        SummaryCard("Your score", result.scorePercent.toString() + "%", if (result.passed) "Amazing work — you passed!" else "Keep practising. Every correct answer can earn reward minutes, even when you do not pass.")
-                        SummaryCard("Reward earned", result.awardedMinutes.toString() + " minutes", if (result.rewardToBank) "Added to your Reward Bank." else "Sent to the destination selected by your parent.")
-                        SummaryCard("Daily reward cap", result.dailyUsedMinutes.toString() + " / " + result.dailyCapMinutes + " minutes", "The server enforces this cap so answers cannot create unlimited rewards.")
+                        if (result.pendingSync) {
+                            SummaryCard("Task saved offline", "Waiting to sync", "Your answers are saved on this device. EduLock will send them to the server when internet returns. Your score and rewards will appear after the server checks your answers.")
+                            SummaryCard("Pending task submissions", repository.pendingOfflineAttemptCount().toString(), "Keep EduLock installed and open it again when you are online so your work can sync.")
+                        } else {
+                            SummaryCard("Your score", result.scorePercent.toString() + "%", if (result.passed) "Amazing work — you passed!" else "Keep practising. Every correct answer can earn reward minutes, even when you do not pass.")
+                            SummaryCard("Reward earned", result.awardedMinutes.toString() + " minutes", if (result.rewardToBank) "Added to your Reward Bank." else "Sent to the destination selected by your parent.")
+                            SummaryCard("Daily reward cap", result.dailyUsedMinutes.toString() + " / " + result.dailyCapMinutes + " minutes", "The server enforces this cap so answers cannot create unlimited rewards.")
+                        }
                     }
                     RewardBankPanel(
                         balanceMinutes = rewardBankMinutes,
