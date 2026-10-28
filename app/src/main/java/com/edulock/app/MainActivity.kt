@@ -1720,7 +1720,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     "display" -> supportedUiLanguages.filter { code ->
                         code == "en" || code == "sd" || TranslateLanguage.fromLanguageTag(code) != null
                     }
-                    "translation" -> supportedUiLanguages.filter { code -> code == "sd" || TranslateLanguage.fromLanguageTag(code) != null }
+                    "translation", "question-translation" -> supportedUiLanguages.filter { code -> code == "sd" || TranslateLanguage.fromLanguageTag(code) != null }
                     else -> Locale.getISOLanguages().distinct()
                 }
                 optionCodes.map { code ->
@@ -1741,7 +1741,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 onDismissRequest = { languagePickerOpen = false },
                 title = { AppUiText(when (languagePickerTarget) {
                     "display" -> "Choose app display language"
-                    "translation" -> "Choose translation language"
+                    "translation", "question-translation" -> "Choose translation language"
                     else -> "Choose a learning language"
                 }) },
                 text = {
@@ -1764,6 +1764,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         "translation" -> {
                                             bulkTranslationLanguage = code.lowercase(Locale.ROOT)
                                             templateTranslationLanguage = code.lowercase(Locale.ROOT)
+                                        }
+                                        "question-translation" -> {
+                                            translationLanguage = code.lowercase(Locale.ROOT)
                                         }
                                         "display" -> {
                                             parentDisplayLanguageCode = code.lowercase(Locale.ROOT)
@@ -3824,6 +3827,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                         AppUiText("Concept tag: " + original.conceptKey + " • Original language: " + original.languageCode)
                         AppUiText("Save each translated question with its translated options and accepted correct answers. The child can switch between these language versions without changing the underlying question or concept.")
                         Field(translationLanguage, { translationLanguage = it }, "Target language code (en, ur, sd, etc.)")
+                        OutlinedButton(
+                            onClick = {
+                                languagePickerTarget = "question-translation"
+                                languageSearch = ""
+                                languagePickerOpen = true
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { AppUiText("🌐 Choose target language: " + languageLabel(translationLanguage)) }
                         CompositionLocalProvider(LocalLayoutDirection provides directionFor(translationLanguage)) {
                             Field(translationPrompt, { translationPrompt = it }, "Translated question prompt")
                             if (original.questionType == "multiple_choice" || original.questionType == "true_false") {
