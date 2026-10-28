@@ -613,7 +613,9 @@ begin
     v_concept := v_candidate->>'concept_key';
     select coalesce(focus_score,0),coalesce(attempts,0),coalesce(correct_attempts,0),coalesce(wrong_attempts,0)
       into v_focus,v_old_attempts,v_old_correct,v_old_wrong
-      from edulock.child_concept_progress where child_id=v_child.id and concept_key=v_concept
+      from edulock.child_concept_progress
+      where child_id=v_child.id and concept_key=v_concept
+        and subject_id=(v_candidate->>'subject_id')::uuid
       for update;
     if not found then v_focus:=0;v_old_attempts:=0;v_old_correct:=0;v_old_wrong:=0; end if;
     if coalesce((v_candidate->>'is_correct')::boolean,false) then v_focus:=greatest(0,v_focus-1.5);
@@ -627,7 +629,7 @@ begin
       v_old_wrong + case when coalesce((v_candidate->>'is_correct')::boolean,false) then 0 else 1 end,
       v_focus,now(),now() + case when v_focus >= 4 then interval '1 hour' else interval '1 day' end,
       (v_candidate->>'question_id')::uuid,now()
-    ) on conflict(child_id,concept_key) do update set
+    ) on conflict(child_id,concept_key,subject_id) do update set
       subject_id=excluded.subject_id,attempts=edulock.child_concept_progress.attempts+1,
       correct_attempts=edulock.child_concept_progress.correct_attempts +
         case when coalesce((v_candidate->>'is_correct')::boolean,false) then 1 else 0 end,
