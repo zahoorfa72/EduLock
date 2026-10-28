@@ -1180,6 +1180,12 @@ private fun EduLockApp(repository: EduLockRepository) {
             return
         }
         childProfile = linked
+        if (childLogoutLocked || lockStatePreferences.getBoolean("child_logout_locked", false)) {
+            childLogoutLocked = true
+            screen = AppScreen.PAIR_CHILD
+            notice = "This child profile is logged out but remains linked. Enter a fresh parent authorization code to unlock it."
+            return
+        }
         val locationPrefs = context.getSharedPreferences(ChildLocationService.PREFS, Context.MODE_PRIVATE)
         if (locationPrefs.getString(ChildLocationService.KEY_CHILD_ID, null) != linked.id) {
             locationPrefs.edit()
@@ -1197,6 +1203,11 @@ private fun EduLockApp(repository: EduLockRepository) {
             childLocationSharing = locationPrefs.getBoolean(ChildLocationService.KEY_SHARING_ENABLED, false)
         }
         tasks = repository.loadChildTasks(linked.id, linked.schoolGrade, linked.ageYears)
+        try {
+            childEmergencyOptions = repository.loadChildEmergencyOptions()
+        } catch (_: Exception) {
+            childEmergencyOptions = ChildEmergencyOptions()
+        }
         try {
             earnedToday = repository.refreshChildDeviceRestrictions(linked)
             childRulesLastSyncedAt = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
