@@ -59,16 +59,16 @@ Deno.serve(async (req) => {
     }
 
     const selectFields = "id,country_code,curriculum_name,grade_level,age_min,age_max,subject_code,subject_name,language_code,topic,prompt,question_type,options,concept_key,source_note";
-    // Keep age-band matching strict. If exact locale/grade content is sparse, rank useful
-    // questions across the selected country and international bank, nearby grades, and English.
+    // Keep both age and standard/class matching strict. Never offer a nearby-grade
+    // question as though it belongs to the child's selected class.
     const languages = [...new Set(language === "en" ? ["en"] : [language, "en"])];
     const { data: candidates, error: candidateError } = await admin.schema("edulock")
       .from("curriculum_questions").select(selectFields)
       .eq("active", true).in("country_code", [countryCode, "ZZ"])
-      .gte("grade_level", 0).lte("grade_level", 13)
+      .eq("grade_level", grade)
       .eq("subject_code", subjectCode).in("language_code", languages)
       .lte("age_min", age).gte("age_max", age)
-      .order("grade_level").order("topic").limit(400);
+      .order("topic").limit(400);
     if (candidateError) {
       console.error("Curriculum lookup failed", candidateError.code, candidateError.message);
       return json({ error: "Curriculum library is unavailable. Apply the latest EduLock database migrations." }, 500);
