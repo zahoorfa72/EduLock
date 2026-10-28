@@ -51,6 +51,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -1682,6 +1683,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.SOLAR_SYSTEM_QUIZ -> solarQuizReturnScreen
                 AppScreen.KIDS_GAMES -> AppScreen.CHILD_HOME
                 AppScreen.APP_SETTINGS -> AppScreen.PARENT_HOME
+                AppScreen.CHILD_SECURITY -> AppScreen.CHILDREN
                 AppScreen.LEARNING_3D_LAB -> if (solarQuizReturnScreen == AppScreen.CHILD_HOME) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME
                 AppScreen.DRAWING_STUDIO -> if (childProfile != null) AppScreen.CHILD_HOME else AppScreen.PARENT_HOME
             }
