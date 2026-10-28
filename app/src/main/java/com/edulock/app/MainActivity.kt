@@ -2139,6 +2139,144 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                 }
 
+                AppScreen.CHILD_SECURITY -> ScreenFrame(
+                    "Security & emergency access",
+                    onBack = { screen = AppScreen.CHILDREN; childSecurityCodeDisplay = ""; childSecurityCodeType = "" },
+                    notice = notice,
+                    busy = busy
+                ) {
+                    val child = selectedChild
+                    if (child == null) {
+                        AppUiText("Choose a child profile first.")
+                    } else {
+                        AppUiText("Settings for " + child.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        AppUiText("Emergency access works when your phone is unavailable: the child uses a code created here. The child's phone needs internet to verify it securely.")
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F0FF))
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(
+                                        checked = childEmergencyEnabled,
+                                        onCheckedChange = { childEmergencyEnabled = it }
+                                    )
+                                    Column(Modifier.weight(1f)) {
+                                        AppUiText("Allow emergency app access", fontWeight = FontWeight.Bold)
+                                        AppUiText("One successful use per day for this child.", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                                Field(
+                                    childEmergencyMinutesText,
+                                    { childEmergencyMinutesText = it.filter(Char::isDigit).take(2) },
+                                    "Emergency access minutes (1–30)",
+                                    keyboardType = KeyboardType.Number
+                                )
+                                AppUiText("Choose the apps that can be temporarily opened. Only currently enabled parent-approved apps can be selected.", style = MaterialTheme.typography.bodySmall)
+                                if (childSecurityApps.isEmpty()) {
+                                    AppUiText("No parent-approved apps are enabled yet. Enable apps in Apps & limits first.")
+                                } else {
+                                    childSecurityApps.forEach { app ->
+                                        Row(
+                                            Modifier.fillMaxWidth().clickable {
+                                                childEmergencyAllowedPackages = if (app.packageName in childEmergencyAllowedPackages) {
+                                                    childEmergencyAllowedPackages - app.packageName
+                                                } else {
+                                                    childEmergencyAllowedPackages + app.packageName
+                                                }
+                                            }.padding(vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Checkbox(
+                                                checked = app.packageName in childEmergencyAllowedPackages,
+                                                onCheckedChange = { checked ->
+                                                    childEmergencyAllowedPackages = if (checked) {
+                                                        childEmergencyAllowedPackages + app.packageName
+                                                    } else {
+                                                        childEmergencyAllowedPackages - app.packageName
+                                                    }
+                                                }
+                                            )
+                                            Column(Modifier.weight(1f)) {
+                                                AppUiText(app.displayName, fontWeight = FontWeight.SemiBold)
+                                                AppUiText(app.packageName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        execute {
+                                            val minutes = childEmergencyMinutesText.toIntOrNull()
+                                                ?: throw IllegalArgumentException("Enter emergency access minutes from 1 to 30.")
+                                            repository.saveChildEmergencySettings(
+                                                familyId, child.id, childEmergencyEnabled,
+                                                childEmergencyAllowedPackages, minutes
+                                            )
+                                            notice = "Emergency access settings saved for " + child.displayName + "."
+                                        }
+                                    },
+                                    enabled = !busy && childEmergencyMinutesText.toIntOrNull() in 1..30 &&
+                                        (!childEmergencyEnabled || childEmergencyAllowedPackages.isNotEmpty()),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { AppUiText("Save emergency settings") }
+                                Button(
+                                    onClick = {
+                                        execute {
+                                            val minutes = childEmergencyMinutesText.toIntOrNull()
+                                                ?: throw IllegalArgumentException("Enter emergency access minutes from 1 to 30.")
+                                            val code = repository.generateChildEmergencyCode(
+                                                familyId, child.id, childEmergencyAllowedPackages, minutes
+                                            )
+                                            childEmergencyEnabled = true
+                                            childSecurityCodeDisplay = code
+                                            childSecurityCodeType = "Emergency code • once per day • valid 30 days"
+                                            notice = "Emergency access is enabled. Share this code privately with the child."
+                                        }
+                                    },
+                                    enabled = !busy && childEmergencyMinutesText.toIntOrNull() in 1..30 &&
+                                        childEmergencyAllowedPackages.isNotEmpty(),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { AppUiText("Generate emergency code") }
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                execute {
+                                    childSecurityCodeDisplay = repository.generateChildLogoutCode(child.id)
+                                    childSecurityCodeType = "Parent authorization code • one use • expires in 10 minutes"
+                                    notice = "Share this code privately. It authorizes the child device to log out without unlinking the profile."
+                                }
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { AppUiText("Generate logout / unlock code") }
+                        if (childSecurityCodeDisplay.isNotBlank()) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD))
+                            ) {
+                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                    AppUiText(childSecurityCodeType, fontWeight = FontWeight.SemiBold)
+                                    AppUiText(childSecurityCodeDisplay, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
+                                    AppUiText("This code is shown only now. Keep it private.", style = MaterialTheme.typography.bodySmall)
+                                    OutlinedButton(
+                                        onClick = { childSecurityCodeDisplay = ""; childSecurityCodeType = "" },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { AppUiText("Hide code") }
+                                }
+                            }
+                        }
+                        AppUiText(
+                            "Emergency use is recorded on the server and is limited to one successful redemption per Pakistan calendar day. A new code cannot bypass the selected-app list.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
                 AppScreen.APP_SETTINGS -> ScreenFrame("App settings", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
                     AppUiText("Everything in one place", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
                     AppUiText("Choose the curriculum country, learning language and app language. Religious-education subjects are chosen separately for each child profile.")
@@ -2176,6 +2314,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 onClick = { screen = AppScreen.CHILDREN; execute { children = repository.loadChildren(familyId) } }
                             )
                         }
+                        DashboardIconTile(
+                            icon = "🆘", title = "Emergency access", subtitle = "Parent-approved app access, once per day",
+                            accent = Color(0xFFDA6195),
+                            onClick = { screen = AppScreen.CHILDREN; execute { children = repository.loadChildren(familyId) } }
+                        )
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             DashboardIconTile(
                                 icon = "📍", title = "Location & alerts", subtitle = "Family location and offline notifications",
@@ -2531,11 +2674,26 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     }
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     OutlinedButton(
-                                        onClick = { pendingChildAction = child to "unlink" },
+                                        onClick = {
+                                            selectedChild = child
+                                            childSecurityCodeDisplay = ""
+                                            childSecurityCodeType = ""
+                                            screen = AppScreen.CHILD_SECURITY
+                                            execute {
+                                                childSecurityApps = repository.loadAllowedApps(child.id)
+                                                    .filter { it.enabled }
+                                                    .distinctBy { it.packageName.lowercase(Locale.ROOT) }
+                                                    .sortedBy { it.displayName.lowercase(Locale.ROOT) }
+                                                val config = repository.loadChildEmergencyAccess(child.id)
+                                                childEmergencyEnabled = config.enabled
+                                                childEmergencyAllowedPackages = config.allowedPackages.intersect(childSecurityApps.map { it.packageName }.toSet())
+                                                childEmergencyMinutesText = config.accessMinutes.toString()
+                                            }
+                                        },
                                         enabled = !busy,
                                         modifier = Modifier.weight(1f),
                                         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 5.dp)
-                                    ) { AppUiText("Unlink device", fontSize = 12.sp) }
+                                    ) { AppUiText("🔐 Security", fontSize = 12.sp) }
                                     OutlinedButton(
                                         onClick = { pendingChildAction = child to "delete" },
                                         enabled = !busy,
