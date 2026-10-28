@@ -404,7 +404,7 @@ private suspend fun compressChallengeVideo(context: Context, source: Uri): ByteA
 private enum class AppScreen {
     DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ, KIDS_GAMES, LEARNING_3D_LAB, DRAWING_STUDIO,
     SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK, PHYSICAL_CHALLENGES,
-    REPORTS, ALLOWED_APPS, PROTECTION_STATUS, CHILD_LOCATIONS, APP_USAGE_REPORT, APP_SETTINGS, PLAY_TASK, TASK_RESULT
+    REPORTS, ALLOWED_APPS, PROTECTION_STATUS, CHILD_LOCATIONS, APP_USAGE_REPORT, APP_SETTINGS, CHILD_SECURITY, PLAY_TASK, TASK_RESULT
 }
 
 @Composable
@@ -438,6 +438,21 @@ private fun EduLockApp(repository: EduLockRepository) {
     var children by remember { mutableStateOf(emptyList<ChildProfile>()) }
     var subjects by remember { mutableStateOf(emptyList<SubjectRow>()) }
     var selectedChild by remember { mutableStateOf<ChildProfile?>(null) }
+    var childSecurityApps by remember { mutableStateOf(emptyList<AllowedApp>()) }
+    var childEmergencyEnabled by remember { mutableStateOf(false) }
+    var childEmergencyAllowedPackages by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var childEmergencyMinutesText by remember { mutableStateOf("10") }
+    var childSecurityCodeDisplay by remember { mutableStateOf("") }
+    var childSecurityCodeType by remember { mutableStateOf("") }
+    var childEmergencyOptions by remember { mutableStateOf(ChildEmergencyOptions()) }
+    var childEmergencyCodeInput by remember { mutableStateOf("") }
+    var childEmergencyTargetPackage by remember { mutableStateOf("") }
+    var childEmergencyAppMenuExpanded by remember { mutableStateOf(false) }
+    var childLogoutDialogOpen by remember { mutableStateOf(false) }
+    var childLogoutCodeInput by remember { mutableStateOf("") }
+    var childGateCode by remember { mutableStateOf("") }
+    val lockStatePreferences = remember { context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE) }
+    var childLogoutLocked by remember { mutableStateOf(lockStatePreferences.getBoolean("child_logout_locked", false)) }
     var childSubjectSelections by remember { mutableStateOf<Map<String, Set<String>>>(emptyMap()) }
     var childSubjectDraft by remember { mutableStateOf<Set<String>>(emptySet()) }
     var childSubjectDraftChildId by remember { mutableStateOf("") }
