@@ -3018,6 +3018,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                         AppUiText((index + 1).toString() + ". " + question.prompt, fontWeight = FontWeight.SemiBold)
                                         AppUiText("Type: " + readableQuestionType(question.questionType))
+                                        AppUiText("Level: Grade " + question.gradeLevel + " • Suitable ages " + question.ageMin + "–" + question.ageMax)
                                         AppUiText("Language: " + question.languageCode + " • Concept tag: " + question.conceptKey)
                                         val fourDModel = when {
                                             question.conceptKey.startsWith("4d:", ignoreCase = true) ->
