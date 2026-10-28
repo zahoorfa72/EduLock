@@ -1861,12 +1861,44 @@ class EduLockRepository(context: Context) {
         return result as? JSONObject ?: throw IOException("The authentication server returned an unexpected response")
     }
 
+    private val offlineReadCache by lazy {
+        appContext.getSharedPreferences("edulock_offline_read_cache_v1", Context.MODE_PRIVATE)
+    }
+
+    private fun offlineCacheKey(path: String): String {
+        val userId = sessionStore.read()?.userId ?: "signed-out"
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(path.toByteArray(Charsets.UTF_8))
+            .joinToString("") { byte -> "%02x".format(byte) }
+        return "read_" + userId + "_" + digest
+    }
+
     private suspend fun restArray(path: String, method: String = "GET", body: Any? = null, prefer: String = "return=representation"): JSONArray {
-        val result = send("rest/v1/$path", method, body, authenticated = true, profile = true, prefer = prefer)
-        return when (result) {
-            is JSONArray -> result
-            is JSONObject -> JSONArray().put(result)
-            else -> JSONArray()
+        val canCache = method.equals("GET", ignoreCase = true)
+        val cacheKey = if (canCache) offlineCacheKey(path) else null
+        try {
+            val result = send("rest/v1/$path", method, body, authenticated = true, profile = true, prefer = prefer)
+            val array = when (result) {
+                is JSONArray -> result
+                is JSONObject -> JSONArray().put(result)
+                else -> JSONArray()
+            }
+            if (canCache && cacheKey != null) {
+                offlineReadCache.edit().putString(cacheKey, array.toString()).apply()
+            }
+            return array
+        } catch (error: IOException) {
+            if (canCache && cacheKey != null) {
+                val saved = offlineReadCache.getString(cacheKey, null)
+                if (!saved.isNullOrBlank()) {
+                    try {
+                        return JSONArray(saved)
+                    } catch (_: JSONException) {
+                        offlineReadCache.edit().remove(cacheKey).apply()
+                    }
+                }
+            }
+            throw error
         }
     }
 
