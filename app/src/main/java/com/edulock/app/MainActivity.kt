@@ -2383,7 +2383,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     }
                                 }
                                 AppUiText("Device & learning controls", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     OutlinedButton(
                                         onClick = {
                                             selectedChild = child
@@ -2415,8 +2416,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         modifier = Modifier.weight(1f),
                                         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 5.dp)
                                     ) { AppUiText("🔗 Pairing code", fontSize = 12.sp) }
-                                }
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    }
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     OutlinedButton(
                                         onClick = {
                                             selectedChild = child
@@ -2441,8 +2442,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         modifier = Modifier.weight(1f),
                                         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 5.dp)
                                     ) { AppUiText("📊 Usage report", fontSize = 12.sp) }
-                                }
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    }
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     OutlinedButton(
                                         onClick = { pendingChildAction = child to "unlink" },
                                         enabled = !busy,
@@ -2455,6 +2456,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         modifier = Modifier.weight(1f),
                                         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 5.dp)
                                     ) { AppUiText("Delete profile", fontSize = 12.sp) }
+                                    }
                                 }
                             }
                         }
@@ -2508,29 +2510,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     AppUiText("Choose Kindergarten or Class 1–5. Lessons should match the child's selected standard and age.")
                     Field(childAgeYears, { childAgeYears = it.filter(Char::isDigit).take(2) }, "Child age (3–12 years)", keyboardType = KeyboardType.Number)
                     Field(childLanguage, { childLanguage = it.trim().take(16) }, "Preferred learning language (en, ur, sd...)")
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = childReligionEnabled,
-                            onCheckedChange = { enabled ->
-                                childReligionEnabled = enabled
-                                if (!enabled) childStudyTrack = "none"
-                            }
-                        )
-                        Column(Modifier.weight(1f)) {
-                            AppUiText("Include religious education", fontWeight = FontWeight.SemiBold)
-                            AppUiText("Optional. No religion is selected automatically.")
-                        }
-                    }
-                    if (childReligionEnabled) {
-                        AppUiText("Choose the child's religion to show matching lessons only.", style = MaterialTheme.typography.bodyMedium)
-                        OutlinedButton(onClick = {
-                            studyTrackPickerTarget = "child"
-                            studyTrackPickerOpen = true
-                        }, modifier = Modifier.fillMaxWidth()) {
-                            AppUiText("🕊 Choose religion: " + studyTrackLabel(childStudyTrack))
-                        }
-                    }
-                    AppUiText("Lessons use the child's country, class, age and language. Religious lessons appear only when enabled and selected by the parent.")
+                    AppUiText("Lessons use the child's country, class, age and language.")
                     Field(childDailyCap, { childDailyCap = it.filter(Char::isDigit).take(4) }, "Maximum reward minutes per day (0–1440)", keyboardType = KeyboardType.Number)
                     Field(childDailyGameLimit, { childDailyGameLimit = it.filter(Char::isDigit).take(4) }, "Educational games per day in minutes (0 disables; max 1440)", keyboardType = KeyboardType.Number)
                     Button(onClick = {
