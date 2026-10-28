@@ -2013,7 +2013,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             DashboardIconTile(
-                                icon = "🎯", title = "Tasks & rewards", subtitle = "Create tasks, set limits and manage learning rewards",
+                                icon = "🎯", title = "Assign learning", subtitle = "Build tasks and learning rewards",
                                 modifier = Modifier.weight(1f), accent = Color(0xFFE19B32),
                                 onClick = { selectedChild = null; selectedSubject = null; screen = AppScreen.ASSIGN_TASK }
                             )
@@ -2603,14 +2603,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }, modifier = Modifier.fillMaxWidth()) { AppUiText("Create subject") }
 
                     AppUiText("Your selected subjects", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    AppUiText("Only subjects saved to your family are shown here. Open a subject to review its existing questions, add new questions, and manage translations.")
+                    AppUiText("Only subjects saved to your family are shown. Open a subject to view its questions, add questions, and manage translations.")
                     val visibleSubjects = subjects.filter { subject ->
                         val track = religionTrackForSubject(subject.title)
                         track == null || children.any { child -> child.studyTrack == track }
                     }
-                    if (visibleSubjects.isEmpty()) {
-                        SummaryCard("No subjects yet", "Create your first subject", "Use Create subject to add only the subjects you want.")
-                    }
+                    if (visibleSubjects.isEmpty()) AppUiText("No subjects yet. Create a subject to begin.")
                     visibleSubjects.forEach { subject ->
                         Card(
                             modifier = Modifier.fillMaxWidth().clickable {
@@ -2618,35 +2616,269 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 expandedFourDQuestionId = null
                                 screen = AppScreen.QUESTIONS
                                 execute {
+                                    // Repair existing subjects created before the full starter bank was seeded.
+                                    val addedStarterCount = repository.ensureTemplateQuestions(
+                                        subject.id,
+                                        fourDTemplatesForSubject(
+                                            subject.title, subject.languageCode, subject.gradeLevel,
+                                            selectedChild?.ageYears ?: (subject.gradeLevel + 5).coerceIn(3, 19)
+                                        )
+                                    )
                                     questions = repository.loadQuestions(subject.id)
                                     questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
                                     questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
-                                    notice = if (questions.isEmpty()) {
-                                        "No questions have been added to " + subject.title + " yet. Use Add question to create the first one."
+                                    notice = if (addedStarterCount > 0) {
+                                        "Added " + addedStarterCount + " missing 4D starter questions to " + subject.title + ". Existing questions were kept."
                                     } else {
-                                        "Showing " + questions.size + " saved questions in " + subject.title + "."
+                                        null
                                     }
                                 }
-                            }.padding(vertical = 4.dp)
+                            },
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                         ) {
-                            Row(
-                                Modifier.fillMaxWidth().padding(16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    AppUiText(subject.title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
-                                    AppUiText(
-                                        languageLabel(subject.languageCode) + " • Grade " + subject.gradeLevel,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    AppUiText("Open subject · Manage questions", color = MaterialTheme.colorScheme.primary)
-                                }
-                                AppUiText("›", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                AppUiText(subject.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                AppUiText("Language: " + subject.languageCode + " • " + displayCountryName(subject.countryCode) + " • Grade " + subject.gradeLevel)
+                                AppUiText("Tap the card or use the button below to manage this subject's questions.")
+                                OutlinedButton(
+                                    onClick = {
+                                        selectedSubject = subject
+                                        expandedFourDQuestionId = null
+                                        screen = AppScreen.QUESTIONS
+                                        execute {
+                                            val addedStarterCount = repository.ensureTemplateQuestions(
+                                                subject.id,
+                                                fourDTemplatesForSubject(
+                                                    subject.title, subject.languageCode, subject.gradeLevel,
+                                                    selectedChild?.ageYears ?: (subject.gradeLevel + 5).coerceIn(3, 19)
+                                                )
+                                            )
+                                            questions = repository.loadQuestions(subject.id)
+                                            questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
+                                            questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
+                                            notice = if (addedStarterCount > 0) {
+                                                "Added " + addedStarterCount + " missing starter questions to " + subject.title + ". Existing questions were kept."
+                                            } else null
+                                        }
+                                    },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { AppUiText("📘 Open subject • Manage questions") }
+                                OutlinedButton(onClick = {
+                                    editingSubjectId = subject.id
+                                    subjectTitle = subject.title
+                                    subjectLanguage = subject.languageCode
+                                    subjectCountryCode = subject.countryCode
+                                    subjectGradeLevel = subject.gradeLevel.toString()
+                                    screen = AppScreen.ADD_SUBJECT
+                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("✏️ Edit subject") }
                             }
                         }
                     }
+                }
+
+                AppScreen.LEARNING_TEMPLATES -> ScreenFrame(
+                    "Learning templates",
+                    onBack = { screen = if (selectedSubject != null) AppScreen.QUESTIONS else AppScreen.PARENT_HOME },
+                    notice = notice,
+                    busy = busy
+                ) {
+                    AppUiText(
+                        "Ready-to-use 4D question templates matched to the selected child's country, preferred language and optional religious-study track. Parents can change these preferences in the child profile.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Field(
+                        templateTranslationLanguage,
+                        { templateTranslationLanguage = it.trim().lowercase(Locale.ROOT).take(16) },
+                        "Translate visible templates to language code (e.g. ur, ar, hi, fr, es)"
+                    )
+                    if (children.isNotEmpty()) {
+                        AppUiText("Choose the child this template bank should match", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        children.forEach { child ->
+                            OutlinedButton(onClick = {
+                                selectedChild = child
+                                if (templateCategory == "Religious Education" && child.studyTrack == "none") {
+                                    notice = "This child has no religious-study track selected. Set one from Child profiles to show religion-specific questions."
+                                } else notice = "Template suggestions now use " + child.displayName + "'s country, language and study track."
+                            }, modifier = Modifier.fillMaxWidth()) {
+                                AppUiText((if (selectedChild?.id == child.id) "✓ " else "") +
+                                    child.avatarIcon + " " + child.displayName + " • " +
+                                    displayCountryName(child.countryCode) + " • " + studyTrackLabel(child.studyTrack))
+                            }
+                        }
+                    }
+                    val templateCountryCode = selectedChild?.countryCode ?: parentCountryCode
+                    val templateLanguageCode = selectedChild?.preferredLanguage ?: parentLearningLanguageCode
+                    val templateStudyTrack = selectedChild?.studyTrack ?: "none"
+                    OutlinedButton(
+                        onClick = { selected3DModel = "solar-system"; screen = AppScreen.LEARNING_3D_LAB },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { AppUiText("🌌 Preview all interactive 4D learning models") }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        learningTemplateCategories(templateCountryCode)
+                            .filter { it != "Religious Education" || templateStudyTrack != "none" }
+                            .chunked(2).forEach { categories ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    categories.forEach { category ->
+                                        OutlinedButton(
+                                            onClick = { templateCategory = category },
+                                            enabled = !busy,
+                                            modifier = Modifier.weight(1f)
+                                        ) { AppUiText(if (templateCategory == category) "✓ $category" else category) }
+                                    }
+                                }
+                            }
+                    }
+                    val countryTemplates = LearningTemplates.all.filter { template ->
+                        template.category == templateCategory &&
+                            (template.countryCode == "ZZ" || template.countryCode.equals(templateCountryCode, ignoreCase = true)) &&
+                            (templateCategory != "Religious Education" ||
+                                (templateStudyTrack != "none" &&
+                                    religionTrackForSubject(template.subjectTitle) == templateStudyTrack))
+                    }
+                    val languageTemplates = countryTemplates.filter {
+                        it.languageCode.equals(templateLanguageCode, ignoreCase = true)
+                    }
+                    val localLanguageCategories = setOf("Urdu", "Sindhi", "Hindi")
+                    val filteredTemplates = when {
+                        templateCategory in localLanguageCategories -> countryTemplates
+                        languageTemplates.isNotEmpty() -> languageTemplates
+                        else -> countryTemplates.filter { it.languageCode.equals("en", ignoreCase = true) }
+                    }
+                    if (templateCategory == "Religious Education" && templateStudyTrack == "none") {
+                        AppUiText("Choose a religious-education track in this child's profile to see matching questions for " + displayCountryName(templateCountryCode) + ".")
+                    } else if (countryTemplates.isEmpty()) {
+                        AppUiText("No templates are available for this subject in " + displayCountryName(templateCountryCode) + " yet. You can create your own questions.")
+                    } else if (templateLanguageCode != "en" && languageTemplates.isEmpty() && templateCategory !in localLanguageCategories) {
+                        AppUiText("No " + languageLabel(templateLanguageCode) + " templates are available in this category yet. English starter templates are shown until translated ones are added.")
+                    } else if (filteredTemplates.isEmpty()) {
+                        AppUiText("No templates are available for this category yet. Parents can create their own questions.")
+                    }
+                    OutlinedButton(onClick = {
+                        languagePickerTarget = "translation"
+                        languageSearch = ""
+                        languagePickerOpen = true
+                    }, modifier = Modifier.fillMaxWidth()) { AppUiText("Choose translation language: " + languageLabel(templateTranslationLanguage)) }
+                    OutlinedButton(
+                        onClick = {
+                            execute {
+                                val targetCode = templateTranslationLanguage.trim().lowercase(Locale.ROOT)
+                                require(TranslateLanguage.fromLanguageTag(targetCode) != null) {
+                                    "That language code is not supported by the on-device translator. Choose a supported language code such as ur, hi, ar, fr or es."
+                                }
+                                val translated = translatedTemplateRows.toMutableMap()
+                                filteredTemplates.distinctBy { templateTranslationKey(it) }.forEach { template ->
+                                    if (!template.languageCode.equals(targetCode, ignoreCase = true)) {
+                                        translated[templateTranslationKey(template)] = translateTemplate(template, targetCode)
+                                    }
+                                }
+                                translatedTemplateRows = translated
+                                notice = "Translated " + filteredTemplates.size + " visible templates to " + targetCode + ". These previews are translated on this device; source templates remain unchanged."
+                            }
+                        },
+                        enabled = !busy && filteredTemplates.isNotEmpty(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { AppUiText("🌐 Translate all visible templates") }
+                    filteredTemplates.distinctBy { templateTranslationKey(it) }.forEach { sourceTemplate ->
+                        val template = translatedTemplateRows[templateTranslationKey(sourceTemplate)] ?: sourceTemplate
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(22.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F0FF)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                AppUiText(template.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                AppUiText(
+                                    template.subjectTitle + " • " + readableQuestionType(template.questionType),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                if (template.materials.isNotEmpty()) {
+                                    AppUiText("Materials", fontWeight = FontWeight.Bold)
+                                    AppUiText(template.materials.joinToString(" • "))
+                                }
+                                if (template.steps.isNotEmpty()) {
+                                    AppUiText("Activity steps", fontWeight = FontWeight.Bold)
+                                    template.steps.forEachIndexed { index, step ->
+                                        AppUiText("${index + 1}. $step")
+                                    }
+                                }
+                                AppUiText("Question preview", fontWeight = FontWeight.Bold)
+                                if (template.conceptKey == "solar-system-planet-id") SolarSystemModelPreview()
+                                else if ((template.conceptKey.startsWith("4d:") || template.conceptKey.startsWith("3d:"))) {
+                                    val model = template.conceptKey.removePrefix("4d:").removePrefix("3d:").substringBefore(":")
+                                    if (model == "solar-system") SolarSystemModelPreview() else Learning3DPreview(model)
+                                }
+                                AppUiText(template.prompt)
+                                if (template.options.isNotEmpty()) {
+                                    AppUiText("Answer choices: " + template.options.joinToString(" • "))
+                                }
+                                AppUiText("Parent's worked solution", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                AppUiText(template.solution)
+                                if (template.safety.isNotBlank()) {
+                                    AppUiText("Safety", fontWeight = FontWeight.Bold, color = Color(0xFF8B4C00))
+                                    AppUiText(template.safety, color = Color(0xFF774300))
+                                }
+                                Button(
+                                    onClick = {
+                                        execute {
+                                            val targetSubject = repository.findOrCreateSubject(
+                                                familyId,
+                                                template.subjectTitle,
+                                                template.languageCode,
+                                                templateCountryCode
+                                            )
+                                            subjects = repository.loadSubjects(familyId, templateCountryCode)
+                                            selectedSubject = targetSubject
+                                            questions = repository.loadQuestions(targetSubject.id)
+                                            questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
+                                            questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
+                                            questionPrompt = template.prompt
+                                            question3DModel = if ((template.conceptKey.startsWith("4d:") || template.conceptKey.startsWith("3d:")))
+                                                template.conceptKey.removePrefix("4d:").removePrefix("3d:").substringBefore(":") else "none"
+                                            questionType = template.questionType
+                                            questionOptions = template.options.joinToString("\n")
+                                            questionAnswer = template.answer
+                                            questionLanguage = template.languageCode
+                                            questionConceptKey = if ((template.conceptKey.startsWith("4d:") || template.conceptKey.startsWith("3d:")))
+                                                template.conceptKey.removePrefix("4d:").removePrefix("3d:").substringAfter(":")
+                                            else template.conceptKey
+                                            questionSolution = buildString {
+                                                append(template.solution)
+                                                if (template.materials.isNotEmpty()) {
+                                                    append("\n\nMaterials: ")
+                                                    append(template.materials.joinToString(", "))
+                                                }
+                                                if (template.steps.isNotEmpty()) {
+                                                    append("\n\nSteps:\n")
+                                                    append(template.steps.mapIndexed { index, step -> "${index + 1}. $step" }.joinToString("\n"))
+                                                }
+                                                if (template.safety.isNotBlank()) {
+                                                    append("\n\nSafety: ")
+                                                    append(template.safety)
+                                                }
+                                            }
+                                            screen = AppScreen.ADD_QUESTION
+                                            notice = "Template loaded. Review it, then save the question and private solution."
+                                        }
+                                    },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { AppUiText("Use template · create question") }
+                            }
+                        }
+                    }
+                    AppUiText(
+                        "Experiments use ordinary classroom materials only. Results vary with materials, amounts, temperature and technique. Follow the safety notes and use adult supervision where stated; never mix these activities with cleaning products.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
                 AppScreen.ADD_SUBJECT -> ScreenFrame(if (editingSubjectId == null) "Create subject" else "Edit subject", onBack = { screen = AppScreen.SUBJECTS }, notice = notice, busy = busy) {
                     Field(subjectTitle, { subjectTitle = it }, "Subject name")
@@ -2695,7 +2927,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.QUESTIONS -> ScreenFrame(selectedSubject?.title ?: "Questions", onBack = { screen = AppScreen.SUBJECTS }, notice = notice, busy = busy) {
                     val subject = selectedSubject
                     if (subject != null) {
-                        AppUiText("Create questions in " + languageLabel(subject.languageCode) + " (" + subject.languageCode + "). Give related questions the same concept tag so learning progress is tracked separately from language.")
+                        AppUiText("Create a question in " + subject.languageCode + " and give related questions the same concept tag. The tag lets Concept Bridge report understanding separately from language.")
                         Field(
                             bulkTranslationLanguage,
                             { bulkTranslationLanguage = it.trim().lowercase(Locale.ROOT).take(16) },
@@ -2785,7 +3017,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                         AppUiText((index + 1).toString() + ". " + question.prompt, fontWeight = FontWeight.SemiBold)
                                         AppUiText("Type: " + readableQuestionType(question.questionType))
-                                        AppUiText("Language: " + languageLabel(question.languageCode) + " (" + question.languageCode + ") • Concept tag: " + question.conceptKey)
+                                        AppUiText("Language: " + question.languageCode + " • Concept tag: " + question.conceptKey)
                                         val fourDModel = when {
                                             question.conceptKey.startsWith("4d:", ignoreCase = true) ->
                                                 question.conceptKey.substringAfter("4d:").substringBefore(":").takeIf { it.isNotBlank() }
