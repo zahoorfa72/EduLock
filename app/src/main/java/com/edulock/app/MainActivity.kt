@@ -898,6 +898,15 @@ private fun EduLockApp(repository: EduLockRepository) {
             "Notifications are disabled. EduLock can show status in the app, but Android may suppress notifications."
     }
 
+    fun requestLearningReminderPermission(childName: String) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        LearningReminderScheduler.setEnabled(context, true, childName)
+    }
+
     fun changeWeeklyWindow(appId: String, dayKey: String, update: (AppDayWindow) -> AppDayWindow) {
         val current = weeklyScheduleEdits[appId]
             ?: allowedApps.firstOrNull { it.id == appId }?.let { AppWeeklySchedule.parse(it.weeklyScheduleJson) }
