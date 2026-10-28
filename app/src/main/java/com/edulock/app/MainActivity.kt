@@ -906,8 +906,11 @@ private fun EduLockApp(repository: EduLockRepository) {
             if (loadedQuestions.isEmpty()) {
                 throw IllegalStateException("This task has no linked questions. Ask your parent to repair it.")
             }
-            if (loadedQuestions.size != task.questionCount) {
-                throw IllegalStateException("This task needs " + task.questionCount + " questions, but only " + loadedQuestions.size + " are available. Ask your parent to repair it.")
+            // A stale task_questions link or a deleted question must not make the whole task impossible to start.
+            // Start with the available linked questions and show the actual count in the player.
+            if (loadedQuestions.size < task.questionCount) {
+                notice = "Some questions in this task are no longer available. Starting with " +
+                    loadedQuestions.size + " available question(s). Ask your parent to refresh the task."
             }
             val loadedTranslations = repository.loadQuestionTranslations(loadedQuestions.map { it.id })
             val draft = readTaskDraft(task.id)
@@ -5059,10 +5062,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                     )
                     AppUiText("My apps", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    if (allowedApps.none { it.enabled }) {
+                    val uniqueChildApps = allowedApps.filter { it.enabled }
+                        .distinctBy { it.packageName.lowercase(Locale.ROOT) }
+                        .sortedWith(compareBy<AllowedApp> { it.displayName.lowercase(Locale.ROOT) }.thenBy { it.packageName })
+                    if (uniqueChildApps.isEmpty()) {
                         AppUiText("No parent-approved apps are currently available.")
                     } else {
-                        allowedApps.filter { it.enabled }.forEach { app ->
+                        uniqueChildApps.forEach { app ->
                             val lockPrefs = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
                             val usedMs = lockPrefs.getLong("app_used_millis_" + app.packageName, 0L).coerceAtLeast(0L)
                             val earnedMs = lockPrefs.getStringSet("app_earned_minutes", emptySet()).orEmpty()
