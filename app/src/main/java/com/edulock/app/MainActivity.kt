@@ -3166,16 +3166,17 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                         AppUiText((index + 1).toString() + ". " + question.prompt, fontWeight = FontWeight.SemiBold)
                                         Field(
-                                            questionRewardEdits[question.id] ?: question.rewardMinutes.toString(),
+                                            questionRewardEdits[question.id] ?: (question.rewardMinutes?.toString() ?: ""),
                                             { value -> questionRewardEdits = questionRewardEdits + (question.id to value.filter(Char::isDigit).take(4)) },
-                                            "Reward minutes for this correct answer (0–1440)",
+                                            "Reward minutes (blank = use task default; 0–1440)",
                                             keyboardType = KeyboardType.Number
                                         )
                                         OutlinedButton(
                                             onClick = { execute {
-                                                repository.setQuestionReward(question.id, questionRewardEdits[question.id]?.toIntOrNull() ?: question.rewardMinutes)
+                                                val rawReward = questionRewardEdits[question.id] ?: question.rewardMinutes?.toString().orEmpty()
+                                                repository.setQuestionReward(question.id, rawReward.toIntOrNull())
                                                 questions = repository.loadQuestions(subject.id)
-                                                notice = "Individual question reward saved. The server applies daily limits when grading."
+                                                notice = "Individual question reward saved. Blank uses the task default; the server applies daily limits when grading."
                                             } },
                                             enabled = !busy,
                                             modifier = Modifier.fillMaxWidth()
