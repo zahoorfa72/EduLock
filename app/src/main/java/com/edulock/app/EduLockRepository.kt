@@ -686,6 +686,37 @@ class EduLockRepository(context: Context) {
         return code to result.optInt("expires_in_seconds", 600)
     }
 
+    suspend fun loadChildSubjectSelections(familyId: String): Map<String, Set<String>> {
+        requireSession("parent")
+        val rows = restArray("child_subjects?select=child_id,subject_id,family_id&family_id=eq.$familyId")
+        val grouped = mutableMapOf<String, MutableSet<String>>()
+        for (i in 0 until rows.length()) {
+            val row = rows.optJSONObject(i) ?: continue
+            val childId = row.optString("child_id")
+            val subjectId = row.optString("subject_id")
+            if (childId.isNotBlank() && subjectId.isNotBlank()) {
+                grouped.getOrPut(childId) { mutableSetOf() }.add(subjectId)
+            }
+        }
+        return grouped.mapValues { it.value.toSet() }
+    }
+
+    suspend fun saveChildSubjectSelection(familyId: String, childId: String, subjectIds: Set<String>) {
+        requireSession("parent")
+        require(familyId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid family profile." }
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        require(subjectIds.size <= 200) { "Choose no more than 200 subjects." }
+        require(subjectIds.all { it.matches(Regex("[0-9a-fA-F-]{36}")) }) { "Invalid subject selection." }
+        restArray("child_subjects?child_id=eq.$childId&family_id=eq.$familyId", "DELETE", prefer = "return=minimal")
+        subjectIds.forEach { subjectId ->
+            restArray(
+                "child_subjects?select=child_id",
+                "POST",
+                JSONObject().put("family_id", familyId).put("child_id", childId).put("subject_id", subjectId)
+            )
+        }
+    }
+
     suspend fun loadSubjects(familyId: String, countryCode: String? = null): List<SubjectRow> {
         requireSession("parent")
         val rows = restArray("subjects?select=id,family_id,title,language_code,country_code,grade_level,curriculum_name,curriculum_subject_code&family_id=eq.$familyId&order=created_at.desc")
@@ -698,6 +729,15 @@ class EduLockRepository(context: Context) {
             ?.takeIf { it.matches(Regex("[A-Z]{2}")) }
             ?: return items
         return items.filter { it.countryCode.equals(normalizedCountry, ignoreCase = true) || it.countryCode.equals("ZZ", ignoreCase = true) }
+            .distinctBy { subject ->
+                listOf(
+                    subject.title.trim().lowercase(Locale.ROOT),
+                    subject.languageCode.trim().lowercase(Locale.ROOT),
+                    subject.countryCode.trim().uppercase(Locale.ROOT),
+                    subject.gradeLevel.toString(),
+                    subject.curriculumSubjectCode.trim().lowercase(Locale.ROOT)
+                ).joinToString("|")
+            }
     }
 
     suspend fun addSubject(familyId: String, title: String, languageCode: String, countryCode: String = "PK", gradeLevel: Int = 1, curriculumName: String = "Parent-created", curriculumSubjectCode: String = ""): SubjectRow {
