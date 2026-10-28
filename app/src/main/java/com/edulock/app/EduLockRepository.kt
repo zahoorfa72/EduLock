@@ -15,6 +15,8 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 import java.util.Locale
+import java.security.SecureRandom
+import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -257,6 +259,37 @@ data class RewardBankRedemption(
     val balanceMinutes: Int,
     val targetPackageName: String,
     val targetAppName: String
+)
+data class ChildEmergencyAccessConfig(
+    val childId: String,
+    val familyId: String,
+    val enabled: Boolean = false,
+    val emergencyCodeSalt: String = "",
+    val emergencyCodeHash: String = "",
+    val logoutCodeSalt: String = "",
+    val logoutCodeHash: String = "",
+    val allowedPackages: Set<String> = emptySet(),
+    val accessMinutes: Int = 10,
+    val expiresAt: String? = null,
+    val logoutCodeExpiresAt: String? = null,
+    val emergencyLastUsedDate: String? = null,
+    val emergencyFailedAttempts: Int = 0,
+    val emergencyLockedUntil: String? = null,
+    val logoutFailedAttempts: Int = 0,
+    val logoutLockedUntil: String? = null
+)
+data class ChildEmergencyOptions(
+    val enabled: Boolean = false,
+    val allowedPackages: Set<String> = emptySet(),
+    val accessMinutes: Int = 10,
+    val expiresAt: String? = null,
+    val lastUsedDate: String? = null
+)
+data class EmergencyGrantResult(
+    val packageName: String,
+    val expiresInSeconds: Int,
+    val accessMinutes: Int,
+    val usedDate: String
 )
 data class AuthResult(val session: AuthSession?, val message: String)
 
