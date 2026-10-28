@@ -412,10 +412,17 @@ class EduLockRepository(context: Context) {
                 throw IOException("Account role mismatch. Please sign in again and pair this device using the parent code.")
             }
             candidate
-        } catch (_: Exception) {
-            // Invalid/stale sessions must not open the wrong account dashboard.
-            signOut()
-            null
+        } catch (e: Exception) {
+            // A transient network/server failure is not proof that the saved child session is invalid.
+            // Keep a still-live encrypted session so children are not randomly logged out offline.
+            if (existing.expiresAtMillis > System.currentTimeMillis() + 60_000 &&
+                (e is IOException || (e.cause is IOException))) {
+                existing
+            } else {
+                // Invalid/stale sessions must not open the wrong account dashboard.
+                signOut()
+                null
+            }
         }
     }
     suspend fun ensureParentFamily(
