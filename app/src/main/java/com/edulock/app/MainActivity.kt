@@ -1116,6 +1116,44 @@ private fun EduLockApp(repository: EduLockRepository) {
     }
 
 
+    if (childLogoutDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { childLogoutDialogOpen = false; childLogoutCodeInput = "" },
+            title = { AppUiText("Log out of this child profile?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppUiText("Enter the eight-digit code created by your parent. Logging out keeps this child profile and its parent link intact.")
+                    Field(
+                        childLogoutCodeInput,
+                        { childLogoutCodeInput = it.filter(Char::isDigit).take(8) },
+                        "Parent authorization code",
+                        keyboardType = KeyboardType.Number
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !busy && childLogoutCodeInput.length == 8,
+                    onClick = {
+                        val code = childLogoutCodeInput
+                        execute {
+                            repository.redeemChildLogoutCode(code)
+                            childLogoutDialogOpen = false
+                            childLogoutCodeInput = ""
+                            childLogoutLocked = true
+                            lockStatePreferences.edit().putBoolean("child_logout_locked", true).apply()
+                            screen = AppScreen.PAIR_CHILD
+                            notice = "Logged out. Your profile remains linked. Ask your parent for a fresh authorization code to unlock it again."
+                        }
+                    }
+                ) { AppUiText("Log out") }
+            },
+            dismissButton = {
+                TextButton(onClick = { childLogoutDialogOpen = false; childLogoutCodeInput = "" }) { AppUiText("Cancel") }
+            }
+        )
+    }
+
     pendingChildAction?.let { (targetChild, action) ->
         val isDelete = action == "delete"
         AlertDialog(
@@ -5112,6 +5150,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                             }
                         }
                     }
+                    OutlinedButton(
+                        onClick = { childLogoutCodeInput = ""; childLogoutDialogOpen = true },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { AppUiText("🚪 Log out • parent code required") }
                     Button(
                         onClick = {
                             val nextTask = activeTask?.takeIf { current -> tasks.any { it.id == current.id } }
