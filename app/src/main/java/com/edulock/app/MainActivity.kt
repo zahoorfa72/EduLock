@@ -3273,6 +3273,17 @@ private fun EduLockApp(repository: EduLockRepository) {
                         AppUiText("No subject is available for this child's Grade " + (selectedChild?.schoolGrade ?: 1) + " and age " + (selectedChild?.ageYears ?: 8) + ". Create a subject for the correct class or import matching curriculum questions.")
                         OutlinedButton(
                             onClick = {
+                                editingSubjectId = null
+                                subjectTitle = ""
+                                subjectLanguage = selectedChild?.preferredLanguage ?: "en"
+                                subjectCountryCode = selectedTaskCountry
+                                subjectGradeLevel = (selectedChild?.schoolGrade ?: 1).toString()
+                                screen = AppScreen.ADD_SUBJECT
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { AppUiText("＋ Create a subject for this child's grade") }
+                        OutlinedButton(
+                            onClick = {
                                 templateCategory = if (selectedChildTrack == "none") "Mathematics" else "Religious Education"
                                 screen = AppScreen.LEARNING_TEMPLATES
                             },
