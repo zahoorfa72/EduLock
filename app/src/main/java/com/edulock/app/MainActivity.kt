@@ -3462,9 +3462,18 @@ private fun EduLockApp(repository: EduLockRepository) {
                             fontWeight = FontWeight.Bold
                         )
                         OutlinedButton(
-                            onClick = { templateCategory = subject.title; screen = AppScreen.LEARNING_TEMPLATES },
+                            onClick = {
+                                val normalizedTitle = subject.title.substringBefore(" — Grade ").trim()
+                                templateCategory = LearningTemplates.all.firstOrNull {
+                                    it.subjectTitle.equals(normalizedTitle, ignoreCase = true) &&
+                                        it.countryCode in setOf("ZZ", subject.countryCode)
+                                }?.category ?: LearningTemplates.all.firstOrNull {
+                                    it.subjectTitle.equals(normalizedTitle, ignoreCase = true)
+                                }?.category ?: "Mathematics"
+                                screen = AppScreen.LEARNING_TEMPLATES
+                            },
                             modifier = Modifier.fillMaxWidth()
-                        ) { AppUiText("✨ Browse " + subject.title + " question templates") }
+                        ) { AppUiText("✨ Templates & 4D questions") }
                         Button(onClick = {
                             questionPrompt = ""; questionOptions = ""; questionAnswer = ""; questionType = "multiple_choice"
                             questionLanguage = subject.languageCode
