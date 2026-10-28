@@ -702,6 +702,8 @@ private fun EduLockApp(repository: EduLockRepository) {
     var taskRewardGroupId by remember { mutableStateOf("") }
     var physicalChallenges by remember { mutableStateOf(emptyList<PhysicalChallenge>()) }
     var practicalTasks by remember { mutableStateOf(emptyList<PracticalTaskRow>()) }
+    var practicalSubmissions by remember { mutableStateOf(emptyList<PracticalTaskSubmissionReview>()) }
+    var practicalReviewNotes by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var practicalCompletionNotes by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var practicalTaskTitle by remember { mutableStateOf("") }
     var practicalTaskInstructions by remember { mutableStateOf("") }
