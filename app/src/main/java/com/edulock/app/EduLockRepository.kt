@@ -1827,19 +1827,37 @@ class EduLockRepository(context: Context) {
     suspend fun loadAllowedApps(childId: String): List<AllowedApp> {
         requireSession()
         val rows = restArray("allowed_apps?select=id,child_id,package_name,display_name,enabled,daily_limit_minutes,weekly_schedule&child_id=eq.$childId&order=display_name.asc")
-        return (0 until rows.length()).mapNotNull { i ->
+        val loaded = (0 until rows.length()).mapNotNull { i ->
             rows.optJSONObject(i)?.let { row ->
+                val packageName = row.optString("package_name").trim()
+                if (packageName.isBlank()) return@let null
                 AllowedApp(
                     id = row.optString("id"),
                     childId = row.optString("child_id"),
-                    packageName = row.optString("package_name"),
-                    displayName = row.optString("display_name"),
+                    packageName = packageName,
+                    displayName = row.optString("display_name").ifBlank { packageName.substringAfterLast('.') },
                     enabled = row.optBoolean("enabled", true),
                     dailyLimitMinutes = row.optInt("daily_limit_minutes", 0).coerceIn(0, 1440),
                     weeklyScheduleJson = row.optJSONObject("weekly_schedule")?.toString() ?: "{}"
                 )
             }
         }
+        // Legacy installs can contain duplicate rows for the same Android package.
+        // Expose one stable rule per package so lists and reward selection never duplicate apps.
+        return loaded.groupBy { it.packageName.lowercase(java.util.Locale.ROOT) }
+            .values.map { duplicates ->
+                val enabledRules = duplicates.filter { it.enabled }
+                val candidates = if (enabledRules.isNotEmpty()) enabledRules else duplicates
+                val chosen = candidates.minByOrNull { if (it.dailyLimitMinutes <= 0) Int.MAX_VALUE else it.dailyLimitMinutes }
+                    ?: duplicates.first()
+                chosen.copy(
+                    enabled = enabledRules.isNotEmpty(),
+                    dailyLimitMinutes = if (enabledRules.isEmpty()) chosen.dailyLimitMinutes
+                        else enabledRules.map { it.dailyLimitMinutes }.filter { it > 0 }.minOrNull()
+                            ?: enabledRules.first().dailyLimitMinutes
+                )
+            }
+            .sortedWith(compareBy<AllowedApp> { it.displayName.lowercase(java.util.Locale.ROOT) }.thenBy { it.packageName })
     }
 
     suspend fun addAllowedApp(childId: String, packageName: String, displayName: String, dailyLimitMinutes: Int) {
