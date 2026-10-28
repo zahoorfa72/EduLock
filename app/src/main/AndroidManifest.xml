@@ -17,6 +17,8 @@
         </intent>
     </queries>
     <application
+        android:icon="@drawable/edulock_logo"
+        android:roundIcon="@drawable/edulock_logo"
         android:allowBackup="false"
         android:label="EduLock"
         android:supportsRtl="true"

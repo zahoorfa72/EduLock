@@ -38,6 +38,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -88,6 +89,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.graphics.asImageBitmap
@@ -6099,7 +6101,13 @@ private fun ScreenFrame(
                     modifier = Modifier.size(58.dp)
                         .background(Color(0xFFFFD978), RoundedCornerShape(20.dp)),
                     contentAlignment = Alignment.Center
-                ) { AppUiText(screenEmoji(title), fontSize = 29.sp) }
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.edulock_logo),
+                        contentDescription = "EduLock",
+                        modifier = Modifier.size(58.dp)
+                    )
+                }
                 Spacer(Modifier.width(14.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     AppUiText(title, fontSize = 26.sp, lineHeight = 30.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
