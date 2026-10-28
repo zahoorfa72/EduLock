@@ -1448,6 +1448,12 @@ private fun EduLockApp(repository: EduLockRepository) {
             return
         }
         childProfile = linked
+        runCatching {
+            val learningPrefs = repository.loadCurrentChildLearningPreferences(linked.id)
+            LearningReminderScheduler.setEnabled(context, learningPrefs.gentleReminders, linked.displayName)
+        }.onFailure { error ->
+            android.util.Log.w("EduLockLearningReminder", "Could not sync learning reminder preference", error)
+        }
         if (childLogoutLocked || lockStatePreferences.getBoolean("child_logout_locked", false)) {
             childLogoutLocked = true
             screen = AppScreen.PAIR_CHILD
