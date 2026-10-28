@@ -15,6 +15,8 @@ import android.os.Build
 import android.os.UserManager
 import android.provider.Settings
 import android.provider.Settings.Secure
+import android.widget.VideoView
+import java.io.File
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -69,6 +71,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -3512,6 +3515,165 @@ private fun EduLockApp(repository: EduLockRepository) {
                             notice = "Task assigned to " + child.displayName + ". Each correct answer earns the configured minutes, within task and daily caps."
                         }
                     }, enabled = !busy && selectedChild != null && selectedTaskSubjects.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { AppUiText("Assign task") }
+                }
+
+                AppScreen.PHYSICAL_CHALLENGES -> ScreenFrame(
+                    if (session?.accountRole == "child") "Physical activity challenges" else "Physical challenges & reward review",
+                    onBack = { screen = if (session?.accountRole == "child") AppScreen.CHILD_HOME else AppScreen.PARENT_HOME },
+                    notice = notice, busy = busy
+                ) {
+                    val isChildAccount = session?.accountRole == "child"
+                    val learner = childProfile
+                    if (!isChildAccount) {
+                        AppUiText("Create safe, age-appropriate physical activities. Children submit compressed evidence; you review it and approve rewards. Evidence is stored in the EduLock database, not Supabase Storage.")
+                        Field(challengeTitle, { challengeTitle = it.take(120) }, "Activity title (e.g. 10-minute walk)")
+                        Field(challengeDescription, { challengeDescription = it.take(1000) }, "Instructions and safety notes")
+                        Field(challengeRewardMinutes, { challengeRewardMinutes = it.filter(Char::isDigit).take(4) }, "Reward if approved (0–1440 minutes)", keyboardType = KeyboardType.Number)
+                        AppUiText("Required evidence")
+                        listOf("either" to "Photo or video", "photo" to "Photo only", "video" to "Video only").forEach { (value,label) ->
+                            OutlinedButton(onClick = { challengeEvidenceType = value }, modifier = Modifier.fillMaxWidth()) {
+                                AppUiText((if (challengeEvidenceType == value) "✓ " else "") + label)
+                            }
+                        }
+                        OutlinedButton(onClick = { execute {
+                            val created = repository.createPhysicalChallenge(
+                                familyId, selectedChild?.id, challengeTitle, challengeDescription,
+                                challengeRewardMinutes.toIntOrNull() ?: 0, challengeEvidenceType
+                            )
+                            physicalChallenges = listOf(created) + physicalChallenges
+                            challengeTitle = ""; challengeDescription = ""
+                            notice = "Challenge created. The child can now see it."
+                        } }, enabled = !busy && familyId.isNotBlank() && challengeTitle.trim().length >= 2, modifier = Modifier.fillMaxWidth()) {
+                            AppUiText("＋ Create physical challenge")
+                        }
+                        OutlinedButton(onClick = { execute {
+                            children = repository.loadChildren(familyId)
+                            challengeSubmissions = repository.loadChallengeSubmissions(familyId)
+                        } }, modifier = Modifier.fillMaxWidth()) { AppUiText("↻ Refresh submissions") }
+                        AppUiText("Review submissions", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        if (challengeSubmissions.isEmpty()) AppUiText("No submissions yet.")
+                        challengeSubmissions.forEach { submission ->
+                            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    AppUiText(submission.title, fontWeight = FontWeight.Bold)
+                                    AppUiText("Status: " + submission.status + " • Evidence: " + submission.evidenceType)
+                                    if (submission.note.isNotBlank()) AppUiText("Child's note: " + submission.note)
+                                    if (submission.evidenceType == "photo") {
+                                        val bitmap = remember(submission.id) {
+                                            try {
+                                                val bytes = android.util.Base64.decode(submission.mediaBase64, android.util.Base64.DEFAULT)
+                                                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                            } catch (_: Exception) { null }
+                                        }
+                                        if (bitmap != null) androidx.compose.foundation.Image(
+                                            bitmap = bitmap.asImageBitmap(), contentDescription = "Challenge photo evidence",
+                                            modifier = Modifier.fillMaxWidth().height(220.dp)
+                                        )
+                                        else AppUiText("Photo evidence could not be previewed.")
+                                    } else {
+                                        AppUiText("Video evidence attached • " + submission.mimeType)
+                                        OutlinedButton(onClick = {
+                                            try {
+                                                val bytes = android.util.Base64.decode(submission.mediaBase64, android.util.Base64.DEFAULT)
+                                                val file = File(context.cacheDir, "challenge_" + submission.id + ".mp4")
+                                                file.writeBytes(bytes)
+                                                notice = "Video evidence is ready below. Tap play."
+                                                selectedChallenge = physicalChallenges.firstOrNull { it.id == submission.challengeId }
+                                            } catch (e: Exception) { notice = "Could not open video evidence: " + (e.message ?: "unknown error") }
+                                        }, modifier = Modifier.fillMaxWidth()) { AppUiText("Prepare video for review") }
+                                        val videoFile = remember(submission.id, submission.mediaBase64) {
+                                            try {
+                                                val bytes = android.util.Base64.decode(submission.mediaBase64, android.util.Base64.DEFAULT)
+                                                File(context.cacheDir, "challenge_" + submission.id + ".mp4").apply { if (!exists() || length() != bytes.size.toLong()) writeBytes(bytes) }
+                                            } catch (_: Exception) { null }
+                                        }
+                                        if (videoFile != null) AndroidView(
+                                            factory = { ctx -> VideoView(ctx).apply {
+                                                setVideoURI(Uri.fromFile(videoFile))
+                                                setOnPreparedListener { player -> player.isLooping = false }
+                                            } },
+                                            modifier = Modifier.fillMaxWidth().height(220.dp)
+                                        )
+                                    }
+                                    if (submission.reviewNote.isNotBlank()) AppUiText("Parent note: " + submission.reviewNote)
+                                    if (submission.status == "submitted") {
+                                        OutlinedButton(onClick = { execute {
+                                            val result = repository.reviewChallengeSubmission(submission.id, false, "Please try again.")
+                                            challengeSubmissions = repository.loadChallengeSubmissions(familyId)
+                                            notice = "Submission rejected."
+                                        } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Reject / ask child to retry") }
+                                        Button(onClick = { execute {
+                                            val result = repository.reviewChallengeSubmission(submission.id, true)
+                                            challengeSubmissions = repository.loadChallengeSubmissions(familyId)
+                                            notice = "Approved. " + result.optInt("reward_minutes_awarded") + " reward minutes granted within the daily cap."
+                                        } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("✓ Approve and grant reward") }
+                                    } else {
+                                        AppUiText("Reward approved: " + submission.rewardMinutes + " minutes")
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        AppUiText("Choose a physical activity, complete it safely with a parent's permission, then send photo or short video proof. Your parent reviews the evidence before rewards are granted.")
+                        OutlinedButton(onClick = { execute {
+                            physicalChallenges = repository.loadPhysicalChallenges("", learner?.id)
+                            challengeSubmissions = repository.loadChallengeSubmissions("", learner?.id)
+                        } }, modifier = Modifier.fillMaxWidth()) { AppUiText("↻ Refresh activities") }
+                        if (physicalChallenges.isEmpty()) AppUiText("No active challenges yet. Ask your parent to create one.")
+                        physicalChallenges.filter { it.active && (it.childId == null || it.childId == learner?.id) }.forEach { challenge ->
+                            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    AppUiText(challenge.title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                                    AppUiText(challenge.description)
+                                    AppUiText("Reward after parent approval: " + challenge.rewardMinutes + " minutes")
+                                    AppUiText("Evidence required: " + challenge.evidenceType)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(
+                                            onClick = { selectedChallenge = challenge; challengePhotoPicker.launch("image/*") },
+                                            enabled = !busy && challenge.evidenceType != "video",
+                                            modifier = Modifier.weight(1f)
+                                        ) { AppUiText("📷 Add photo") }
+                                        OutlinedButton(
+                                            onClick = { selectedChallenge = challenge; challengeVideoPicker.launch("video/mp4") },
+                                            enabled = !busy && challenge.evidenceType != "photo",
+                                            modifier = Modifier.weight(1f)
+                                        ) { AppUiText("🎥 Add video") }
+                                    }
+                                    if (selectedChallenge?.id == challenge.id && evidenceKind != null) {
+                                        AppUiText("Selected " + evidenceKind + " evidence (" + evidenceMimeType + ")")
+                                        Field(evidenceNote, { evidenceNote = it.take(500) }, "Optional note for parent")
+                                        Button(onClick = { execute {
+                                            repository.submitChallengeEvidence(
+                                                challenge.id, learner?.id ?: throw IOException("Child profile is missing."),
+                                                evidenceKind ?: throw IOException("Choose a photo or video."),
+                                                evidenceMimeType ?: throw IOException("Evidence format is missing."),
+                                                evidenceBase64 ?: throw IOException("Choose evidence first."),
+                                                android.util.Base64.decode(evidenceBase64, android.util.Base64.DEFAULT).size,
+                                                evidenceNote
+                                            )
+                                            evidenceBase64 = null; evidenceMimeType = null; evidenceKind = null
+                                            evidenceNote = ""; selectedChallenge = null
+                                            challengeSubmissions = repository.loadChallengeSubmissions("", learner.id)
+                                            notice = "Evidence sent to your parent. Rewards appear after approval."
+                                        } }, enabled = !busy && evidenceBase64 != null, modifier = Modifier.fillMaxWidth()) {
+                                            AppUiText("Send evidence to parent")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        AppUiText("My submissions", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        challengeSubmissions.forEach { submission ->
+                            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                                Column(Modifier.padding(12.dp)) {
+                                    AppUiText(submission.title, fontWeight = FontWeight.Bold)
+                                    AppUiText("Status: " + submission.status)
+                                    if (submission.reviewNote.isNotBlank()) AppUiText("Parent feedback: " + submission.reviewNote)
+                                    if (submission.status == "approved") AppUiText("Reward granted: " + submission.rewardMinutes + " minutes")
+                                }
+                            }
+                        }
+                    }
                 }
 
                 AppScreen.REPORTS -> ScreenFrame("Progress reports", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
