@@ -50,6 +50,19 @@ data class PracticalTaskRow(
     val expectedMinutes: Int = 10
 )
 
+data class PracticalTaskSubmissionReview(
+    val id: String,
+    val practicalTaskId: String,
+    val childId: String,
+    val title: String,
+    val instructions: String,
+    val completionNote: String,
+    val status: String,
+    val parentFeedback: String,
+    val submittedAt: String,
+    val reviewedAt: String
+)
+
 data class PracticalTaskSubmission(
     val id: String,
     val status: String,
@@ -1829,6 +1842,85 @@ class EduLockRepository(context: Context) {
 
 
     /** Separate practical-task portal backed by the adaptive learning schema. */
+    suspend fun loadPracticalSubmissionsForParent(familyId: String, childId: String? = null): List<PracticalTaskSubmissionReview> {
+        requireSession("parent")
+        require(familyId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Select a family first." }
+        val childFilter = childId?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) }?.let { "&child_id=eq.$it" } ?: ""
+        val rows = restArray(
+            "practical_task_submissions?select=id,practical_task_id,child_id,completion_note,status,parent_feedback,submitted_at,reviewed_at,practical_tasks!inner(title,instructions,family_id)&practical_tasks.family_id=eq.$familyId$childFilter&order=submitted_at.desc&limit=100"
+        )
+        return (0 until rows.length()).mapNotNull { index ->
+            rows.optJSONObject(index)?.let { row ->
+                val task = row.optJSONObject("practical_tasks") ?: JSONObject()
+                PracticalTaskSubmissionReview(
+                    id = row.optString("id"),
+                    practicalTaskId = row.optString("practical_task_id"),
+                    childId = row.optString("child_id"),
+                    title = task.optString("title", "Practical task"),
+                    instructions = task.optString("instructions"),
+                    completionNote = row.optString("completion_note"),
+                    status = row.optString("status", "submitted"),
+                    parentFeedback = row.optString("parent_feedback"),
+                    submittedAt = row.optString("submitted_at"),
+                    reviewedAt = row.optString("reviewed_at")
+                )
+            }
+        }
+    }
+
+    suspend fun loadMyPracticalSubmissions(childId: String): List<PracticalTaskSubmissionReview> {
+        requireSession("child")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        val rows = restArray(
+            "practical_task_submissions?select=id,practical_task_id,child_id,completion_note,status,parent_feedback,submitted_at,reviewed_at,practical_tasks!inner(title,instructions)&child_id=eq.$childId&order=submitted_at.desc&limit=100"
+        )
+        return (0 until rows.length()).mapNotNull { index ->
+            rows.optJSONObject(index)?.let { row ->
+                val task = row.optJSONObject("practical_tasks") ?: JSONObject()
+                PracticalTaskSubmissionReview(
+                    id = row.optString("id"),
+                    practicalTaskId = row.optString("practical_task_id"),
+                    childId = row.optString("child_id"),
+                    title = task.optString("title", "Practical task"),
+                    instructions = task.optString("instructions"),
+                    completionNote = row.optString("completion_note"),
+                    status = row.optString("status", "submitted"),
+                    parentFeedback = row.optString("parent_feedback"),
+                    submittedAt = row.optString("submitted_at"),
+                    reviewedAt = row.optString("reviewed_at")
+                )
+            }
+        }
+    }
+
+    suspend fun reviewPracticalTaskSubmission(
+        submissionId: String, approved: Boolean, parentFeedback: String = ""
+    ): PracticalTaskSubmissionReview {
+        requireSession("parent")
+        require(submissionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid practical-task submission." }
+        require(parentFeedback.length <= 1000) { "Parent feedback must be 1,000 characters or fewer." }
+        val result = requestFunction(
+            "review-practical-task",
+            JSONObject()
+                .put("submission_id", submissionId)
+                .put("status", if (approved) "approved" else "needs_practice")
+                .put("parent_feedback", parentFeedback.trim())
+        )
+        val row = result.optJSONObject("submission") ?: throw IOException("Practical-task review was not confirmed.")
+        return PracticalTaskSubmissionReview(
+            id = row.optString("id"),
+            practicalTaskId = "",
+            childId = "",
+            title = "",
+            instructions = "",
+            completionNote = "",
+            status = row.optString("status"),
+            parentFeedback = row.optString("parent_feedback"),
+            submittedAt = "",
+            reviewedAt = row.optString("reviewed_at")
+        )
+    }
+
     suspend fun loadPracticalTasksForParent(familyId: String, childId: String? = null): List<PracticalTaskRow> {
         requireSession("parent")
         require(familyId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Select a family first." }
