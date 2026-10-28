@@ -53,6 +53,11 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase functions deploy claim-child-pairing --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
 
+      - name: Deploy secure child emergency access function
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy child-emergency-access --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+
       - name: Deploy task submission function
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
