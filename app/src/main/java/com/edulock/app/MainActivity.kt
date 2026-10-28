@@ -3033,6 +3033,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             dailyTaskPassPercentText = cfg.passPercent.toString()
                                             dailyTaskRewardMinutesText = cfg.rewardMinutes.toString()
                                             dailyTaskCapMinutesText = cfg.dailyCapMinutes.toString()
+                                            val learningPrefs = repository.loadChildLearningPreferences(child.id)
+                                            kindergartenModeEnabled = learningPrefs.kindergartenMode
+                                            gentleLearningRemindersEnabled = learningPrefs.gentleReminders
+                                            dailyWrittenLimitText = learningPrefs.dailyWrittenQuestionLimit.toString()
+                                            practicalTasksEnabled = learningPrefs.practicalTasksEnabled
                                             dailyTaskSettingsChild = child
                                         }
                                     },
