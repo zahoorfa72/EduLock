@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import java.io.ByteArrayOutputStream
 import android.content.pm.PackageManager
 import android.content.pm.ApplicationInfo
@@ -26,6 +27,9 @@ import androidx.media3.effect.Presentation
 import androidx.media3.transformer.Effects
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.Composition
+import androidx.media3.transformer.DefaultEncoderFactory
+import androidx.media3.transformer.VideoEncoderSettings
+import androidx.media3.transformer.AudioEncoderSettings
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.MediaItem
 import java.io.File
@@ -296,29 +300,57 @@ private data class LocalTaskDraft(
     val pausedQuestionSecondsRemaining: Int? = null
 )
 
-private suspend fun compressChallengeVideo(context: Context, source: Uri): ByteArray =
-    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+private suspend fun compressChallengeVideo(context: Context, source: Uri): ByteArray {
+    // Reject long recordings before transcoding to protect kids' phones from
+    // excessive memory/battery use and keep evidence small for database storage.
+    val durationMs = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val metadata = MediaMetadataRetriever()
+        try {
+            metadata.setDataSource(context, source)
+            metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+                ?: throw IOException("Could not read the video duration. Choose a short MP4 clip.")
+        } finally {
+            metadata.release()
+        }
+    }
+    if (durationMs <= 0L) throw IOException("This video has no readable duration. Choose another clip.")
+    if (durationMs > 15_000L) throw IOException("Please trim the video to 15 seconds or less before uploading.")
+
+    return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
         kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
             val output = File(context.cacheDir, "edulock_challenge_" + System.currentTimeMillis() + ".mp4")
+            val encoderFactory = DefaultEncoderFactory.Builder(context.applicationContext)
+                .setRequestedVideoEncoderSettings(
+                    VideoEncoderSettings.Builder().setBitrate(450_000).build()
+                )
+                .setRequestedAudioEncoderSettings(
+                    AudioEncoderSettings.Builder().setBitrate(64_000).build()
+                )
+                .build()
             val transformer = Transformer.Builder(context)
+                .setEncoderFactory(encoderFactory)
                 .setVideoMimeType(MimeTypes.VIDEO_H264)
                 .setAudioMimeType(MimeTypes.AUDIO_AAC)
                 .addListener(object : Transformer.Listener {
                     override fun onCompleted(composition: Composition, exportResult: ExportResult) {
                         try {
                             val bytes = output.readBytes()
-                            if (bytes.isEmpty() || bytes.size > 3_500_000) {
-                                continuation.resumeWithException(IOException("The compressed video is still too large. Choose a shorter clip (15 seconds or less)."))
-                            } else continuation.resume(bytes)
+                            if (bytes.isEmpty() || bytes.size > 1_800_000) {
+                                if (continuation.isActive) continuation.resumeWithException(
+                                    IOException("The compressed video is over 1.8 MB. Choose a shorter clip or reduce video quality before selecting it.")
+                                )
+                            } else if (continuation.isActive) continuation.resume(bytes)
                         } catch (error: Exception) {
-                            continuation.resumeWithException(error)
+                            if (continuation.isActive) continuation.resumeWithException(error)
                         } finally {
                             output.delete()
                         }
                     }
                     override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
                         output.delete()
-                        if (continuation.isActive) continuation.resumeWithException(IOException("Could not compress this video. Try a short MP4 clip.", exportException))
+                        if (continuation.isActive) continuation.resumeWithException(
+                            IOException("Could not compress this video on this device. Try a short MP4 clip.", exportException)
+                        )
                     }
                 })
                 .build()
@@ -334,6 +366,7 @@ private suspend fun compressChallengeVideo(context: Context, source: Uri): ByteA
             }
         }
     }
+}
 
 private enum class AppScreen {
     DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ, KIDS_GAMES, LEARNING_3D_LAB, DRAWING_STUDIO,
@@ -937,32 +970,36 @@ private fun EduLockApp(repository: EduLockRepository) {
     }
     val challengePhotoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) execute {
-            val raw = withContext(kotlinx.coroutines.Dispatchers.IO) {
-                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            val resizedAndCompressed = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
                     ?: throw IOException("Could not read the selected photo.")
+                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("Choose a supported photo.")
+                val factor = maxOf(bounds.outWidth / 1280f, bounds.outHeight / 1280f, 1f)
+                val sample = Integer.highestOneBit(factor.toInt().coerceAtLeast(1))
+                val bitmap = context.contentResolver.openInputStream(uri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream, null, BitmapFactory.Options().apply { inSampleSize = sample })
+                } ?: throw IOException("Could not decode the photo.")
+                val scale = minOf(1f, 1280f / maxOf(bitmap.width, bitmap.height).toFloat())
+                val resized = if (scale < 1f) Bitmap.createScaledBitmap(
+                    bitmap, (bitmap.width * scale).toInt().coerceAtLeast(1),
+                    (bitmap.height * scale).toInt().coerceAtLeast(1), true
+                ) else bitmap
+                var quality = 82
+                var bytes: ByteArray
+                do {
+                    val output = ByteArrayOutputStream()
+                    if (!resized.compress(Bitmap.CompressFormat.JPEG, quality, output)) throw IOException("Photo compression failed.")
+                    bytes = output.toByteArray()
+                    quality -= 10
+                } while (bytes.size > 1_800_000 && quality >= 32)
+                if (bytes.size > 1_800_000) throw IOException("Photo is still too large after compression. Choose another photo.")
+                bytes
             }
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeByteArray(raw, 0, raw.size, bounds)
-            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("Choose a supported photo.")
-            val factor = maxOf(bounds.outWidth / 1280f, bounds.outHeight / 1280f, 1f)
-            val sample = Integer.highestOneBit(factor.toInt().coerceAtLeast(1))
-            val bitmap = BitmapFactory.decodeByteArray(raw, 0, raw.size, BitmapFactory.Options().apply { inSampleSize = sample })
-                ?: throw IOException("Could not decode the photo.")
-            val scale = minOf(1f, 1280f / maxOf(bitmap.width, bitmap.height).toFloat())
-            val resized = if (scale < 1f) Bitmap.createScaledBitmap(bitmap,(bitmap.width*scale).toInt().coerceAtLeast(1),(bitmap.height*scale).toInt().coerceAtLeast(1),true) else bitmap
-            var quality = 82
-            var bytes: ByteArray
-            do {
-                val output = ByteArrayOutputStream()
-                if (!resized.compress(Bitmap.CompressFormat.JPEG, quality, output)) throw IOException("Photo compression failed.")
-                bytes = output.toByteArray()
-                quality -= 12
-            } while (bytes.size > 2_500_000 && quality >= 34)
-            if (bytes.size > 2_500_000) throw IOException("Photo is still too large after compression. Choose another photo.")
-            evidenceBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            evidenceBase64 = android.util.Base64.encodeToString(resizedAndCompressed, android.util.Base64.NO_WRAP)
             evidenceMimeType = "image/jpeg"
             evidenceKind = "photo"
-            notice = "Photo compressed to " + (bytes.size / 1024).coerceAtLeast(1) + " KB on this device."
+            notice = "Photo compressed to " + (resizedAndCompressed.size / 1024).coerceAtLeast(1) + " KB on this device."
         }
     }
     val challengeVideoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
