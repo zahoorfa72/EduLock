@@ -1474,6 +1474,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.ADD_SUBJECT, AppScreen.QUESTIONS -> AppScreen.SUBJECTS
                 AppScreen.LEARNING_TEMPLATES -> if (selectedSubject != null) AppScreen.QUESTIONS else AppScreen.PARENT_HOME
                 AppScreen.ADD_QUESTION, AppScreen.ADD_TRANSLATION -> AppScreen.QUESTIONS
+                AppScreen.PHYSICAL_CHALLENGES -> if (session?.accountRole == "child") AppScreen.CHILD_HOME else AppScreen.PARENT_HOME
                 AppScreen.PLAY_TASK, AppScreen.TASK_RESULT -> AppScreen.CHILD_HOME
                 AppScreen.SOLAR_SYSTEM_QUIZ -> solarQuizReturnScreen
                 AppScreen.KIDS_GAMES -> AppScreen.CHILD_HOME
@@ -2083,6 +2084,17 @@ private fun EduLockApp(repository: EduLockRepository) {
                             )
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashboardIconTile(
+                                icon = "🏃", title = "Physical challenges", subtitle = "Set activities, review evidence and approve rewards",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF20A46B),
+                                onClick = {
+                                    screen = AppScreen.PHYSICAL_CHALLENGES
+                                    execute {
+                                        physicalChallenges = repository.loadPhysicalChallenges(familyId)
+                                        challengeSubmissions = repository.loadChallengeSubmissions(familyId)
+                                    }
+                                }
+                            )
                             DashboardIconTile(
                                 icon = "⚙️", title = "App settings", subtitle = "Country, languages, religion, limits and protection",
                                 modifier = Modifier.weight(1f), accent = Color(0xFF4E5D75),
@@ -3076,6 +3088,20 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                         AppUiText((index + 1).toString() + ". " + question.prompt, fontWeight = FontWeight.SemiBold)
+                                        Field(
+                                            questionRewardEdits[question.id] ?: "0",
+                                            { value -> questionRewardEdits = questionRewardEdits + (question.id to value.filter(Char::isDigit).take(4)) },
+                                            "Reward minutes for this correct answer (0–1440)",
+                                            keyboardType = KeyboardType.Number
+                                        )
+                                        OutlinedButton(
+                                            onClick = { execute {
+                                                repository.setQuestionReward(question.id, questionRewardEdits[question.id]?.toIntOrNull() ?: 0)
+                                                notice = "Individual question reward saved. The server applies daily limits when grading."
+                                            } },
+                                            enabled = !busy,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) { AppUiText("Save question reward") }
                                         val savedTranslationsForQuestion = questionTranslations[question.id].orEmpty()
                                         if (savedTranslationsForQuestion.isNotEmpty()) {
                                             savedTranslationsForQuestion.forEach { savedTranslation ->
@@ -3966,6 +3992,16 @@ private fun EduLockApp(repository: EduLockRepository) {
                         enabled = !busy,
                         modifier = Modifier.fillMaxWidth()
                     ) { AppUiText("📚 Learning • Continue a task") }
+                    OutlinedButton(
+                        onClick = {
+                            screen = AppScreen.PHYSICAL_CHALLENGES
+                            execute {
+                                physicalChallenges = repository.loadPhysicalChallenges("", child?.id)
+                                challengeSubmissions = repository.loadChallengeSubmissions("", child?.id)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { AppUiText("🏃 Physical activity challenges • Submit photo/video proof") }
                     // Large illustrated tiles make the child dashboard feel like a learning game hub.
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         DashboardIconTile(
