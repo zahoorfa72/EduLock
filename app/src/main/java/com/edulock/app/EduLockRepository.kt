@@ -719,6 +719,187 @@ class EduLockRepository(context: Context) {
         return code to result.optInt("expires_in_seconds", 600)
     }
 
+    private fun emergencyCodeHash(salt: String, code: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest((salt + ":" + code).toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+
+    private fun randomEmergencyCode(): String =
+        SecureRandom().nextInt(100_000_000).toString().padStart(8, '0')
+
+    private fun randomEmergencySalt(): String {
+        val bytes = ByteArray(16)
+        SecureRandom().nextBytes(bytes)
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun JSONObject.toChildEmergencyConfig(childId: String, familyId: String): ChildEmergencyAccessConfig {
+        val packages = optJSONArray("allowed_packages") ?: JSONArray()
+        val allowed = (0 until packages.length()).mapNotNull { packages.optString(it).takeIf(String::isNotBlank) }.toSet()
+        return ChildEmergencyAccessConfig(
+            childId = optString("child_id", childId),
+            familyId = optString("family_id", familyId),
+            enabled = optBoolean("enabled", false),
+            emergencyCodeSalt = optString("emergency_code_salt"),
+            emergencyCodeHash = optString("emergency_code_hash"),
+            logoutCodeSalt = optString("logout_code_salt"),
+            logoutCodeHash = optString("logout_code_hash"),
+            allowedPackages = allowed,
+            accessMinutes = optInt("access_minutes", 10).coerceIn(1, 30),
+            expiresAt = optString("expires_at").takeIf { it.isNotBlank() && it != "null" },
+            logoutCodeExpiresAt = optString("logout_code_expires_at").takeIf { it.isNotBlank() && it != "null" },
+            emergencyLastUsedDate = optString("emergency_last_used_date").takeIf { it.isNotBlank() && it != "null" },
+            emergencyFailedAttempts = optInt("emergency_failed_attempts", 0),
+            emergencyLockedUntil = optString("emergency_locked_until").takeIf { it.isNotBlank() && it != "null" },
+            logoutFailedAttempts = optInt("logout_failed_attempts", 0),
+            logoutLockedUntil = optString("logout_locked_until").takeIf { it.isNotBlank() && it != "null" }
+        )
+    }
+
+    private fun ChildEmergencyAccessConfig.toJson(): JSONObject = JSONObject()
+        .put("child_id", childId)
+        .put("family_id", familyId)
+        .put("enabled", enabled)
+        .put("emergency_code_salt", emergencyCodeSalt)
+        .put("emergency_code_hash", emergencyCodeHash)
+        .put("logout_code_salt", logoutCodeSalt)
+        .put("logout_code_hash", logoutCodeHash)
+        .put("allowed_packages", JSONArray(allowedPackages.sorted()))
+        .put("access_minutes", accessMinutes.coerceIn(1, 30))
+        .put("expires_at", expiresAt ?: JSONObject.NULL)
+        .put("logout_code_expires_at", logoutCodeExpiresAt ?: JSONObject.NULL)
+        .put("emergency_last_used_date", emergencyLastUsedDate ?: JSONObject.NULL)
+        .put("emergency_failed_attempts", emergencyFailedAttempts.coerceIn(0, 100))
+        .put("emergency_locked_until", emergencyLockedUntil ?: JSONObject.NULL)
+        .put("logout_failed_attempts", logoutFailedAttempts.coerceIn(0, 100))
+        .put("logout_locked_until", logoutLockedUntil ?: JSONObject.NULL)
+        .put("updated_at", java.time.Instant.now().toString())
+
+    suspend fun loadChildEmergencyAccess(childId: String): ChildEmergencyAccessConfig {
+        requireSession("parent")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        val rows = restArray("child_emergency_access?select=*&child_id=eq.$childId&limit=1")
+        val row = rows.optJSONObject(0)
+        if (row != null) return row.toChildEmergencyConfig(childId, row.optString("family_id"))
+        val childRows = restArray("children?select=id,family_id&id=eq.$childId&limit=1")
+        val child = childRows.optJSONObject(0) ?: throw IOException("Child profile was not found in this family.")
+        return ChildEmergencyAccessConfig(childId = childId, familyId = child.optString("family_id"))
+    }
+
+    private suspend fun upsertChildEmergencyAccess(config: ChildEmergencyAccessConfig): ChildEmergencyAccessConfig {
+        val saved = restArray(
+            "child_emergency_access?on_conflict=child_id",
+            "POST",
+            config.toJson(),
+            prefer = "resolution=merge-duplicates,return=representation"
+        ).optJSONObject(0) ?: throw IOException("The security settings could not be saved.")
+        require(saved.optString("child_id") == config.childId) {
+            "The security settings could not be confirmed by the server."
+        }
+        return saved.toChildEmergencyConfig(config.childId, config.familyId)
+    }
+
+    suspend fun saveChildEmergencySettings(
+        familyId: String,
+        childId: String,
+        enabled: Boolean,
+        allowedPackages: Set<String>,
+        accessMinutes: Int
+    ): ChildEmergencyAccessConfig {
+        requireSession("parent")
+        require(familyId.matches(Regex("[0-9a-fA-F-]{36}")) && childId.matches(Regex("[0-9a-fA-F-]{36}"))) {
+            "Invalid family or child profile."
+        }
+        require(accessMinutes in 1..30) { "Emergency access must be between 1 and 30 minutes." }
+        val normalized = allowedPackages.map { it.trim() }.filter(String::isNotBlank).toSet()
+        require(normalized.size <= 100 && normalized.all {
+            it.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+"))
+        }) { "Choose valid Android apps." }
+        require(!enabled || normalized.isNotEmpty()) {
+            "Select at least one parent-approved app before enabling emergency access."
+        }
+        val current = loadChildEmergencyAccess(childId)
+        require(current.familyId == familyId) { "This child does not belong to the selected family." }
+        return upsertChildEmergencyAccess(current.copy(enabled = enabled, allowedPackages = normalized, accessMinutes = accessMinutes))
+    }
+
+    suspend fun generateChildEmergencyCode(
+        familyId: String,
+        childId: String,
+        allowedPackages: Set<String>,
+        accessMinutes: Int
+    ): String {
+        requireSession("parent")
+        require(allowedPackages.isNotEmpty()) { "Select at least one parent-approved app." }
+        val current = saveChildEmergencySettings(familyId, childId, true, allowedPackages, accessMinutes)
+        val code = randomEmergencyCode()
+        val salt = randomEmergencySalt()
+        val expires = java.time.Instant.now().plusSeconds(30L * 24L * 60L * 60L).toString()
+        upsertChildEmergencyAccess(current.copy(
+            emergencyCodeSalt = salt,
+            emergencyCodeHash = emergencyCodeHash(salt, code),
+            expiresAt = expires,
+            emergencyFailedAttempts = 0,
+            emergencyLockedUntil = null
+        ))
+        return code
+    }
+
+    suspend fun generateChildLogoutCode(childId: String): String {
+        requireSession("parent")
+        val current = loadChildEmergencyAccess(childId)
+        val code = randomEmergencyCode()
+        val salt = randomEmergencySalt()
+        val expires = java.time.Instant.now().plusSeconds(10L * 60L).toString()
+        upsertChildEmergencyAccess(current.copy(
+            logoutCodeSalt = salt,
+            logoutCodeHash = emergencyCodeHash(salt, code),
+            logoutCodeExpiresAt = expires,
+            logoutFailedAttempts = 0,
+            logoutLockedUntil = null
+        ))
+        return code
+    }
+
+    suspend fun loadChildEmergencyOptions(): ChildEmergencyOptions {
+        requireSession("child")
+        val response = requestFunction("child-emergency-access", JSONObject().put("action", "options"))
+        val packages = response.optJSONArray("allowed_packages") ?: JSONArray()
+        return ChildEmergencyOptions(
+            enabled = response.optBoolean("enabled", false),
+            allowedPackages = (0 until packages.length()).mapNotNull { packages.optString(it).takeIf(String::isNotBlank) }.toSet(),
+            accessMinutes = response.optInt("access_minutes", 10).coerceIn(1, 30),
+            expiresAt = response.optString("expires_at").takeIf { it.isNotBlank() && it != "null" },
+            lastUsedDate = response.optString("last_used_date").takeIf { it.isNotBlank() && it != "null" }
+        )
+    }
+
+    suspend fun redeemChildEmergencyAccess(code: String, packageName: String): EmergencyGrantResult {
+        requireSession("child")
+        val normalizedCode = code.filter(Char::isDigit)
+        require(normalizedCode.matches(Regex("\\d{8}"))) { "Enter the eight-digit emergency code created by the parent." }
+        require(packageName.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+"))) { "Choose an app approved by the parent." }
+        val response = requestFunction(
+            "child-emergency-access",
+            JSONObject().put("action", "emergency").put("code", normalizedCode).put("package_name", packageName)
+        )
+        val returnedPackage = response.optString("package_name")
+        require(returnedPackage == packageName) { "The server returned a different app approval." }
+        return EmergencyGrantResult(
+            packageName = returnedPackage,
+            expiresInSeconds = response.optInt("expires_in_seconds", 0).coerceIn(1, 30 * 60),
+            accessMinutes = response.optInt("access_minutes", 0).coerceIn(1, 30),
+            usedDate = response.optString("used_date")
+        )
+    }
+
+    suspend fun redeemChildLogoutCode(code: String) {
+        requireSession("child")
+        val normalizedCode = code.filter(Char::isDigit)
+        require(normalizedCode.matches(Regex("\\d{8}"))) { "Enter the eight-digit code created by the parent." }
+        requestFunction("child-emergency-access", JSONObject().put("action", "logout").put("code", normalizedCode))
+    }
+
     suspend fun loadChildSubjectSelections(familyId: String): Map<String, Set<String>> {
         requireSession("parent")
         val rows = restArray("child_subjects?select=child_id,subject_id,family_id&family_id=eq.$familyId")
