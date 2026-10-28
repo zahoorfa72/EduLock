@@ -2083,7 +2083,9 @@ class EduLockRepository(context: Context) {
             payload.put(JSONObject().put("child_id", childId).put("package_name", pkg)
                 .put("display_name", name).put("last_seen_at", timestamp))
         }
-        // One PostgREST upsert avoids hundreds of sequential network requests on child startup.
+        // Replace the child's inventory snapshot so older background/system-app rows disappear.
+        // Allowed-app rules are kept separately; Settings is the only system app submitted by the client.
+        restArray("child_installed_apps?child_id=eq.$childId", "DELETE", prefer = "return=minimal")
         val uploaded = restArray("child_installed_apps?on_conflict=child_id,package_name", "POST", payload,
             prefer = "resolution=merge-duplicates,return=representation")
         if (uploaded.length() < normalized.size) {

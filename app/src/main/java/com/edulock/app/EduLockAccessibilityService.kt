@@ -230,14 +230,14 @@ class EduLockAccessibilityService : AccessibilityService() {
             // Accessibility overlays can be dismissed or obscured by some OEM launchers.
             // Bring EduLock itself back to the foreground as a second guard. True device-wide
             // kiosk enforcement still requires device-owner Lock Task mode.
+            // Every blocked-app attempt should take the child back to learning. When a current
+            // task is available, open it directly; the child-home daily-task generator fills gaps.
             val taskId = taskIdForPackage(packageName)
-            if (blockedForAppTime || blockedForEarnedTime || blockedForSchedule) {
-                if (taskId != null) {
-                    prefs.edit()
-                        .putString(KEY_PENDING_TASK_ID, taskId)
-                        .putString("pending_reward_package", packageName)
-                        .apply()
-                }
+            if (taskId != null) {
+                prefs.edit()
+                    .putString(KEY_PENDING_TASK_ID, taskId)
+                    .putString("pending_reward_package", packageName)
+                    .apply()
             }
             redirectToEduLockIfNeeded(packageName)
         } else {

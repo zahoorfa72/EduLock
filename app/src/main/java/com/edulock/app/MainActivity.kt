@@ -1749,10 +1749,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                         val label = try {
                             info.loadLabel(context.packageManager)?.toString()?.trim().orEmpty()
                         } catch (_: Exception) { "" }
+                        val isSystemApp = (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0 ||
+                            (info.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
                         if (label.isBlank() ||
                             label.equals("3 Button Navigation Bar", ignoreCase = true) ||
                             label.equals("Ad Privacy", ignoreCase = true) ||
-                            label.equals("AgingFunction", ignoreCase = true)) null else pkg to label
+                            label.equals("AgingFunction", ignoreCase = true) ||
+                            (isSystemApp && pkg != "com.android.settings")) null else pkg to label
                     }.distinctBy { it.first }.take(500)
                     repository.syncInstalledApps(child.id, visibleApps)
                 } catch (_: Exception) {
@@ -5468,7 +5471,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                     if (childInstalledApps.isNotEmpty() && allowedApps.isEmpty()) AppUiText("No saved app rules were returned. Apps remain allowed by default; check the database migration if you cannot save a limit.")
                     allowedApps.filter { app ->
-                        childInstalledApps.none { it.packageName == app.packageName } &&
+                        (app.packageName == "com.android.settings" || childInstalledApps.any { it.packageName == app.packageName }) &&
+                            childInstalledApps.none { it.packageName == app.packageName } &&
                             (appSearchQuery.isBlank() || app.displayName.contains(appSearchQuery, ignoreCase = true) || app.packageName.contains(appSearchQuery, ignoreCase = true)) &&
                             when (appStatusFilter) {
                                 "Allowed" -> app.enabled
