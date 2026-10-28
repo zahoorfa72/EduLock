@@ -74,18 +74,6 @@ create index if not exists child_concept_review_idx
 
 -- Keep granular scoring and feedback so parent and child screens can show the exact
 -- accuracy/spelling breakdown instead of only a pass/fail flag.
-alter table edulock.attempt_answers
-  add column if not exists accuracy_score integer not null default 0
-    check (accuracy_score between 0 and 100),
-  add column if not exists spelling_score integer not null default 0
-    check (spelling_score between 0 and 100),
-  add column if not exists final_score integer not null default 0
-    check (final_score between 0 and 100),
-  add column if not exists detected_errors jsonb not null default '[]'::jsonb,
-  add column if not exists feedback text not null default '',
-  add column if not exists expected_answer text not null default '',
-  add column if not exists supplied_answer text not null default '';
-
 create table if not exists edulock.child_learning_preferences (
   child_id uuid primary key references edulock.children(id) on delete cascade,
   kindergarten_mode boolean not null default false,
