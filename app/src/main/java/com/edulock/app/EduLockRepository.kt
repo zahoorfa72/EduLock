@@ -1785,6 +1785,102 @@ class EduLockRepository(context: Context) {
     }
 
 
+    /** Separate practical-task portal backed by the adaptive learning schema. */
+    suspend fun loadPracticalTasks(childId: String): List<PracticalTaskRow> {
+        requireSession("child")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        val rows = restArray(
+            "practical_tasks?select=id,child_id,title,instructions,materials,safety_notes,age_min,age_max,activity_kind,expected_minutes&child_id=eq.$childId&active=eq.true&order=created_at.desc&limit=50"
+        )
+        return (0 until rows.length()).mapNotNull { index ->
+            rows.optJSONObject(index)?.let { row ->
+                PracticalTaskRow(
+                    id = row.optString("id"),
+                    childId = row.optString("child_id"),
+                    title = row.optString("title"),
+                    instructions = row.optString("instructions"),
+                    materialsJson = row.optJSONArray("materials")?.toString() ?: "[]",
+                    safetyNotes = row.optString("safety_notes"),
+                    ageMin = row.optInt("age_min", 3).coerceIn(3, 19),
+                    ageMax = row.optInt("age_max", 19).coerceIn(3, 19),
+                    activityKind = row.optString("activity_kind", "practical"),
+                    expectedMinutes = row.optInt("expected_minutes", 10).coerceIn(1, 180)
+                )
+            }
+        }
+    }
+
+    /** Store a practical completion; task ownership is validated by the server. */
+    suspend fun submitPracticalTask(
+        practicalTaskId: String,
+        completionNote: String = "",
+        evidencePath: String? = null
+    ): PracticalTaskSubmission {
+        requireSession("child")
+        require(practicalTaskId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid practical task." }
+        require(completionNote.length <= 2000) { "Your note must be 2,000 characters or fewer." }
+        require(evidencePath.isNullOrBlank() || evidencePath.length <= 500) { "Invalid evidence path." }
+        val response = requestFunction(
+            "submit-practical-task",
+            JSONObject()
+                .put("practical_task_id", practicalTaskId)
+                .put("completion_note", completionNote.trim())
+                .apply { if (!evidencePath.isNullOrBlank()) put("evidence_path", evidencePath) }
+        )
+        val submission = response.optJSONObject("submission")
+            ?: throw IOException("EduLock did not confirm the practical task submission.")
+        val id = submission.optString("id")
+        require(id.matches(Regex("[0-9a-fA-F-]{36}"))) {
+            "EduLock returned an invalid practical-task submission."
+        }
+        return PracticalTaskSubmission(
+            id = id,
+            status = submission.optString("status", "submitted"),
+            submittedAt = submission.optString("submitted_at")
+        )
+    }
+
+    /** Per-answer written feedback visible to the linked child and its parent. */
+    suspend fun loadWrittenAnswerFeedback(childId: String? = null): List<WrittenAnswerFeedback> {
+        requireSession()
+        val currentSession = sessionStore.read() ?: throw IOException("Sign in to view learning feedback.")
+        val resolvedChildId = childId ?: if (currentSession.accountRole == "child") {
+            restArray("children?select=id&child_user_id=eq.${currentSession.userId}&limit=1")
+                .optJSONObject(0)?.optString("id")
+        } else null
+        if (resolvedChildId.isNullOrBlank() ||
+            !resolvedChildId.matches(Regex("[0-9a-fA-F-]{36}"))) {
+            throw IOException("Choose a child profile to view written-answer feedback.")
+        }
+        if (currentSession.accountRole == "child") {
+            val linkedChildId = restArray("children?select=id&child_user_id=eq.${currentSession.userId}&limit=1")
+                .optJSONObject(0)?.optString("id")
+            require(linkedChildId == resolvedChildId) { "A child can only view their own learning feedback." }
+        }
+        val rows = restArray(
+            "attempt_answer_feedback?select=id,attempt_id,question_id,child_id,concept_key,supplied_answer,expected_answer,accuracy_score,spelling_score,final_score,detected_errors,feedback,created_at&child_id=eq.$resolvedChildId&order=created_at.desc&limit=200"
+        )
+        return (0 until rows.length()).mapNotNull { index ->
+            rows.optJSONObject(index)?.let { row ->
+                WrittenAnswerFeedback(
+                    id = row.optString("id"),
+                    attemptId = row.optString("attempt_id"),
+                    questionId = row.optString("question_id"),
+                    childId = row.optString("child_id"),
+                    conceptKey = row.optString("concept_key", "general"),
+                    suppliedAnswer = row.optString("supplied_answer"),
+                    expectedAnswer = row.optString("expected_answer"),
+                    accuracyScore = row.optInt("accuracy_score").coerceIn(0, 100),
+                    spellingScore = row.optInt("spelling_score").coerceIn(0, 100),
+                    finalScore = row.optInt("final_score").coerceIn(0, 100),
+                    detectedErrorsJson = row.optJSONArray("detected_errors")?.toString() ?: "[]",
+                    feedback = row.optString("feedback"),
+                    createdAt = row.optString("created_at")
+                )
+            }
+        }
+    }
+
     suspend fun loadPhysicalChallenges(familyId: String, childId: String? = null): List<PhysicalChallenge> {
         val session = sessionStore.read() ?: throw IOException("Sign in to view challenges.")
         val path = if (session.accountRole == "parent") {
