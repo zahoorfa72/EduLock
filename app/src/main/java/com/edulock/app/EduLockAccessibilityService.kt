@@ -118,7 +118,7 @@ class EduLockAccessibilityService : AccessibilityService() {
                 .putLong(appUsageKey, usedBefore + delta)
             val appLimit = prefs.getStringSet(KEY_APP_DAILY_LIMITS, emptySet()).orEmpty()
                 .firstOrNull { it.startsWith("$lastPackage=") }
-                ?.substringAfter("=")?.toIntOrNull()?.coerceIn(1, 1440)
+                ?.substringAfter("=")?.toIntOrNull()?.takeIf { it > 0 }?.coerceAtMost(1440)
             val appEarned = prefs.getStringSet(KEY_APP_EARNED_MINUTES, emptySet()).orEmpty()
                 .firstOrNull { it.startsWith("$lastPackage=") }
                 ?.substringAfter("=")?.toIntOrNull()?.coerceIn(0, 1440) ?: 0
@@ -177,7 +177,8 @@ class EduLockAccessibilityService : AccessibilityService() {
             .firstOrNull { it.startsWith("$packageName=") }
             ?.substringAfter("=")
             ?.toIntOrNull()
-            ?.coerceIn(1, 1440)
+            ?.takeIf { it > 0 }
+            ?.coerceAtMost(1440)
         val appUsed = prefs.getLong(APP_USED_PREFIX + packageName, 0L)
         val appEarnedMinutes = prefs.getStringSet(KEY_APP_EARNED_MINUTES, emptySet()).orEmpty()
             .firstOrNull { it.startsWith("$packageName=") }

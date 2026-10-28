@@ -43,6 +43,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -610,7 +611,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var appGroupSelectedPackages by remember { mutableStateOf<Set<String>>(emptySet()) }
     var appPackage by remember { mutableStateOf("") }
     var appDisplayName by remember { mutableStateOf("") }
-    var appDailyLimit by remember { mutableStateOf("60") }
+    var appDailyLimit by remember { mutableStateOf("0") }
     var appLimitEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var appSearchQuery by remember { mutableStateOf("") }
     var appStatusFilter by remember { mutableStateOf("All") }
@@ -4060,6 +4061,24 @@ private fun EduLockApp(repository: EduLockRepository) {
                     filteredInstalledApps.forEach { installed ->
                         val existingRule = allowedApps.firstOrNull { it.packageName == installed.packageName }
                         val appIsEnabled = existingRule?.enabled ?: (child?.kidsModeEnabled != true)
+                        val hasEditedLimit = installedAppLimitEdits.containsKey(installed.packageName)
+                        val limitText = installedAppLimitEdits[installed.packageName]
+                            ?: existingRule?.dailyLimitMinutes?.takeIf { it > 0 }?.toString().orEmpty()
+                        LaunchedEffect(installed.packageName, child?.id, existingRule?.id, existingRule?.dailyLimitMinutes, limitText, hasEditedLimit) {
+                            delay(700)
+                            val selected = child ?: return@LaunchedEffect
+                            if (existingRule == null && !hasEditedLimit) return@LaunchedEffect
+                            val limit = if (limitText.isBlank()) 0 else limitText.toIntOrNull() ?: return@LaunchedEffect
+                            if (limit !in 0..1440 || existingRule?.dailyLimitMinutes == limit) return@LaunchedEffect
+                            execute {
+                                if (existingRule == null) repository.allowInstalledApp(selected.id, installed, limit)
+                                else repository.updateAllowedAppLimit(existingRule.id, limit)
+                                allowedApps = repository.loadAllowedApps(selected.id)
+                                installedAppLimitEdits = installedAppLimitEdits - installed.packageName
+                                notice = if (limit == 0) "${installed.displayName}: no daily cap saved."
+                                    else "${installed.displayName}: ${limit}-minute daily limit saved."
+                            }
+                        }
                         val appGlyph = when {
                             installed.packageName.contains("chrome", true) || installed.displayName.contains("browser", true) -> "🌐"
                             installed.packageName.contains("youtube", true) || installed.displayName.contains("video", true) -> "▶️"
@@ -4081,20 +4100,34 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(9.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(7.dp)
                                 ) {
                                     Box(
-                                        Modifier.size(40.dp).background(
+                                        Modifier.size(36.dp).background(
                                             if (appIsEnabled) Color(0xFFE2F7EC) else Color(0xFFFDE8E8),
-                                            RoundedCornerShape(12.dp)
+                                            RoundedCornerShape(10.dp)
                                         ),
                                         contentAlignment = Alignment.Center
-                                    ) { AppUiText(appGlyph, fontSize = 21.sp) }
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    ) { AppUiText(appGlyph, fontSize = 20.sp) }
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                         AppUiText(installed.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
                                         AppUiText(if (appIsEnabled) "Enabled" else "Disabled",
                                             color = if (appIsEnabled) Color(0xFF16804A) else MaterialTheme.colorScheme.onSurfaceVariant,
                                             style = MaterialTheme.typography.labelSmall)
+                                    }
+                                    if (existingRule != null) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                weeklyScheduleEditIds = if (existingRule.id in weeklyScheduleEditIds)
+                                                    weeklyScheduleEditIds - existingRule.id else weeklyScheduleEditIds + existingRule.id
+                                                if (existingRule.id !in weeklyScheduleEdits) {
+                                                    weeklyScheduleEdits = weeklyScheduleEdits + (existingRule.id to AppWeeklySchedule.parse(existingRule.weeklyScheduleJson))
+                                                }
+                                            },
+                                            enabled = !busy,
+                                            modifier = Modifier.size(width = 40.dp, height = 36.dp),
+                                            contentPadding = PaddingValues(0.dp)
+                                        ) { AppUiText("🗓", fontSize = 17.sp) }
                                     }
                                     Switch(
                                         checked = appIsEnabled,
@@ -4102,7 +4135,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             execute {
                                                 val selected = child ?: throw IllegalStateException("Select a child profile first.")
                                                 if (existingRule == null) {
-                                                    repository.allowInstalledApp(selected.id, installed, 1440)
+                                                    repository.allowInstalledApp(selected.id, installed, 0)
                                                     val created = repository.loadAllowedApps(selected.id).firstOrNull { it.packageName == installed.packageName }
                                                         ?: throw IllegalStateException("App rule was not confirmed by Supabase.")
                                                     if (!checked) repository.updateAllowedAppEnabled(created.id, false)
@@ -4115,108 +4148,68 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         enabled = !busy
                                     )
                                 }
-                                AppUiText(installed.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
-                                if (existingRule == null) {
-                                    var limitText = installedAppLimitEdits[installed.packageName] ?: ""
-                                    Field(limitText, { value ->
-                                        installedAppLimitEdits = installedAppLimitEdits + (installed.packageName to value.filter(Char::isDigit).take(4))
-                                    }, "Daily limit in minutes (1–1440)", keyboardType = KeyboardType.Number)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = limitText,
+                                        onValueChange = { value -> installedAppLimitEdits = installedAppLimitEdits + (installed.packageName to value.filter(Char::isDigit).take(4)) },
+                                        modifier = Modifier.weight(1f).height(56.dp),
+                                        singleLine = true,
+                                        label = { AppUiText("Daily limit (min)") },
+                                        placeholder = { AppUiText("0 = no limit") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                                    )
+                                    AppUiText("0 / blank\n= no cap", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+                                }
+                                if (existingRule != null && existingRule.id in weeklyScheduleEditIds) {
+                                    val schedule = weeklyScheduleEdits[existingRule.id] ?: AppWeeklySchedule.parse(existingRule.weeklyScheduleJson)
+                                    AppUiText("Choose allowed days and hours. Disabled days block this app all day. Times use the child's local 24-hour clock; overnight windows are supported.")
+                                    AppWeeklySchedule.DAY_KEYS.forEachIndexed { dayIndex, dayKey ->
+                                        val dayWindow = schedule.days[dayKey] ?: AppDayWindow(enabled = false)
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = CardDefaults.cardColors(containerColor = if (dayWindow.enabled) Color(0xFFE1F7EF) else Color(0xFFFFEEF0))
+                                        ) {
+                                            Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                                OutlinedButton(
+                                                    onClick = { changeWeeklyWindow(existingRule.id, dayKey) { it.copy(enabled = !it.enabled) } },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) { AppUiText((if (dayWindow.enabled) "✓ " else "○ ") + AppWeeklySchedule.DAY_LABELS[dayIndex] + if (dayWindow.enabled) " • Allowed hours" else " • Blocked all day") }
+                                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    OutlinedTextField(
+                                                        value = dayWindow.start,
+                                                        onValueChange = { value -> changeWeeklyWindow(existingRule.id, dayKey) { it.copy(start = value.filter { c -> c.isDigit() || c == ':' }.take(5)) } },
+                                                        modifier = Modifier.weight(1f), singleLine = true,
+                                                        label = { AppUiText("Start") }, placeholder = { AppUiText("08:00") }
+                                                    )
+                                                    OutlinedTextField(
+                                                        value = dayWindow.end,
+                                                        onValueChange = { value -> changeWeeklyWindow(existingRule.id, dayKey) { it.copy(end = value.filter { c -> c.isDigit() || c == ':' }.take(5)) } },
+                                                        modifier = Modifier.weight(1f), singleLine = true,
+                                                        label = { AppUiText("End") }, placeholder = { AppUiText("20:00") }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                     Button(
                                         onClick = {
                                             execute {
-                                                val limit = (installedAppLimitEdits[installed.packageName] ?: "").toIntOrNull()
-                                                    ?: throw IllegalArgumentException("Enter a daily limit from 1 to 1440 minutes.")
-                                                require(limit in 1..1440) { "Daily limit must be between 1 and 1440 minutes." }
-                                                val selected = child ?: throw IllegalStateException("Select a child profile first.")
-                                                repository.allowInstalledApp(selected.id, installed, limit)
-                                                allowedApps = repository.loadAllowedApps(selected.id)
-                                                notice = "App rule saved with a $limit-minute daily limit. It remains allowed unless you disable it; the child phone applies updates after syncing."
+                                                val edited = weeklyScheduleEdits[existingRule.id] ?: AppWeeklySchedule.parse(existingRule.weeklyScheduleJson)
+                                                repository.updateAllowedAppWeeklySchedule(existingRule.id, edited)
+                                                allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
+                                                weeklyScheduleEditIds = weeklyScheduleEditIds - existingRule.id
+                                                weeklyScheduleEdits = weeklyScheduleEdits - existingRule.id
+                                                notice = "Weekly timetable saved. The child's device applies it after syncing."
                                             }
                                         },
                                         enabled = !busy,
                                         modifier = Modifier.fillMaxWidth()
-                                    ) { AppUiText("Save app limit") }
-                                } else {
-                                    AppUiText(if (!existingRule.enabled) "Blocked by parent" else if (existingRule.dailyLimitMinutes >= 1440) "Allowed • no practical daily cap" else "Allowed • ${existingRule.dailyLimitMinutes} minutes/day")
-                                    Field(
-                                        installedAppLimitEdits[installed.packageName] ?: existingRule.dailyLimitMinutes.toString(),
-                                        { value -> installedAppLimitEdits = installedAppLimitEdits + (installed.packageName to value.filter(Char::isDigit).take(4)) },
-                                        "Daily limit in minutes (1–1440; 1440 = no practical cap)",
-                                        keyboardType = KeyboardType.Number
-                                    )
-                                    Button(onClick = {
-                                        execute {
-                                            val limit = (installedAppLimitEdits[installed.packageName] ?: existingRule.dailyLimitMinutes.toString()).toIntOrNull()
-                                                ?: throw IllegalArgumentException("Enter a daily limit from 1 to 1440 minutes.")
-                                            require(limit in 1..1440) { "Daily limit must be between 1 and 1440 minutes." }
-                                            repository.updateAllowedAppLimit(existingRule.id, limit)
-                                            allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
-                                            installedAppLimitEdits = installedAppLimitEdits - installed.packageName
-                                            notice = "Daily limit saved. The child's phone applies it after syncing."
-                                        }
-                                    }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Save limit") }
-                                    OutlinedButton(
-                                        onClick = {
-                                            weeklyScheduleEditIds = if (existingRule.id in weeklyScheduleEditIds)
-                                                weeklyScheduleEditIds - existingRule.id else weeklyScheduleEditIds + existingRule.id
-                                            if (existingRule.id !in weeklyScheduleEdits) {
-                                                weeklyScheduleEdits = weeklyScheduleEdits + (
-                                                    existingRule.id to AppWeeklySchedule.parse(existingRule.weeklyScheduleJson)
-                                                )
-                                            }
-                                        },
-                                        enabled = !busy,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) { AppUiText(if (existingRule.id in weeklyScheduleEditIds) "Hide weekly timetable" else "🗓 Set weekly timetable (24-hour clock)") }
-                                    if (existingRule.id in weeklyScheduleEditIds) {
-                                        val schedule = weeklyScheduleEdits[existingRule.id]
-                                            ?: AppWeeklySchedule.parse(existingRule.weeklyScheduleJson)
-                                        AppUiText("Select allowed weekdays and start/end time. Disabled days block this app all day. Times use the child's phone local clock; overnight windows are supported.")
-                                        AppWeeklySchedule.DAY_KEYS.forEachIndexed { dayIndex, dayKey ->
-                                            val dayWindow = schedule.days[dayKey] ?: AppDayWindow(enabled = false)
-                                            Card(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                shape = RoundedCornerShape(14.dp),
-                                                colors = CardDefaults.cardColors(containerColor = if (dayWindow.enabled) Color(0xFFE1F7EF) else Color(0xFFFFEEF0))
-                                            ) {
-                                                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                    OutlinedButton(
-                                                        onClick = { changeWeeklyWindow(existingRule.id, dayKey) { it.copy(enabled = !it.enabled) } },
-                                                        modifier = Modifier.fillMaxWidth()
-                                                    ) { AppUiText((if (dayWindow.enabled) "✓ " else "○ ") + AppWeeklySchedule.DAY_LABELS[dayIndex] +
-                                                        if (dayWindow.enabled) " • Allowed hours" else " • Blocked all day") }
-                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                        OutlinedTextField(
-                                                            value = dayWindow.start,
-                                                            onValueChange = { value -> changeWeeklyWindow(existingRule.id, dayKey) { it.copy(start = value.filter { c -> c.isDigit() || c == ':' }.take(5)) } },
-                                                            modifier = Modifier.weight(1f), singleLine = true,
-                                                            label = { AppUiText("Start (HH:mm)") }, placeholder = { AppUiText("08:00") }
-                                                        )
-                                                        OutlinedTextField(
-                                                            value = dayWindow.end,
-                                                            onValueChange = { value -> changeWeeklyWindow(existingRule.id, dayKey) { it.copy(end = value.filter { c -> c.isDigit() || c == ':' }.take(5)) } },
-                                                            modifier = Modifier.weight(1f), singleLine = true,
-                                                            label = { AppUiText("End (HH:mm)") }, placeholder = { AppUiText("20:00") }
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        Button(
-                                            onClick = {
-                                                execute {
-                                                    val edited = weeklyScheduleEdits[existingRule.id] ?: AppWeeklySchedule.parse(existingRule.weeklyScheduleJson)
-                                                    repository.updateAllowedAppWeeklySchedule(existingRule.id, edited)
-                                                    allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
-                                                    weeklyScheduleEditIds = weeklyScheduleEditIds - existingRule.id
-                                                    weeklyScheduleEdits = weeklyScheduleEdits - existingRule.id
-                                                    notice = "Weekly timetable saved. The child's device applies it after syncing."
-                                                }
-                                            },
-                                            enabled = !busy,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) { AppUiText("Save weekly timetable") }
-                                    }
+                                    ) { AppUiText("Save weekly timetable") }
                                 }
                             }
                         }
@@ -4246,45 +4239,120 @@ private fun EduLockApp(repository: EduLockRepository) {
                             !app.displayName.equals("Ad Privacy", ignoreCase = true) &&
                             !app.displayName.equals("AgingFunction", ignoreCase = true)
                     }.forEach { app ->
+                        val hasEditedLimit = appLimitEdits.containsKey(app.id)
+                        val limitText = appLimitEdits[app.id] ?: app.dailyLimitMinutes.takeIf { it > 0 }?.toString().orEmpty()
+                        LaunchedEffect(app.id, child?.id, app.dailyLimitMinutes, limitText, hasEditedLimit) {
+                            delay(700)
+                            if (!hasEditedLimit) return@LaunchedEffect
+                            val limit = if (limitText.isBlank()) 0 else limitText.toIntOrNull() ?: return@LaunchedEffect
+                            if (limit !in 0..1440 || limit == app.dailyLimitMinutes) return@LaunchedEffect
+                            execute {
+                                repository.updateAllowedAppLimit(app.id, limit)
+                                allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
+                                appLimitEdits = appLimitEdits - app.id
+                                notice = if (limit == 0) "${app.displayName}: no daily cap saved." else "${app.displayName}: ${limit}-minute daily limit saved."
+                            }
+                        }
                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                AppUiText(app.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
-                                AppUiText(app.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Field(
-                                    appLimitEdits[app.id] ?: app.dailyLimitMinutes.toString(),
-                                    { newValue -> appLimitEdits = appLimitEdits + (app.id to newValue.filter(Char::isDigit).take(4)) },
-                                    "Daily limit in minutes (1–1440)",
-                                    keyboardType = KeyboardType.Number
-                                )
-                                Button(onClick = {
-                                    execute {
-                                        val limit = (appLimitEdits[app.id] ?: app.dailyLimitMinutes.toString()).toIntOrNull()
-                                            ?: throw IllegalArgumentException("Enter a daily limit from 1 to 1440 minutes.")
-                                        require(limit in 1..1440) { "Daily limit must be between 1 and 1440 minutes." }
-                                        repository.updateAllowedAppLimit(app.id, limit)
-                                        allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
-                                        appLimitEdits = appLimitEdits - app.id
-                                        notice = "Daily limit updated. Sync the child's device to apply the change."
+                            Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                    Box(
+                                        Modifier.size(36.dp).background(if (app.enabled) Color(0xFFE2F7EC) else Color(0xFFFDE8E8), RoundedCornerShape(10.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) { AppUiText("📱", fontSize = 20.sp) }
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                        AppUiText(app.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
+                                        AppUiText(if (app.enabled) "Enabled" else "Disabled", color = if (app.enabled) Color(0xFF16804A) else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
                                     }
-                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Save daily limit") }
-                                OutlinedButton(
-                                    onClick = {
-                                        execute {
-                                            repository.updateAllowedAppEnabled(app.id, !app.enabled)
-                                            allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
-                                            notice = if (app.enabled) "App disabled for this child. Sync the child's device to apply the change."
-                                                else "App enabled for this child. Sync the child's device to apply the change."
+                                    OutlinedButton(
+                                        onClick = {
+                                            weeklyScheduleEditIds = if (app.id in weeklyScheduleEditIds) weeklyScheduleEditIds - app.id else weeklyScheduleEditIds + app.id
+                                            if (app.id !in weeklyScheduleEdits) weeklyScheduleEdits = weeklyScheduleEdits + (app.id to AppWeeklySchedule.parse(app.weeklyScheduleJson))
+                                        },
+                                        enabled = !busy,
+                                        modifier = Modifier.size(width = 40.dp, height = 36.dp),
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) { AppUiText("🗓", fontSize = 17.sp) }
+                                    Switch(
+                                        checked = app.enabled,
+                                        onCheckedChange = { checked ->
+                                            execute {
+                                                repository.updateAllowedAppEnabled(app.id, checked)
+                                                allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
+                                                notice = if (checked) "${app.displayName} enabled; applies after child sync." else "${app.displayName} disabled; applies after child sync."
+                                            }
+                                        },
+                                        enabled = !busy
+                                    )
+                                }
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(
+                                        value = limitText,
+                                        onValueChange = { value -> appLimitEdits = appLimitEdits + (app.id to value.filter(Char::isDigit).take(4)) },
+                                        modifier = Modifier.weight(1f).height(56.dp),
+                                        singleLine = true,
+                                        label = { AppUiText("Daily limit (min)") },
+                                        placeholder = { AppUiText("0 = no limit") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                                    )
+                                    OutlinedButton(
+                                        onClick = {
+                                            execute {
+                                                repository.deleteAllowedApp(app.id)
+                                                allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
+                                            }
+                                        },
+                                        enabled = !busy,
+                                        modifier = Modifier.height(40.dp)
+                                    ) { AppUiText("Remove") }
+                                }
+                                if (app.id in weeklyScheduleEditIds) {
+                                    val schedule = weeklyScheduleEdits[app.id] ?: AppWeeklySchedule.parse(app.weeklyScheduleJson)
+                                    AppUiText("Choose allowed days and hours. Disabled days block this app all day. Times use the child's local 24-hour clock.")
+                                    AppWeeklySchedule.DAY_KEYS.forEachIndexed { dayIndex, dayKey ->
+                                        val dayWindow = schedule.days[dayKey] ?: AppDayWindow(enabled = false)
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = CardDefaults.cardColors(containerColor = if (dayWindow.enabled) Color(0xFFE1F7EF) else Color(0xFFFFEEF0))
+                                        ) {
+                                            Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                                OutlinedButton(
+                                                    onClick = { changeWeeklyWindow(app.id, dayKey) { it.copy(enabled = !it.enabled) } },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) { AppUiText((if (dayWindow.enabled) "✓ " else "○ ") + AppWeeklySchedule.DAY_LABELS[dayIndex] + if (dayWindow.enabled) " • Allowed hours" else " • Blocked all day") }
+                                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    OutlinedTextField(
+                                                        value = dayWindow.start,
+                                                        onValueChange = { value -> changeWeeklyWindow(app.id, dayKey) { it.copy(start = value.filter { c -> c.isDigit() || c == ':' }.take(5)) } },
+                                                        modifier = Modifier.weight(1f), singleLine = true,
+                                                        label = { AppUiText("Start") }, placeholder = { AppUiText("08:00") }
+                                                    )
+                                                    OutlinedTextField(
+                                                        value = dayWindow.end,
+                                                        onValueChange = { value -> changeWeeklyWindow(app.id, dayKey) { it.copy(end = value.filter { c -> c.isDigit() || c == ':' }.take(5)) } },
+                                                        modifier = Modifier.weight(1f), singleLine = true,
+                                                        label = { AppUiText("End") }, placeholder = { AppUiText("20:00") }
+                                                    )
+                                                }
+                                            }
                                         }
-                                    },
-                                    enabled = !busy,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { AppUiText(if (app.enabled) "Disable this app on child's device" else "Allow this app on child's device") }
-                                OutlinedButton(onClick = {
-                                    execute {
-                                        repository.deleteAllowedApp(app.id)
-                                        allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
                                     }
-                                }, modifier = Modifier.fillMaxWidth()) { AppUiText("Remove app") }
+                                    Button(
+                                        onClick = {
+                                            execute {
+                                                val edited = weeklyScheduleEdits[app.id] ?: AppWeeklySchedule.parse(app.weeklyScheduleJson)
+                                                repository.updateAllowedAppWeeklySchedule(app.id, edited)
+                                                allowedApps = child?.let { repository.loadAllowedApps(it.id) } ?: emptyList()
+                                                weeklyScheduleEditIds = weeklyScheduleEditIds - app.id
+                                                weeklyScheduleEdits = weeklyScheduleEdits - app.id
+                                                notice = "Weekly timetable saved. The child's device applies it after syncing."
+                                            }
+                                        },
+                                        enabled = !busy,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { AppUiText("Save weekly timetable") }
+                                }
                             }
                         }
                     }
@@ -4465,11 +4533,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                             val usedMs = lockPrefs.getLong("app_used_millis_" + app.packageName, 0L).coerceAtLeast(0L)
                             val earnedMs = lockPrefs.getStringSet("app_earned_minutes", emptySet()).orEmpty()
                                 .firstOrNull { it.startsWith(app.packageName + "=") }?.substringAfter("=")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
-                            val remaining = (app.dailyLimitMinutes + earnedMs - (usedMs / 60_000L).toInt()).coerceAtLeast(0)
+                            val remaining = if (app.dailyLimitMinutes <= 0) Int.MAX_VALUE else (app.dailyLimitMinutes + earnedMs - (usedMs / 60_000L).toInt()).coerceAtLeast(0)
                             val hasTask = tasks.any { it.rewardToBank } ||
                                 tasks.any { it.rewardPackageName == app.packageName } ||
                                 tasks.any { task -> !task.rewardGroupId.isNullOrBlank() && appGroups.any { it.id == task.rewardGroupId && app.packageName in it.packageNames } }
-                            val status = if (remaining <= 0) "Time's up • answer to unlock" else "$remaining min left"
+                            val status = if (app.dailyLimitMinutes <= 0) "No app-specific daily cap" else if (remaining <= 0) "Time's up • answer to unlock" else "$remaining min left"
                             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {

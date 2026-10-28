@@ -157,7 +157,7 @@ data class AllowedApp(
     val packageName: String,
     val displayName: String,
     val enabled: Boolean = true,
-    val dailyLimitMinutes: Int = 1440,
+    val dailyLimitMinutes: Int = 0,
     val weeklyScheduleJson: String = "{}"
 )
 
@@ -1635,7 +1635,7 @@ class EduLockRepository(context: Context) {
 
     suspend fun allowInstalledApp(childId: String, app: ChildInstalledApp, limitMinutes: Int) {
         requireSession("parent")
-        require(limitMinutes in 1..1440) { "Daily app limit must be between 1 and 1440 minutes." }
+        require(limitMinutes in 0..1440) { "Daily app limit must be between 0 and 1440 minutes." }
         val existing = restArray("allowed_apps?select=id&child_id=eq.$childId&package_name=eq.${app.packageName}")
         if (existing.length() > 0) {
             val id = existing.optJSONObject(0)?.optString("id")
@@ -1677,7 +1677,7 @@ class EduLockRepository(context: Context) {
                     packageName = row.optString("package_name"),
                     displayName = row.optString("display_name"),
                     enabled = row.optBoolean("enabled", true),
-                    dailyLimitMinutes = row.optInt("daily_limit_minutes", 1440).coerceIn(1, 1440),
+                    dailyLimitMinutes = row.optInt("daily_limit_minutes", 0).coerceIn(0, 1440),
                     weeklyScheduleJson = row.optJSONObject("weekly_schedule")?.toString() ?: "{}"
                 )
             }
@@ -1687,7 +1687,7 @@ class EduLockRepository(context: Context) {
     suspend fun addAllowedApp(childId: String, packageName: String, displayName: String, dailyLimitMinutes: Int) {
         requireSession("parent")
         require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
-        require(dailyLimitMinutes in 1..1440) { "Daily app limit must be between 1 and 1440 minutes." }
+        require(dailyLimitMinutes in 0..1440) { "Daily app limit must be between 0 and 1440 minutes." }
         val normalizedPackage = packageName.trim()
         require(normalizedPackage.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+"))) {
             "Enter a valid Android package name, for example com.example.app"
@@ -1706,7 +1706,7 @@ class EduLockRepository(context: Context) {
     suspend fun updateAllowedAppLimit(appId: String, dailyLimitMinutes: Int) {
         requireSession("parent")
         require(appId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid app rule." }
-        require(dailyLimitMinutes in 1..1440) { "Daily app limit must be between 1 and 1440 minutes." }
+        require(dailyLimitMinutes in 0..1440) { "Daily app limit must be between 0 and 1440 minutes." }
         restArray("allowed_apps?id=eq.$appId", "PATCH", JSONObject().put("daily_limit_minutes", dailyLimitMinutes))
         val row = restArray("allowed_apps?select=id,daily_limit_minutes&id=eq.$appId&limit=1").optJSONObject(0)
             ?: throw IOException("Supabase did not confirm the app daily limit was saved.")
@@ -1835,7 +1835,7 @@ class EduLockRepository(context: Context) {
         val allowed = appRules.filter { it.enabled }.map { it.packageName }.toMutableSet()
         allowed += "com.edulock.app"
         val blocked = appRules.filter { !it.enabled }.map { it.packageName }.toSet()
-        val appLimits = appRules.filter { it.enabled }.map { it.packageName + "=" + it.dailyLimitMinutes }.toSet()
+        val appLimits = appRules.filter { it.enabled && it.dailyLimitMinutes > 0 }.map { it.packageName + "=" + it.dailyLimitMinutes }.toSet()
         val weeklySchedules = appRules.filter { rule ->
             try { JSONObject(rule.weeklyScheduleJson).length() > 0 } catch (_: Exception) { false }
         }.map { it.packageName + "=" + it.weeklyScheduleJson }.toSet()
