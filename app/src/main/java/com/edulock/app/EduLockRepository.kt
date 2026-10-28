@@ -233,7 +233,8 @@ data class TaskResult(
     val awardedMinutes: Int,
     val dailyUsedMinutes: Int,
     val dailyCapMinutes: Int,
-    val rewardToBank: Boolean = false
+    val rewardToBank: Boolean = false,
+    val pendingSync: Boolean = false
 )
 
 data class RewardBankRedemption(
@@ -1288,10 +1289,19 @@ class EduLockRepository(context: Context) {
             answerLanguages[questionId]?.takeIf { it.isNotBlank() }?.let { row.put("language_code", it.take(16)) }
             payload.put(row)
         }
-        val response = requestFunction(
-            "submit-task-attempt",
-            JSONObject().put("task_id", taskId).put("answers", payload)
-        )
+        val requestBody = JSONObject().put("task_id", taskId).put("answers", payload)
+        val response = try {
+            requestFunction("submit-task-attempt", requestBody)
+        } catch (error: IOException) {
+            // Keep the completed attempt on-device. The server will grade it and
+            // calculate rewards after connectivity returns; never fabricate rewards offline.
+            enqueueOfflineAttempt(requestBody)
+            return TaskResult(
+                scorePercent = 0, passed = false, awardedMinutes = 0,
+                dailyUsedMinutes = 0, dailyCapMinutes = 0,
+                rewardToBank = false, pendingSync = true
+            )
+        }
         return TaskResult(
             scorePercent = response.optInt("score_percent", 0).coerceIn(0, 100),
             passed = response.optBoolean("passed", false),
@@ -1301,6 +1311,55 @@ class EduLockRepository(context: Context) {
             rewardToBank = response.optBoolean("reward_to_bank", false)
         )
     }
+
+    private fun enqueueOfflineAttempt(body: JSONObject) {
+        synchronized(offlineAttemptQueue) {
+            val current = try {
+                JSONArray(offlineAttemptQueue.getString("pending", "[]"))
+            } catch (_: Exception) { JSONArray() }
+            val taskId = body.optString("task_id")
+            // A task can only have one pending completion; replace the queued draft
+            // rather than accidentally granting duplicate rewards on retries.
+            val next = JSONArray()
+            for (i in 0 until current.length()) {
+                val item = current.optJSONObject(i) ?: continue
+                if (item.optString("task_id") != taskId) next.put(item)
+            }
+            next.put(body)
+            offlineAttemptQueue.edit().putString("pending", next.toString()).commit()
+        }
+    }
+
+    suspend fun syncPendingOfflineAttempts(): Int {
+        requireSession("child")
+        synchronized(offlineAttemptQueue) {
+            // Read under lock; network work happens below.
+        }
+        val current = try {
+            JSONArray(offlineAttemptQueue.getString("pending", "[]"))
+        } catch (_: Exception) { JSONArray() }
+        if (current.length() == 0) return 0
+        val remaining = JSONArray()
+        var synced = 0
+        for (i in 0 until current.length()) {
+            val item = current.optJSONObject(i) ?: continue
+            try {
+                requestFunction("submit-task-attempt", item)
+                synced++
+            } catch (error: IOException) {
+                remaining.put(item)
+            } catch (error: Exception) {
+                // Keep rejected items for review instead of silently losing a child's work.
+                remaining.put(item)
+            }
+        }
+        offlineAttemptQueue.edit().putString("pending", remaining.toString()).commit()
+        return synced
+    }
+
+    fun pendingOfflineAttemptCount(): Int = try {
+        JSONArray(offlineAttemptQueue.getString("pending", "[]")).length()
+    } catch (_: Exception) { 0 }
 
     /** Load recent attempts for parent progress/report screens. */
     suspend fun loadAttempts(): List<AttemptRow> {
@@ -1327,6 +1386,7 @@ class EduLockRepository(context: Context) {
     ): List<TaskRow> {
         requireSession("child")
         val rows = restArray("tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id,time_limit_seconds,question_time_limit_seconds,reward_to_bank,target_grade_level,target_age_years&child_id=eq.$childId&active=eq.true&order=created_at.desc")
+        try { syncPendingOfflineAttempts() } catch (_: Exception) { /* retain queued work until a later online read */ }
         return (0 until rows.length()).mapNotNull { i -> rows.optJSONObject(i)?.toTaskRow() }
             .filter { task ->
                 (schoolGrade == null || task.targetGradeLevel == schoolGrade) &&
@@ -1859,6 +1919,10 @@ class EduLockRepository(context: Context) {
     private suspend fun authRequest(path: String, body: JSONObject): JSONObject {
         val result = send(path, "POST", body, authenticated = false, profile = false, allowRefresh = false)
         return result as? JSONObject ?: throw IOException("The authentication server returned an unexpected response")
+    }
+
+    private val offlineAttemptQueue by lazy {
+        appContext.getSharedPreferences("edulock_offline_attempt_queue_v1", Context.MODE_PRIVATE)
     }
 
     private val offlineReadCache by lazy {
