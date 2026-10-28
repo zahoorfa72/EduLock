@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     const { data: bankQuestions, error: bankError } = await admin.schema("edulock")
       .from("curriculum_questions").select("*").in("id", ids).eq("active", true)
       .in("country_code", [countryCode, "ZZ"])
-      .gte("grade_level", 0).lte("grade_level", 13)
+      .eq("grade_level", grade)
       .eq("subject_code", subjectCode).in("language_code", [...new Set(language === "en" ? ["en"] : [language, "en"])])
       .lte("age_min", age).gte("age_max", age);
     if (bankError) {
@@ -114,6 +114,9 @@ Deno.serve(async (req) => {
       answer_key: q.answer_key ?? {},
       language_code: q.language_code,
       concept_key: q.concept_key || q.topic || "general",
+      grade_level: q.grade_level,
+      age_min: q.age_min,
+      age_max: q.age_max,
     }));
     const { data: imported, error: importError } = await admin.schema("edulock").from("questions")
       .upsert(rows, { onConflict: "subject_id,curriculum_question_id", ignoreDuplicates: true })
@@ -123,15 +126,20 @@ Deno.serve(async (req) => {
       return json({ error: "Could not import these curriculum questions" }, 500);
     }
 
-    // Make the selected curriculum usable immediately on the child's device:
-    // create or refresh one active task for this child's country/grade/subject.
-    const { count: totalQuestions, error: countError } = await admin.schema("edulock")
-      .from("questions").select("id", { count: "exact", head: true }).eq("subject_id", subject.id);
+    // Only link questions that match both the selected class and this child's exact age.
+    const { data: eligibleQuestions, error: countError } = await admin.schema("edulock")
+      .from("questions").select("id")
+      .eq("subject_id", subject.id).eq("grade_level", grade)
+      .lte("age_min", age).gte("age_max", age)
+      .order("created_at").limit(500);
     if (countError) {
       console.error("Curriculum question count failed", countError.code, countError.message);
-      return json({ error: "Questions were imported, but the learning task could not be prepared. Open Assign Task to create it." }, 500);
+      return json({ error: "Questions were imported, but the matching task could not be prepared. Open Assign Task to create it." }, 500);
     }
-    const questionCount = Math.max(1, Math.min(totalQuestions ?? questions.length, 500));
+    if (!eligibleQuestions?.length) {
+      return json({ error: "The selected questions do not match this child's grade and age. Choose matching questions and try again." }, 400);
+    }
+    const questionCount = eligibleQuestions.length;
     const taskTitle = "Curriculum practice — " + String(first.subject_name) + " — Grade " + String(grade);
     const dailyCap = Math.max(0, Math.min(Number(child.daily_cap_minutes ?? 60), 1440));
     const { data: existingTask, error: taskLookupError } = await admin.schema("edulock")
@@ -145,6 +153,8 @@ Deno.serve(async (req) => {
     let taskId = existingTask?.id as string | undefined;
     if (taskId) {
       const { error: taskUpdateError } = await admin.schema("edulock").from("tasks").update({
+        target_grade_level: grade,
+        target_age_years: age,
         question_count: questionCount,
         pass_percent: 70,
         reward_minutes: Math.min(10, dailyCap),
@@ -161,6 +171,8 @@ Deno.serve(async (req) => {
           family_id: child.family_id,
           child_id: childId,
           subject_id: subject.id,
+          target_grade_level: grade,
+          target_age_years: age,
           title: taskTitle,
           question_count: questionCount,
           pass_percent: 70,
@@ -173,6 +185,25 @@ Deno.serve(async (req) => {
         return json({ error: "Questions were imported, but the learning task could not be created. Open Assign Task to create it." }, 500);
       }
       taskId = createdTask.id;
+    }
+
+    // Replace links atomically enough for this admin workflow so this task
+    // contains only the selected grade/age questions, even if the subject has mixed imports.
+    const { error: clearLinksError } = await admin.schema("edulock").from("task_questions")
+      .delete().eq("task_id", taskId);
+    if (clearLinksError) {
+      console.error("Old task question links could not be cleared", clearLinksError.code, clearLinksError.message);
+      return json({ error: "Questions were imported, but the age-matched task could not be refreshed." }, 500);
+    }
+    const links = eligibleQuestions.map((q: any, index: number) => ({
+      task_id: taskId,
+      question_id: q.id,
+      sort_order: index,
+    }));
+    const { error: linkError } = await admin.schema("edulock").from("task_questions").insert(links);
+    if (linkError) {
+      console.error("Age-matched task question links could not be saved", linkError.code, linkError.message);
+      return json({ error: "Questions were imported, but the age-matched task could not be prepared." }, 500);
     }
 
     return json({
