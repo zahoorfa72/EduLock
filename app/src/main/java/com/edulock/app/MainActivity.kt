@@ -3017,6 +3017,33 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                         AppUiText((index + 1).toString() + ". " + question.prompt, fontWeight = FontWeight.SemiBold)
+                                        val savedTranslationsForQuestion = questionTranslations[question.id].orEmpty()
+                                        if (savedTranslationsForQuestion.isNotEmpty()) {
+                                            savedTranslationsForQuestion.forEach { savedTranslation ->
+                                                CompositionLocalProvider(LocalLayoutDirection provides directionFor(savedTranslation.languageCode)) {
+                                                    Surface(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        color = MaterialTheme.colorScheme.surface,
+                                                        tonalElevation = 1.dp
+                                                    ) {
+                                                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                            AppUiText(
+                                                                "Translation • " + languageLabel(savedTranslation.languageCode) + " (" + savedTranslation.languageCode + ")",
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = MaterialTheme.colorScheme.primary
+                                                            )
+                                                            AppUiText(savedTranslation.prompt, fontWeight = FontWeight.SemiBold)
+                                                            if (savedTranslation.options.isNotEmpty()) {
+                                                                AppUiText(savedTranslation.options.mapIndexed { optionIndex, option ->
+                                                                    (optionIndex + 1).toString() + ". " + option
+                                                                }.joinToString("\\n"))
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                         AppUiText("Type: " + readableQuestionType(question.questionType))
                                         AppUiText("Level: Grade " + question.gradeLevel + " • Suitable ages " + question.ageMin + "–" + question.ageMax)
                                         AppUiText("Language: " + question.languageCode + " • Concept tag: " + question.conceptKey)
@@ -3047,7 +3074,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             }
                                         }
                                         if (question.options.isNotEmpty()) AppUiText("Options: " + question.options.joinToString(" • "))
-                                        AppUiText("Translations: " + (questionTranslations[question.id]?.size ?: 0))
+                                        AppUiText(
+                                            if (savedTranslationsForQuestion.isEmpty()) "Translations: none saved yet"
+                                            else "Translations available above: " + savedTranslationsForQuestion.joinToString(", ") { it.languageCode },
+                                            color = if (savedTranslationsForQuestion.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
+                                        )
                                         questionSolutions[question.id]?.let { solution ->
                                             AppUiText("Worked solution", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                             AppUiText(solution)
