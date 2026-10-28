@@ -2351,15 +2351,6 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 ) { AppUiText("Save educational game limit") }
                                 OutlinedButton(
                                     onClick = {
-                                        studyTrackPickerTarget = "existing-child"
-                                        studyTrackChildId = child.id
-                                        studyTrackPickerOpen = true
-                                    },
-                                    enabled = !busy,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { AppUiText("🕊 Religious education: " + studyTrackLabel(child.studyTrack)) }
-                                OutlinedButton(
-                                    onClick = {
                                         selectedChild = child
                                         curriculumCountryCode = child.countryCode
                                         curriculumGradeLevel = child.schoolGrade.toString()
@@ -2373,7 +2364,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     enabled = !busy,
                                     modifier = Modifier.fillMaxWidth()
                                 ) { AppUiText("📚  Country syllabus & question bank") }
-                                AppUiText("Device link: generate a one-time code on the child's first setup.")
+                                AppUiText("Device & learning controls", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 OutlinedButton(onClick = {
                                     selectedChild = child
                                     lastPairingCode = ""
