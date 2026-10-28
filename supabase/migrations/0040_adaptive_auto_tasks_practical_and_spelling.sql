@@ -214,20 +214,21 @@ create or replace function edulock.adaptive_question_candidates(
   p_child_id uuid, p_subject_ids uuid[], p_grade integer, p_age integer, p_limit integer default 20
 ) returns table(question_id uuid, concept_key text, priority numeric, reason text)
 language sql stable security definer set search_path = ''
-as $
+as $$ 
   with eligible as (
     select q.id, q.concept_key, q.subject_id, q.created_at, q.difficulty_level,
       coalesce(cp.focus_score, 0)::numeric as focus_score,
-      cp.next_review_at,
-      cp.last_question_id
+      cp.next_review_at
     from edulock.questions q
     left join edulock.child_concept_progress cp
-      on cp.child_id = p_child_id and cp.concept_key = coalesce(nullif(q.concept_key,''),'general')
+      on cp.child_id = p_child_id
+     and cp.subject_id = q.subject_id
+     and cp.concept_key = coalesce(nullif(q.concept_key,''),'general')
     where q.subject_id = any(p_subject_ids)
       and q.learning_mode = 'written'
       and q.grade_level = p_grade
       and p_age between q.age_min and q.age_max
-      and (cp.next_review_at is null or cp.next_review_at <= now() or cp.focus_score > 0)
+      and (cp.next_review_at is null or cp.next_review_at <= now() or coalesce(cp.focus_score,0) > 0)
   )
   select e.id, coalesce(nullif(e.concept_key,''),'general'),
     (e.focus_score * 10)
@@ -244,7 +245,7 @@ as $
       + case when e.next_review_at is not null and e.next_review_at <= now() then 5 else 0 end desc,
     e.created_at desc, e.id
   limit greatest(1, least(coalesce(p_limit,20),100));
-$;
+$$;
 revoke all on function edulock.adaptive_question_candidates(uuid, uuid[], integer, integer, integer) from public, anon, authenticated;
 grant execute on function edulock.adaptive_question_candidates(uuid, uuid[], integer, integer, integer) to service_role;
 
