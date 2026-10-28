@@ -3855,18 +3855,22 @@ private fun EduLockApp(repository: EduLockRepository) {
                     AppUiText("Optional interactive 4D model", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     AppUiText("Choose a model to attach a touch-friendly learning visual to your question.")
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(
-                            "none" to "No model",
-                            "atom" to "⚛ Atom",
-                            "molecule" to "🧪 Molecule",
-                            "geometry" to "📐 4D exploded shapes",
-                            "cell" to "🧬 Cell",
-                            "force" to "🏀 Forces",
-                            "water-cycle" to "🌧 Water cycle",
-                            "earth" to "🌍 Earth",
-                            "circuit" to "⚡ Circuit",
-                            "solar-system" to "🪐 Solar System"
-                        ).chunked(2).forEach { group ->
+                        val subjectTitleForModel = selectedSubject?.title.orEmpty()
+                            .substringBefore(" — Grade ").trim().lowercase(Locale.ROOT)
+                        val subjectModels = when {
+                            subjectTitleForModel.contains("math") -> listOf("geometry" to "📐 4D exploded shapes")
+                            subjectTitleForModel.contains("chem") -> listOf("atom" to "⚛ Atom", "molecule" to "🧪 Molecule")
+                            subjectTitleForModel.contains("physics") -> listOf("force" to "🏀 Forces", "circuit" to "⚡ Circuit")
+                            subjectTitleForModel.contains("biology") -> listOf("cell" to "🧬 Cell")
+                            subjectTitleForModel.contains("geography") || subjectTitleForModel.contains("earth") -> listOf("earth" to "🌍 Earth", "water-cycle" to "🌧 Water cycle")
+                            subjectTitleForModel.contains("science") -> listOf("atom" to "⚛ Atom", "molecule" to "🧪 Molecule", "cell" to "🧬 Cell", "water-cycle" to "🌧 Water cycle", "earth" to "🌍 Earth")
+                            else -> emptyList()
+                        }
+                        val questionModelOptions = listOf("none" to "No model") + subjectModels
+                        if (question3DModel != "none" && subjectModels.none { it.first == question3DModel }) {
+                            question3DModel = "none"
+                        }
+                        questionModelOptions.chunked(2).forEach { group ->
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 group.forEach { (model, label) ->
                                     OutlinedButton(onClick = { question3DModel = model }, enabled = !busy, modifier = Modifier.weight(1f)) {
