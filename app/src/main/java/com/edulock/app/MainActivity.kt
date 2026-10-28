@@ -3333,11 +3333,29 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                         tonalElevation = 1.dp
                                                     ) {
                                                         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                            AppUiText(
-                                                                "Translation • " + languageLabel(savedTranslation.languageCode) + " (" + savedTranslation.languageCode + ")",
-                                                                fontWeight = FontWeight.Bold,
-                                                                color = MaterialTheme.colorScheme.primary
-                                                            )
+                                                            Row(
+                                                                Modifier.fillMaxWidth(),
+                                                                verticalAlignment = Alignment.CenterVertically,
+                                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                            ) {
+                                                                Column(Modifier.weight(1f)) {
+                                                                    AppUiText(
+                                                                        "Translation • " + languageLabel(savedTranslation.languageCode) + " (" + savedTranslation.languageCode + ")",
+                                                                        fontWeight = FontWeight.Bold,
+                                                                        color = MaterialTheme.colorScheme.primary
+                                                                    )
+                                                                }
+                                                                TextButton(
+                                                                    onClick = {
+                                                                        translationEditorQuestionId = question.id
+                                                                        translationLanguage = savedTranslation.languageCode
+                                                                        translationPrompt = savedTranslation.prompt
+                                                                        translationOptions = if (question.questionType == "matching") "" else savedTranslation.options.joinToString("\n")
+                                                                        translationAcceptedAnswers = ""
+                                                                    },
+                                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 3.dp)
+                                                                ) { AppUiText("Edit", fontSize = 12.sp) }
+                                                            }
                                                             AppUiText(savedTranslation.prompt, fontWeight = FontWeight.SemiBold)
                                                             if (savedTranslation.options.isNotEmpty()) {
                                                                 AppUiText(savedTranslation.options.mapIndexed { optionIndex, option ->
