@@ -1373,6 +1373,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 dailyCapMinutes = dailyTaskCapMinutesText.toIntOrNull() ?: 30
                             )
                             repository.saveChildDailyTaskSettings(cfg)
+                            repository.saveChildLearningPreferences(
+                                ChildLearningPreferences(
+                                    childId = taskChild.id,
+                                    kindergartenMode = kindergartenModeEnabled,
+                                    gentleReminders = gentleLearningRemindersEnabled,
+                                    dailyWrittenQuestionLimit = dailyWrittenLimitText.toIntOrNull()?.coerceIn(1,100) ?: 8,
+                                    practicalTasksEnabled = practicalTasksEnabled
+                                )
+                            )
                             dailyTaskSettingsChild = null
                             notice = if (cfg.enabled) {
                                 "Automatic daily tasks saved for ${taskChild.displayName}. New tasks are generated when the child opens EduLock each day."
