@@ -1486,7 +1486,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         repository.syncAppUsage(activeChildId)
                     }
                 } catch (e: Exception) {
-                    childRulesSyncError = e.message ?: "Supabase did not confirm the child-device rules sync."
+                    childRulesSyncError = e.message ?: "The child-device rules could not be confirmed by the server."
                     // Keep the last confirmed rules while offline and surface the failed refresh.
                 }
             }
@@ -1559,7 +1559,7 @@ private fun EduLockApp(repository: EduLockRepository) {
         if (deviceMode == "unknown") {
             screen = AppScreen.DEVICE_SETUP
             if (!repository.isConfigured) {
-                notice = "Configuration needed: set the public Supabase URL and anon/publishable key in GitHub Actions secrets before building."
+                notice = "App setup is incomplete. Ask the app administrator to finish the connection settings before building."
             }
             return@LaunchedEffect
         }
@@ -1584,7 +1584,7 @@ private fun EduLockApp(repository: EduLockRepository) {
             }
         }
         if (!repository.isConfigured) {
-            notice = "Supabase is not configured yet. Add SUPABASE_URL and SUPABASE_ANON_KEY to GitHub Actions secrets before building."
+            notice = "The app connection is not configured yet. Ask the app administrator to finish setup before building."
         }
     }
     BackHandler(enabled = screen != AppScreen.AUTH) {
@@ -2019,7 +2019,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         modifier = Modifier.fillMaxWidth()
                     ) { AppUiText("Set up a child's device with pairing code") }
                     if (!repository.isConfigured) {
-                        AppUiText("Configuration needed: set the public Supabase URL and anon/publishable key in the GitHub Actions secrets before building. Never add a service-role key to the Android app.")
+                        AppUiText("App setup is incomplete. Ask the app administrator to finish connection settings before building. Never put private server keys in the app.")
                     }
                 }
 
@@ -2096,11 +2096,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                         ) {
                             AppUiText("One-time setup for the parent", fontWeight = FontWeight.Bold, color = Color(0xFF704B00))
                             AppUiText(
-                                "If pairing says anonymous sign-ins are disabled, enable this setting in the parent-managed Supabase project: Dashboard → Authentication → Sign In / Providers → Anonymous. Save the setting, then retry pairing. Reinstalling the app will not enable this project setting.",
+                                "If pairing says guest sign-in is disabled, ask the app administrator to enable guest sign-in in the authentication settings, then retry pairing. Reinstalling the app will not change this setting.",
                                 color = Color(0xFF704B00)
                             )
                             AppUiText(
-                                "Never put a Supabase service-role key in the Android app. The child session is linked only after the parent-generated one-time code is claimed.",
+                                "Never put a private server key in the Android app. The child session is linked only after the parent-generated one-time code is claimed.",
                                 color = Color(0xFF704B00),
                                 style = MaterialTheme.typography.bodySmall
                             )
@@ -2372,23 +2372,23 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                     val existingRules = repository.loadAllowedApps(child.id)
                                                     val confirmed = repository.updateChildKidsMode(child.id, requested)
                                                     if (confirmed != requested) {
-                                                        throw IllegalStateException("Supabase did not confirm the requested Kids Mode setting.")
+                                                        throw IllegalStateException("The server did not confirm the requested Kids Mode setting.")
                                                     }
                                                     val latest = repository.loadChildren(familyId)
                                                     val updated = latest.firstOrNull { it.id == child.id }
-                                                        ?: throw IllegalStateException("Supabase did not return this child profile after saving Kids Mode.")
+                                                        ?: throw IllegalStateException("The server did not return this child profile after saving Kids Mode.")
                                                     if (updated.kidsModeEnabled != requested) {
-                                                        throw IllegalStateException("Supabase returned a different Kids Mode value. No success was reported.")
+                                                        throw IllegalStateException("The server returned a different Kids Mode value. No success was reported.")
                                                     }
                                                     children = latest
                                                     selectedChild = updated
                                                     notice = when {
                                                         requested && existingRules.none { it.enabled } ->
-                                                            "Kids Mode was saved and verified in Supabase, but no apps are enabled yet. Third-party apps will be blocked after the child phone syncs. Add permitted apps first."
+                                                            "Kids Mode was saved and verified, but no apps are enabled yet. Third-party apps will be blocked after the child phone syncs. Add permitted apps first."
                                                         requested ->
-                                                            "Kids Mode was saved and verified in Supabase. The child phone applies it after its next successful sync; verify Accessibility and device-owner status on that phone."
+                                                            "Kids Mode was saved and verified. The child phone applies it after its next successful sync; verify Accessibility and device-owner status on that phone."
                                                         else ->
-                                                            "Kids Mode was disabled and verified in Supabase. Individual app rules apply again after the next child-device sync."
+                                                            "Kids Mode was disabled and verified. Individual app rules apply again after the next child-device sync."
                                                     }
                                                 }
                                             },
@@ -4167,7 +4167,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     val isChildAccount = session?.accountRole == "child"
                     val learner = childProfile
                     if (!isChildAccount) {
-                        AppUiText("Create safe, age-appropriate physical activities. Children submit compressed evidence; you review it and approve rewards. Evidence is stored in the EduLock database, not Supabase Storage.")
+                        AppUiText("Create safe, age-appropriate physical activities. Children submit compressed evidence; you review it and approve rewards.")
                         AppUiText("Assign challenge to", fontWeight = FontWeight.Bold)
                         OutlinedButton(
                             onClick = { challengeTargetChildId = "all" },
@@ -4538,7 +4538,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 if (existingRule == null) {
                                                     repository.allowInstalledApp(selected.id, installed, 0)
                                                     val created = repository.loadAllowedApps(selected.id).firstOrNull { it.packageName == installed.packageName }
-                                                        ?: throw IllegalStateException("App rule was not confirmed by Supabase.")
+                                                        ?: throw IllegalStateException("The server did not confirm this app rule.")
                                                     if (!checked) repository.updateAllowedAppEnabled(created.id, false)
                                                 } else repository.updateAllowedAppEnabled(existingRule.id, checked)
                                                 allowedApps = repository.loadAllowedApps(selected.id)
@@ -5152,7 +5152,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 serviceOperational ->
                                     "Accessibility-based blocking is running, but this phone is not confirmed as device owner. It cannot guarantee protection against force-stop, Clear data or system-level escape."
                                 else ->
-                                    "Kids Mode is saved in Supabase, but this phone has not confirmed active enforcement. Enable Accessibility and sync again. Kiosk-level enforcement requires device-owner provisioning."
+                                    "Kids Mode is saved, but this phone has not confirmed active enforcement. Enable Accessibility and sync again. Kiosk-level enforcement requires device-owner provisioning."
                             }
                         )
                     }
