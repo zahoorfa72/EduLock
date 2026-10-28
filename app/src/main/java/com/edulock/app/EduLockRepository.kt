@@ -1441,9 +1441,9 @@ class EduLockRepository(context: Context) {
         requireSession()
         val session = sessionStore.read() ?: throw IOException("Sign in to view submissions.")
         val path = if (session.accountRole == "parent") {
-            "physical_challenge_submissions?select=id,challenge_id,child_id,evidence_type,mime_type,media_base64,note,status,reward_minutes_awarded,review_note,submitted_at,physical_challenges!inner(title,description,family_id)&physical_challenges.family_id=eq.$familyId&order=submitted_at.desc&limit=20"
+            "physical_challenge_submissions?select=id,challenge_id,child_id,evidence_type,mime_type,media_base64,note,status,reward_minutes_awarded,review_note,submitted_at,physical_challenges!inner(title,description,family_id)&physical_challenges.family_id=eq.$familyId&order=submitted_at.desc&limit=5"
         } else {
-            "physical_challenge_submissions?select=id,challenge_id,child_id,evidence_type,mime_type,media_base64,note,status,reward_minutes_awarded,review_note,submitted_at,physical_challenges!inner(title,description)&child_id=eq.${childId ?: ""}&order=submitted_at.desc&limit=20"
+            "physical_challenge_submissions?select=id,challenge_id,child_id,evidence_type,mime_type,media_base64,note,status,reward_minutes_awarded,review_note,submitted_at,physical_challenges!inner(title,description)&child_id=eq.${childId ?: ""}&order=submitted_at.desc&limit=5"
         }
         val rows=restArray(path)
         return (0 until rows.length()).mapNotNull { i ->
@@ -1465,7 +1465,7 @@ class EduLockRepository(context: Context) {
         requireSession("child")
         require(challengeId.matches(Regex("[0-9a-fA-F-]{36}")) && childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid challenge." }
         require(evidenceType in setOf("photo","video") && mimeType in setOf("image/jpeg","video/mp4")) { "Choose a supported photo or MP4 video." }
-        require(mediaBase64.length in 100..5_000_000 && compressedBytes in 1..3_750_000) { "The compressed evidence must be smaller than 3.75 MB. Please choose a shorter video or smaller photo." }
+        require(mediaBase64.length in 100..2_500_000 && compressedBytes in 1..1_800_000) { "The compressed evidence must be smaller than 1.8 MB. Please choose a shorter video or smaller photo." }
         require(note.length <= 500) { "Your note is too long." }
         val body=JSONObject().put("challenge_id",challengeId).put("child_id",childId)
             .put("evidence_type",evidenceType).put("mime_type",mimeType)
