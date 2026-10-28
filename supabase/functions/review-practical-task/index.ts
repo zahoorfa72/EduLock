@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
       return json({ error: "Child/family ownership check failed" }, 403);
     }
     const { data: family, error: familyError } = await schema
-      .from("family_profiles").select("id").eq("id", child.family_id).eq("parent_user_id", authData.user.id).maybeSingle();
+      .from("family_profiles").select("id").eq("id", child.family_id).eq("owner_user_id", authData.user.id).maybeSingle();
     if (familyError || !family) return json({ error: "You cannot review another family's submission" }, 403);
 
     const { data: reviewed, error: updateError } = await schema
