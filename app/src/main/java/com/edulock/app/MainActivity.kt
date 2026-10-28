@@ -3306,8 +3306,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 execute {
                                                     val rawReward = (questionRewardEdits[question.id]
                                                         ?: question.rewardMinutes?.toString().orEmpty()).trim()
-                                                    val parsed = if (rawReward.isBlank()) null else rawReward.toIntOrNull()
-                                                        ?: throw IllegalArgumentException("Enter a whole-number reward from 0 to 1440, or leave it blank to use the task default.")
+                                                    val parsed: Int? = if (rawReward.isBlank()) {
+                                                        null
+                                                    } else {
+                                                        rawReward.toIntOrNull()
+                                                            ?: throw IllegalArgumentException("Enter a whole-number reward from 0 to 1440, or leave it blank to use the task default.")
+                                                    }
                                                     require(parsed == null || parsed in 0..1440) {
                                                         "Question reward must be between 0 and 1440 minutes."
                                                     }
