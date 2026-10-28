@@ -1821,6 +1821,71 @@ class EduLockRepository(context: Context) {
 
 
     /** Separate practical-task portal backed by the adaptive learning schema. */
+    suspend fun loadPracticalTasksForParent(familyId: String, childId: String? = null): List<PracticalTaskRow> {
+        requireSession("parent")
+        require(familyId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Select a family first." }
+        val childFilter = childId?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) }
+            ?.let { "&child_id=eq.$it" } ?: ""
+        val rows = restArray(
+            "practical_tasks?select=id,child_id,title,instructions,materials,safety_notes,age_min,age_max,activity_kind,expected_minutes&family_id=eq.$familyId$childFilter&order=created_at.desc&limit=100"
+        )
+        return (0 until rows.length()).mapNotNull { index ->
+            rows.optJSONObject(index)?.let { row ->
+                PracticalTaskRow(
+                    id = row.optString("id"), childId = row.optString("child_id"),
+                    title = row.optString("title"), instructions = row.optString("instructions"),
+                    materialsJson = row.optJSONArray("materials")?.toString() ?: "[]",
+                    safetyNotes = row.optString("safety_notes"),
+                    ageMin = row.optInt("age_min",3).coerceIn(3,19),
+                    ageMax = row.optInt("age_max",19).coerceIn(3,19),
+                    activityKind = row.optString("activity_kind","practical"),
+                    expectedMinutes = row.optInt("expected_minutes",10).coerceIn(1,180)
+                )
+            }
+        }
+    }
+
+    suspend fun createPracticalTask(
+        familyId: String, childId: String, title: String, instructions: String,
+        materialsJson: String = "[]", safetyNotes: String = "", activityKind: String = "practical",
+        ageMin: Int = 3, ageMax: Int = 19, expectedMinutes: Int = 10, subjectId: String? = null
+    ): PracticalTaskRow {
+        requireSession("parent")
+        require(familyId.matches(Regex("[0-9a-fA-F-]{36}")) &&
+            childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Select a valid child profile." }
+        require(title.trim().length in 1..160) { "Enter a practical-task title." }
+        require(instructions.trim().length in 1..5000) { "Enter activity instructions." }
+        require(activityKind in setOf("practical","physical","life_skill","creative")) { "Choose a supported activity type." }
+        require(ageMin in 3..19 && ageMax in ageMin..19) { "Choose a valid age range." }
+        require(expectedMinutes in 1..180) { "Duration must be 1–180 minutes." }
+        val materials = try { JSONArray(materialsJson.ifBlank { "[]" }) } catch (_: Exception) {
+            throw IllegalArgumentException("Materials must be a JSON list, for example ["paper","pencil"].")
+        }
+        val body = JSONObject()
+            .put("family_id",familyId)
+            .put("child_id",childId)
+            .put("title",title.trim())
+            .put("instructions",instructions.trim())
+            .put("materials",materials)
+            .put("safety_notes",safetyNotes.trim().take(1000))
+            .put("activity_kind",activityKind)
+            .put("age_min",ageMin)
+            .put("age_max",ageMax)
+            .put("expected_minutes",expectedMinutes)
+            .put("active",true)
+        if (!subjectId.isNullOrBlank() && subjectId.matches(Regex("[0-9a-fA-F-]{36}"))) body.put("subject_id",subjectId)
+        val rows=restArray("practical_tasks?select=id,child_id,title,instructions,materials,safety_notes,age_min,age_max,activity_kind,expected_minutes","POST",body)
+        val row=rows.optJSONObject(0) ?: throw IOException("Practical task was not saved.")
+        return PracticalTaskRow(
+            id=row.optString("id"), childId=row.optString("child_id"),
+            title=row.optString("title"), instructions=row.optString("instructions"),
+            materialsJson=row.optJSONArray("materials")?.toString() ?: "[]",
+            safetyNotes=row.optString("safety_notes"), ageMin=row.optInt("age_min",3),
+            ageMax=row.optInt("age_max",19), activityKind=row.optString("activity_kind","practical"),
+            expectedMinutes=row.optInt("expected_minutes",10)
+        )
+    }
+
     suspend fun loadPracticalTasks(childId: String): List<PracticalTaskRow> {
         requireSession("child")
         require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
