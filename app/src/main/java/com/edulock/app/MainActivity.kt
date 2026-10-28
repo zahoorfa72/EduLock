@@ -16,6 +16,18 @@ import android.os.UserManager
 import android.provider.Settings
 import android.provider.Settings.Secure
 import android.widget.VideoView
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resumeWithException
+import kotlin.coroutines.resume
+import androidx.media3.transformer.Transformer
+import androidx.media3.transformer.ExportResult
+import androidx.media3.transformer.ExportException
+import androidx.media3.effect.Presentation
+import androidx.media3.transformer.Effects
+import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.Composition
+import androidx.media3.common.MimeTypes
+import androidx.media3.common.MediaItem
 import java.io.File
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -283,6 +295,45 @@ private data class LocalTaskDraft(
     val pausedTaskSecondsRemaining: Int? = null,
     val pausedQuestionSecondsRemaining: Int? = null
 )
+
+private suspend fun compressChallengeVideo(context: Context, source: Uri): ByteArray =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+        kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+            val output = File(context.cacheDir, "edulock_challenge_" + System.currentTimeMillis() + ".mp4")
+            val transformer = Transformer.Builder(context)
+                .setVideoMimeType(MimeTypes.VIDEO_H264)
+                .setAudioMimeType(MimeTypes.AUDIO_AAC)
+                .addListener(object : Transformer.Listener {
+                    override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                        try {
+                            val bytes = output.readBytes()
+                            if (bytes.isEmpty() || bytes.size > 3_500_000) {
+                                continuation.resumeWithException(IOException("The compressed video is still too large. Choose a shorter clip (15 seconds or less)."))
+                            } else continuation.resume(bytes)
+                        } catch (error: Exception) {
+                            continuation.resumeWithException(error)
+                        } finally {
+                            output.delete()
+                        }
+                    }
+                    override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
+                        output.delete()
+                        if (continuation.isActive) continuation.resumeWithException(IOException("Could not compress this video. Try a short MP4 clip.", exportException))
+                    }
+                })
+                .build()
+            try {
+                val edited = EditedMediaItem.Builder(MediaItem.fromUri(source))
+                    .setEffects(Effects(emptyList(), listOf(Presentation.createForHeight(480))))
+                    .build()
+                transformer.start(edited, output.absolutePath)
+                continuation.invokeOnCancellation { transformer.cancel(); output.delete() }
+            } catch (error: Exception) {
+                output.delete()
+                if (continuation.isActive) continuation.resumeWithException(error)
+            }
+        }
+    }
 
 private enum class AppScreen {
     DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ, KIDS_GAMES, LEARNING_3D_LAB, DRAWING_STUDIO,
@@ -916,17 +967,13 @@ private fun EduLockApp(repository: EduLockRepository) {
     }
     val challengeVideoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) execute {
-            val bytes = withContext(kotlinx.coroutines.Dispatchers.IO) {
-                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    ?: throw IOException("Could not read the selected video.")
-            }
             val mime = context.contentResolver.getType(uri).orEmpty()
-            if (mime !in setOf("video/mp4", "application/mp4")) throw IOException("Choose an MP4 video. Other formats are not supported.")
-            if (bytes.size > 3_500_000) throw IOException("This video is too large. Choose a shorter/lower-resolution MP4 (under 3.5 MB). Automatic video transcoding is not available in this build yet.")
+            if (!mime.startsWith("video/")) throw IOException("Choose a supported video.")
+            val bytes = compressChallengeVideo(context, uri)
             evidenceBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
             evidenceMimeType = "video/mp4"
             evidenceKind = "video"
-            notice = "Video ready (" + (bytes.size / 1024).coerceAtLeast(1) + " KB)."
+            notice = "Video compressed on this device to " + (bytes.size / 1024).coerceAtLeast(1) + " KB."
         }
     }
 
