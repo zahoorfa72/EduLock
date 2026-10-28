@@ -2870,6 +2870,24 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 }
                             )
                             DashboardIconTile(
+                                icon = "🧪", title = "Practical tasks", subtitle = "Save hands-on learning tasks for children",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF7C5CE7),
+                                onClick = {
+                                    val child = selectedChild ?: children.firstOrNull()
+                                    if (child == null) {
+                                        notice = "Add a child profile before saving practical tasks."
+                                    } else {
+                                        selectedChild = child
+                                        screen = AppScreen.PRACTICAL_TASKS
+                                        execute {
+                                            practicalTasks = repository.loadPracticalTasksForParent(familyId, child.id)
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashboardIconTile(
                                 icon = "⚙️", title = "App settings", subtitle = "Country, languages, religion, limits and protection",
                                 modifier = Modifier.weight(1f), accent = Color(0xFF4E5D75),
                                 onClick = {
