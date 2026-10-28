@@ -282,7 +282,7 @@ private data class LocalTaskDraft(
 
 private enum class AppScreen {
     DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ, KIDS_GAMES, LEARNING_3D_LAB, DRAWING_STUDIO,
-    SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
+    SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK, PHYSICAL_CHALLENGES,
     REPORTS, ALLOWED_APPS, PROTECTION_STATUS, CHILD_LOCATIONS, APP_USAGE_REPORT, APP_SETTINGS, PLAY_TASK, TASK_RESULT
 }
 
@@ -497,6 +497,19 @@ private fun EduLockApp(repository: EduLockRepository) {
     var taskRewardToBank by remember { mutableStateOf(true) }
     var taskRewardPackageName by remember { mutableStateOf("") }
     var taskRewardGroupId by remember { mutableStateOf("") }
+    var physicalChallenges by remember { mutableStateOf(emptyList<PhysicalChallenge>()) }
+    var challengeSubmissions by remember { mutableStateOf(emptyList<ChallengeSubmission>()) }
+    var challengeTitle by remember { mutableStateOf("") }
+    var challengeDescription by remember { mutableStateOf("") }
+    var challengeRewardMinutes by remember { mutableStateOf("10") }
+    var challengeEvidenceType by remember { mutableStateOf("either") }
+    var selectedChallenge by remember { mutableStateOf<PhysicalChallenge?>(null) }
+    var evidenceBase64 by remember { mutableStateOf<String?>(null) }
+    var evidenceMimeType by remember { mutableStateOf<String?>(null) }
+    var evidenceKind by remember { mutableStateOf<String?>(null) }
+    var evidenceNote by remember { mutableStateOf("") }
+    var questionRewardEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var questionGroupRewardEdits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var selectedTaskSubjectIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var appGroups by remember { mutableStateOf(emptyList<AppGroup>()) }
     var appGroupName by remember { mutableStateOf("") }
@@ -866,6 +879,52 @@ private fun EduLockApp(repository: EduLockRepository) {
             }
         }
     }
+    val challengePhotoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) execute {
+            val raw = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: throw IOException("Could not read the selected photo.")
+            }
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(raw, 0, raw.size, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("Choose a supported photo.")
+            val factor = maxOf(bounds.outWidth / 1280f, bounds.outHeight / 1280f, 1f)
+            val sample = Integer.highestOneBit(factor.toInt().coerceAtLeast(1))
+            val bitmap = BitmapFactory.decodeByteArray(raw, 0, raw.size, BitmapFactory.Options().apply { inSampleSize = sample })
+                ?: throw IOException("Could not decode the photo.")
+            val scale = minOf(1f, 1280f / maxOf(bitmap.width, bitmap.height).toFloat())
+            val resized = if (scale < 1f) Bitmap.createScaledBitmap(bitmap,(bitmap.width*scale).toInt().coerceAtLeast(1),(bitmap.height*scale).toInt().coerceAtLeast(1),true) else bitmap
+            var quality = 82
+            var bytes: ByteArray
+            do {
+                val output = ByteArrayOutputStream()
+                if (!resized.compress(Bitmap.CompressFormat.JPEG, quality, output)) throw IOException("Photo compression failed.")
+                bytes = output.toByteArray()
+                quality -= 12
+            } while (bytes.size > 2_500_000 && quality >= 34)
+            if (bytes.size > 2_500_000) throw IOException("Photo is still too large after compression. Choose another photo.")
+            evidenceBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            evidenceMimeType = "image/jpeg"
+            evidenceKind = "photo"
+            notice = "Photo compressed to " + (bytes.size / 1024).coerceAtLeast(1) + " KB on this device."
+        }
+    }
+    val challengeVideoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) execute {
+            val bytes = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: throw IOException("Could not read the selected video.")
+            }
+            val mime = context.contentResolver.getType(uri).orEmpty()
+            if (mime !in setOf("video/mp4", "application/mp4")) throw IOException("Choose an MP4 video. Other formats are not supported.")
+            if (bytes.size > 3_500_000) throw IOException("This video is too large. Choose a shorter/lower-resolution MP4 (under 3.5 MB). Automatic video transcoding is not available in this build yet.")
+            evidenceBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            evidenceMimeType = "video/mp4"
+            evidenceKind = "video"
+            notice = "Video ready (" + (bytes.size / 1024).coerceAtLeast(1) + " KB)."
+        }
+    }
+
     val launchPreferences = remember { context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE) }
     LaunchedEffect(childProfile?.id, screen) {
         val requestedTaskId = launchPreferences.getString("pending_task_id", null)
