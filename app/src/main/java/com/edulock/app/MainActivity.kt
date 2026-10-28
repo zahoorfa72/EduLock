@@ -589,6 +589,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var challengeSubmissions by remember { mutableStateOf(emptyList<ChallengeSubmission>()) }
     var challengeTitle by remember { mutableStateOf("") }
     var challengeDescription by remember { mutableStateOf("") }
+    var challengeTargetChildId by remember { mutableStateOf("all") }
     var challengeRewardMinutes by remember { mutableStateOf("10") }
     var challengeEvidenceType by remember { mutableStateOf("either") }
     var selectedChallenge by remember { mutableStateOf<PhysicalChallenge?>(null) }
@@ -3639,6 +3640,19 @@ private fun EduLockApp(repository: EduLockRepository) {
                     val learner = childProfile
                     if (!isChildAccount) {
                         AppUiText("Create safe, age-appropriate physical activities. Children submit compressed evidence; you review it and approve rewards. Evidence is stored in the EduLock database, not Supabase Storage.")
+                        AppUiText("Assign challenge to", fontWeight = FontWeight.Bold)
+                        OutlinedButton(
+                            onClick = { challengeTargetChildId = "all" },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { AppUiText((if (challengeTargetChildId == "all") "✓ " else "") + "All children") }
+                        children.forEach { childOption ->
+                            OutlinedButton(
+                                onClick = { challengeTargetChildId = childOption.id },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                AppUiText((if (challengeTargetChildId == childOption.id) "✓ " else "") + childOption.displayName + " • Grade " + childOption.schoolGrade + " • Age " + childOption.ageYears)
+                            }
+                        }
                         Field(challengeTitle, { challengeTitle = it.take(120) }, "Activity title (e.g. 10-minute walk)")
                         Field(challengeDescription, { challengeDescription = it.take(1000) }, "Instructions and safety notes")
                         Field(challengeRewardMinutes, { challengeRewardMinutes = it.filter(Char::isDigit).take(4) }, "Reward if approved (0–1440 minutes)", keyboardType = KeyboardType.Number)
@@ -3650,7 +3664,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         OutlinedButton(onClick = { execute {
                             val created = repository.createPhysicalChallenge(
-                                familyId, selectedChild?.id, challengeTitle, challengeDescription,
+                                familyId, challengeTargetChildId.takeIf { it != "all" }, challengeTitle, challengeDescription,
                                 challengeRewardMinutes.toIntOrNull() ?: 0, challengeEvidenceType
                             )
                             physicalChallenges = listOf(created) + physicalChallenges
