@@ -1181,8 +1181,8 @@ class EduLockRepository(context: Context) {
         }
         val saved = written.optJSONObject(0)
         require(
-            written.length() == 1 &&
-                saved?.optString("question_id") == question.id &&
+            written.length() == 1 && saved != null &&
+                saved.optString("question_id") == question.id &&
                 saved.optString("language_code").equals(lang, ignoreCase = true) &&
                 saved.optString("prompt") == prompt.trim().take(10000)
         ) {
@@ -1560,8 +1560,8 @@ class EduLockRepository(context: Context) {
         )
         val row = changed.optJSONObject(0)
         require(
-            changed.length() == 1 && row?.optString("id") == questionId &&
-                if (minutes == null) row.isNull("reward_minutes") else row.optInt("reward_minutes", -1) == minutes
+            changed.length() == 1 && row != null && row.optString("id") == questionId &&
+                (if (minutes == null) row.isNull("reward_minutes") else row.optInt("reward_minutes", -1) == minutes)
         ) {
             "Supabase did not confirm that this question reward was saved. Check your connection and parent permissions, then try again."
         }
@@ -1572,7 +1572,7 @@ class EduLockRepository(context: Context) {
         require(questionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid question." }
         // Request the deleted row so RLS-filtered no-op deletes cannot be reported as success.
         val deleted = restArray("questions?id=eq.$questionId", "DELETE")
-        require(deleted.any { it is JSONObject && it.optString("id") == questionId }) {
+        require((0 until deleted.length()).any { deleted.optJSONObject(it)?.optString("id") == questionId }) {
             "Supabase did not confirm that this question was removed. Check your connection and parent permissions, then try again."
         }
     }
@@ -1600,7 +1600,8 @@ class EduLockRepository(context: Context) {
         )
         val row = saved.optJSONObject(0)
         require(
-            saved.length() == 1 && row?.optString("subject_id") == subjectId &&
+            saved.length() == 1 && row != null &&
+                row.optString("subject_id") == subjectId &&
                 row.optString("concept_key") == expectedConcept && row.optInt("reward_minutes", -1) == minutes
         ) {
             "Supabase did not confirm that the group bonus was saved. Check your connection and parent permissions, then try again."
