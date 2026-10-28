@@ -2444,6 +2444,21 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     OutlinedButton(
                                         onClick = {
                                             selectedChild = child
+                                            selectedSubject = null
+                                            questions = emptyList()
+                                            execute {
+                                                subjects = repository.loadSubjects(familyId, child.countryCode)
+                                                childSubjectSelections = repository.loadChildSubjectSelections(familyId)
+                                                screen = AppScreen.SUBJECTS
+                                            }
+                                        },
+                                        enabled = !busy,
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 5.dp)
+                                    ) { AppUiText("❓ Questions", fontSize = 12.sp) }
+                                    OutlinedButton(
+                                        onClick = {
+                                            selectedChild = child
                                             lastPairingCode = ""
                                             execute {
                                                 val generated = repository.createPairingCode(child.id)
