@@ -445,7 +445,7 @@ private suspend fun compressChallengeVideo(context: Context, source: Uri): ByteA
 
 private enum class AppScreen {
     DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ, KIDS_GAMES, LEARNING_3D_LAB, DRAWING_STUDIO,
-    SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK, PHYSICAL_CHALLENGES,
+    SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK, PHYSICAL_CHALLENGES, PRACTICAL_TASKS, LEARNING_FEEDBACK,
     REPORTS, ALLOWED_APPS, PROTECTION_STATUS, CHILD_LOCATIONS, APP_USAGE_REPORT, APP_SETTINGS, CHILD_SECURITY, PLAY_TASK, TASK_RESULT
 }
 
@@ -697,6 +697,9 @@ private fun EduLockApp(repository: EduLockRepository) {
     var taskRewardPackageName by remember { mutableStateOf("") }
     var taskRewardGroupId by remember { mutableStateOf("") }
     var physicalChallenges by remember { mutableStateOf(emptyList<PhysicalChallenge>()) }
+    var practicalTasks by remember { mutableStateOf(emptyList<PracticalTaskRow>()) }
+    var practicalCompletionNotes by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var writtenAnswerFeedback by remember { mutableStateOf(emptyList<WrittenAnswerFeedback>()) }
     var challengeSubmissions by remember { mutableStateOf(emptyList<ChallengeSubmission>()) }
     var challengeVideoPreviewFiles by remember { mutableStateOf<Map<String, File>>(emptyMap()) }
     var previewingSubmissionId by remember { mutableStateOf<String?>(null) }
@@ -1863,7 +1866,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.ADD_SUBJECT, AppScreen.QUESTIONS -> AppScreen.SUBJECTS
                 AppScreen.LEARNING_TEMPLATES -> if (selectedSubject != null) AppScreen.QUESTIONS else AppScreen.PARENT_HOME
                 AppScreen.ADD_QUESTION, AppScreen.ADD_TRANSLATION -> AppScreen.QUESTIONS
-                AppScreen.PHYSICAL_CHALLENGES -> if (session?.accountRole == "child") AppScreen.CHILD_HOME else AppScreen.PARENT_HOME
+                AppScreen.PHYSICAL_CHALLENGES, AppScreen.PRACTICAL_TASKS, AppScreen.LEARNING_FEEDBACK -> if (session?.accountRole == "child") AppScreen.CHILD_HOME else AppScreen.PARENT_HOME
                 AppScreen.PLAY_TASK, AppScreen.TASK_RESULT -> AppScreen.CHILD_HOME
                 AppScreen.SOLAR_SYSTEM_QUIZ -> solarQuizReturnScreen
                 AppScreen.KIDS_GAMES -> AppScreen.CHILD_HOME
@@ -5216,6 +5219,105 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }, enabled = !busy && selectedChild != null && selectedTaskSubjects.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { AppUiText("Assign task") }
                 }
 
+                AppScreen.PRACTICAL_TASKS -> ScreenFrame(
+                    "Practical learning • separate from written tasks",
+                    onBack = { screen = AppScreen.CHILD_HOME },
+                    notice = notice,
+                    busy = busy
+                ) {
+                    AppUiText(
+                        "Try a hands-on activity. Follow the safety notes and ask a parent for help when needed.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    if (practicalTasks.isEmpty()) {
+                        SummaryCard("No practical tasks yet", "🧩", "Ask your parent to save a practical activity for your profile.")
+                    } else {
+                        practicalTasks.forEach { practical ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Column(
+                                    Modifier.fillMaxWidth().padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    AppUiText(practical.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    AppUiText(practical.instructions)
+                                    if (practical.materialsJson != "[]") AppUiText("Materials: " + practical.materialsJson)
+                                    if (practical.safetyNotes.isNotBlank()) {
+                                        AppUiText("Safety: " + practical.safetyNotes, color = MaterialTheme.colorScheme.error)
+                                    }
+                                    AppUiText("About ${practical.expectedMinutes} minutes • Ages ${practical.ageMin}–${practical.ageMax}")
+                                    OutlinedTextField(
+                                        value = practicalCompletionNotes[practical.id].orEmpty(),
+                                        onValueChange = { value ->
+                                            practicalCompletionNotes = practicalCompletionNotes + (practical.id to value.take(2000))
+                                        },
+                                        label = { AppUiText("What did you do? (optional)") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        minLines = 2
+                                    )
+                                    Button(
+                                        onClick = {
+                                            execute {
+                                                repository.submitPracticalTask(
+                                                    practical.id,
+                                                    practicalCompletionNotes[practical.id].orEmpty()
+                                                )
+                                                practicalCompletionNotes = practicalCompletionNotes - practical.id
+                                                notice = "Practical task submitted for parent review."
+                                            }
+                                        },
+                                        enabled = !busy,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { AppUiText("Done • send to parent") }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                AppScreen.LEARNING_FEEDBACK -> ScreenFrame(
+                    "My written answer feedback",
+                    onBack = { screen = AppScreen.CHILD_HOME },
+                    notice = notice,
+                    busy = busy
+                ) {
+                    AppUiText(
+                        "Use these tips to improve. Mistakes are part of learning—try again step by step.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    if (writtenAnswerFeedback.isEmpty()) {
+                        SummaryCard("No feedback yet", "✍️", "Complete a written task to see spelling and accuracy feedback here.")
+                    } else {
+                        writtenAnswerFeedback.forEach { feedback ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(18.dp)
+                            ) {
+                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    AppUiText(feedback.conceptKey.replace('_',' ').replaceFirstChar { it.uppercase() },
+                                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    AppUiText("Your answer: " + feedback.suppliedAnswer)
+                                    AppUiText("Target answer: " + feedback.expectedAnswer)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        AppUiText("Accuracy: ${feedback.accuracyScore}%")
+                                        AppUiText("Spelling: ${feedback.spellingScore}%")
+                                    }
+                                    AppUiText("Score: ${feedback.finalScore}/100", fontWeight = FontWeight.Bold)
+                                    if (feedback.feedback.isNotBlank()) AppUiText(feedback.feedback)
+                                    if (feedback.detectedErrorsJson != "[]") AppUiText("Next focus: " + feedback.detectedErrorsJson)
+                                }
+                            }
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { execute { writtenAnswerFeedback = repository.loadWrittenAnswerFeedback() } },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { AppUiText("Refresh feedback") }
+                }
+
                 AppScreen.PHYSICAL_CHALLENGES -> ScreenFrame(
                     if (session?.accountRole == "child") "Physical activity challenges" else "Physical challenges & reward review",
                     onBack = { screen = if (session?.accountRole == "child") AppScreen.CHILD_HOME else AppScreen.PARENT_HOME },
@@ -5982,16 +6084,32 @@ private fun EduLockApp(repository: EduLockRepository) {
                         enabled = !busy,
                         modifier = Modifier.fillMaxWidth()
                     ) { AppUiText("📚 Learning • Continue a task") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                screen = AppScreen.PHYSICAL_CHALLENGES
+                                execute {
+                                    physicalChallenges = repository.loadPhysicalChallenges("", child?.id)
+                                    challengeSubmissions = repository.loadChallengeSubmissions("", child?.id)
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) { AppUiText("🏃 Physical challenges") }
+                        OutlinedButton(
+                            onClick = {
+                                screen = AppScreen.PRACTICAL_TASKS
+                                execute { practicalTasks = repository.loadPracticalTasks(child?.id.orEmpty()) }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) { AppUiText("🧪 Practical tasks") }
+                    }
                     OutlinedButton(
                         onClick = {
-                            screen = AppScreen.PHYSICAL_CHALLENGES
-                            execute {
-                                physicalChallenges = repository.loadPhysicalChallenges("", child?.id)
-                                challengeSubmissions = repository.loadChallengeSubmissions("", child?.id)
-                            }
+                            screen = AppScreen.LEARNING_FEEDBACK
+                            execute { writtenAnswerFeedback = repository.loadWrittenAnswerFeedback() }
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { AppUiText("🏃 Physical activity challenges • Submit photo/video proof") }
+                    ) { AppUiText("✍️ My answer feedback • spelling & accuracy") }
                     // Large illustrated tiles make the child dashboard feel like a learning game hub.
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         DashboardIconTile(
