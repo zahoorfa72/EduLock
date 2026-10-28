@@ -56,6 +56,8 @@ Deno.serve(async (req) => {
         : "Could not submit answers. Please retry.";
       return json({ error: safeMessage }, 400);
     }
+    // The SQL grader remains authoritative. This endpoint only returns its per-question
+    // detail payload when the database function provides it; never infer reward values here.
     return json(result);
   } catch (error) {
     console.error("Submit attempt failed", error);
