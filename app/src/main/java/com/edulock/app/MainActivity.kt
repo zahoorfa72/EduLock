@@ -3838,9 +3838,18 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                     }
                     Button(
-                        onClick = { screen = AppScreen.CHILD_HOME },
+                        onClick = {
+                            val nextTask = activeTask?.takeIf { current -> tasks.any { it.id == current.id } }
+                                ?: tasks.firstOrNull()
+                            if (nextTask == null) {
+                                notice = "No active tasks yet. Ask your parent to assign a learning task."
+                            } else {
+                                openChildTask(nextTask)
+                            }
+                        },
+                        enabled = !busy,
                         modifier = Modifier.fillMaxWidth()
-                    ) { AppUiText("Learning • Continue tasks") }
+                    ) { AppUiText("📚 Learning • Continue a task") }
                     // Large illustrated tiles make the child dashboard feel like a learning game hub.
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         DashboardIconTile(
@@ -3984,20 +3993,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                     ?: tasks.firstOrNull { t -> !t.rewardGroupId.isNullOrBlank() && appGroups.any { it.id == t.rewardGroupId && app.packageName in it.packageNames } }
                                                     ?: tasks.firstOrNull { it.rewardToBank }
                                                 if (task != null) {
-                                                    execute {
-                                                        val loadedQuestions = repository.loadQuestionsForTask(task.id, task.subjectId, task.questionCount)
-                                                        if (loadedQuestions.size != task.questionCount) throw IllegalStateException("This task is missing questions.")
-                                                        val loadedTranslations = repository.loadQuestionTranslations(loadedQuestions.map { it.id })
-                                                        activeTask = task
-                                                        questions = loadedQuestions
-                                                        questionTranslations = loadedTranslations
-                                                        answerLanguages = loadedQuestions.associate { q -> q.id to (childProfile?.preferredLanguage ?: q.languageCode) }
-                                                        answers = emptyMap()
-                                                        questionIndex = 0
-                                                        taskDeadlineAtMillis = task.timeLimitSeconds?.let { System.currentTimeMillis() + it * 1000L }
-                                                        taskSecondsRemaining = task.timeLimitSeconds ?: 0
-                                                        screen = AppScreen.PLAY_TASK
-                                                    }
+                                                    openChildTask(task)
                                                 } else {
                                                     notice = "Time's up. Ask your parent to assign a learning task to this app."
                                                 }
@@ -4020,29 +4016,17 @@ private fun EduLockApp(repository: EduLockRepository) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 AppUiText(task.title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
                                 AppUiText(task.questionCount.toString() + " questions • pass " + task.passPercent + "% • " + task.rewardMinutes + " min per correct answer" + if (task.rewardToBank) " • Reward Bank" else "")
-                                Button(onClick = {
-                                    execute {
-                                        val loadedQuestions = repository.loadQuestionsForTask(task.id, task.subjectId, task.questionCount)
-                                        if (loadedQuestions.size != task.questionCount) {
-                                            throw IllegalStateException("This task needs " + task.questionCount + " questions, but only " + loadedQuestions.size + " are available. Ask your parent to repair the task.")
-                                        }
-                                        val loadedTranslations = repository.loadQuestionTranslations(loadedQuestions.map { it.id })
-                                        questions = loadedQuestions
-                                        questionTranslations = loadedTranslations
-                                        answerLanguages = loadedQuestions.associate { item ->
-                                            val preferred = childProfile?.preferredLanguage ?: item.languageCode
-                                            val translated = loadedTranslations[item.id].orEmpty().any { it.languageCode.equals(preferred, ignoreCase = true) }
-                                            item.id to if (translated) preferred.lowercase() else item.languageCode
-                                        }
-                                        val draft = readTaskDraft(task.id)
-                                        activeTask = task
-                                        answers = draft.first.filterKeys { key -> loadedQuestions.any { it.id == key } }
-                                        questionIndex = draft.second.coerceIn(0, (loadedQuestions.size - 1).coerceAtLeast(0))
-                                        taskDeadlineAtMillis = null
-                                        taskSecondsRemaining = 0
-                                        screen = AppScreen.PLAY_TASK
-                                    }
-                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Start task") }
+                                AppUiText(
+                                    (task.timeLimitSeconds?.let { "Total time: " + it + " sec" } ?: "No total time limit") +
+                                        " • " + (task.questionTimeLimitSeconds?.let { it.toString() + " sec per question" } ?: "No per-question limit"),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Button(onClick = { openChildTask(task) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                                    AppUiText(
+                                        if (activeTask?.id == task.id) "▶ Resume task" else "▶ Start task"
+                                    )
+                                }
                             }
                         }
                     }
