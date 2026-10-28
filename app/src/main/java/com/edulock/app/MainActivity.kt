@@ -4,6 +4,8 @@ import android.Manifest
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.ClipboardManager
+import android.content.ClipData
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -438,6 +440,13 @@ private fun EduLockApp(repository: EduLockRepository) {
     var childProfile by remember { mutableStateOf<ChildProfile?>(null) }
     var children by remember { mutableStateOf(emptyList<ChildProfile>()) }
     var childProfileSearchQuery by remember { mutableStateOf("") }
+    var dailyTaskSettingsChild by remember { mutableStateOf<ChildProfile?>(null) }
+    var dailyTasksEnabled by remember { mutableStateOf(false) }
+    var dailyTaskCountText by remember { mutableStateOf("1") }
+    var dailyTaskQuestionCountText by remember { mutableStateOf("4") }
+    var dailyTaskPassPercentText by remember { mutableStateOf("70") }
+    var dailyTaskRewardMinutesText by remember { mutableStateOf("1") }
+    var dailyTaskCapMinutesText by remember { mutableStateOf("30") }
     var subjects by remember { mutableStateOf(emptyList<SubjectRow>()) }
     var subjectSearchQuery by remember { mutableStateOf("") }
     var questionSearchQuery by remember { mutableStateOf("") }
@@ -670,6 +679,9 @@ private fun EduLockApp(repository: EduLockRepository) {
     var questionEditExpandedId by remember { mutableStateOf<String?>(null) }
     var questionEditDrafts by remember { mutableStateOf<Map<String, QuestionEditDraft>>(emptyMap()) }
     var selectedTaskSubjectIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var taskQuestionChoices by remember { mutableStateOf(emptyList<QuestionRow>()) }
+    var selectedTaskQuestionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var taskQuestionSearchQuery by remember { mutableStateOf("") }
     var appGroups by remember { mutableStateOf(emptyList<AppGroup>()) }
     var appGroupName by remember { mutableStateOf("") }
     var appGroupEditingId by remember { mutableStateOf<String?>(null) }
@@ -1209,6 +1221,102 @@ private fun EduLockApp(repository: EduLockRepository) {
         )
     }
 
+    dailyTaskSettingsChild?.let { taskChild ->
+        AlertDialog(
+            onDismissRequest = { dailyTaskSettingsChild = null },
+            title = { AppUiText("Automatic daily tasks • ${taskChild.displayName}") },
+            text = {
+                Column(
+                    Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    AppUiText(
+                        "EduLock can create new tasks automatically once per day when this child opens the learning space. Existing tasks are not duplicated.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            AppUiText("Give daily tasks automatically", fontWeight = FontWeight.SemiBold)
+                            AppUiText("Uses this child's saved subject choices and grade/age.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Switch(checked = dailyTasksEnabled, onCheckedChange = { dailyTasksEnabled = it })
+                    }
+                    OutlinedTextField(
+                        value = dailyTaskCountText,
+                        onValueChange = { dailyTaskCountText = it.filter(Char::isDigit).take(1) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { AppUiText("Tasks each day (1–5)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    OutlinedTextField(
+                        value = dailyTaskQuestionCountText,
+                        onValueChange = { dailyTaskQuestionCountText = it.filter(Char::isDigit).take(2) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { AppUiText("Questions in each task (1–20)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    OutlinedTextField(
+                        value = dailyTaskPassPercentText,
+                        onValueChange = { dailyTaskPassPercentText = it.filter(Char::isDigit).take(3) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { AppUiText("Pass score percent (0–100)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    OutlinedTextField(
+                        value = dailyTaskRewardMinutesText,
+                        onValueChange = { dailyTaskRewardMinutesText = it.filter(Char::isDigit).take(2) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { AppUiText("Reward per correct answer (0–60 min)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    OutlinedTextField(
+                        value = dailyTaskCapMinutesText,
+                        onValueChange = { dailyTaskCapMinutesText = it.filter(Char::isDigit).take(4) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { AppUiText("Daily task reward cap (0–1440 min)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    AppUiText(
+                        "Each automatic task uses 4 questions by default and adds correct-answer rewards to the child's Reward Bank. If there are not enough matching questions, EduLock skips that task and tries again on the next day.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        execute {
+                            val cfg = DailyTaskSettings(
+                                childId = taskChild.id,
+                                enabled = dailyTasksEnabled,
+                                dailyTaskCount = dailyTaskCountText.toIntOrNull() ?: 1,
+                                questionsPerTask = dailyTaskQuestionCountText.toIntOrNull() ?: 4,
+                                passPercent = dailyTaskPassPercentText.toIntOrNull() ?: 70,
+                                rewardMinutes = dailyTaskRewardMinutesText.toIntOrNull() ?: 1,
+                                dailyCapMinutes = dailyTaskCapMinutesText.toIntOrNull() ?: 30
+                            )
+                            repository.saveChildDailyTaskSettings(cfg)
+                            dailyTaskSettingsChild = null
+                            notice = if (cfg.enabled) {
+                                "Automatic daily tasks saved for ${taskChild.displayName}. New tasks are generated when the child opens EduLock each day."
+                            } else "Automatic daily tasks are off for ${taskChild.displayName}."
+                        }
+                    },
+                    enabled = !busy
+                ) { AppUiText("Save daily task settings") }
+            },
+            dismissButton = {
+                TextButton(onClick = { dailyTaskSettingsChild = null }) { AppUiText("Cancel") }
+            }
+        )
+    }
+
     suspend fun refreshParentData() {
         familyId = repository.ensureParentFamily(
             displayName.ifBlank { "My family" }, parentCountryCode, parentLearningLanguageCode,
@@ -1279,6 +1387,10 @@ private fun EduLockApp(repository: EduLockRepository) {
             childLocationSharing = false
         } else {
             childLocationSharing = locationPrefs.getBoolean(ChildLocationService.KEY_SHARING_ENABLED, false)
+        }
+        try { repository.ensureDailyTasks() } catch (_: Exception) {
+            // A temporary network failure must not prevent the child from opening the app.
+            notice = "Today's automatic task could not sync yet. Reopen the learning space while online to retry."
         }
         tasks = repository.loadChildTasks(linked.id, linked.schoolGrade, linked.ageYears)
         try {
@@ -1765,8 +1877,16 @@ private fun EduLockApp(repository: EduLockRepository) {
 
     LaunchedEffect(screen, childProfile?.id) {
         val linked = childProfile
+        if (linked != null && session?.accountRole == "child" && screen == AppScreen.CHILD_HOME) {
+            try {
+                repository.ensureDailyTasks()
+                tasks = repository.loadChildTasks(linked.id, linked.schoolGrade, linked.ageYears)
+            } catch (_: Exception) {
+                // Keep the previous task list visible. The next home entry retries generation.
+            }
+        }
         if (linked != null && session?.accountRole == "child" &&
-            (screen == AppScreen.CHILD_HOME || screen == AppScreen.TASK_RESULT)) {
+            (screen == AppScreen.CHILD_HOME || screen == AppScreen.TASK_RESULT))
             try {
                 rewardBankMinutes = repository.loadChildRewardBankMinutes(linked.id)
                 val approved = allowedApps.filter { it.enabled }
@@ -2757,6 +2877,24 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     style = MaterialTheme.typography.bodySmall
                                 )
+                                OutlinedButton(
+                                    onClick = {
+                                        execute {
+                                            val cfg = repository.loadChildDailyTaskSettings(child.id)
+                                            dailyTasksEnabled = cfg.enabled
+                                            dailyTaskCountText = cfg.dailyTaskCount.toString()
+                                            dailyTaskQuestionCountText = cfg.questionsPerTask.toString()
+                                            dailyTaskPassPercentText = cfg.passPercent.toString()
+                                            dailyTaskRewardMinutesText = cfg.rewardMinutes.toString()
+                                            dailyTaskCapMinutesText = cfg.dailyCapMinutes.toString()
+                                            dailyTaskSettingsChild = child
+                                        }
+                                    },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    AppUiText("🤖 Daily learning tasks • Configure")
+                                }
                                 Field(
                                     childRewardCapEdits[child.id] ?: child.dailyCapMinutes.toString(),
                                     { value -> childRewardCapEdits = childRewardCapEdits + (child.id to value.filter(Char::isDigit).take(4)) },
@@ -2977,6 +3115,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 AppUiText("One-time pairing code for " + pairingChildName, fontWeight = FontWeight.SemiBold)
                                 AppUiText(lastPairingCode, fontSize = 32.sp, fontWeight = FontWeight.Bold)
                                 AppUiText("Valid for " + (pairingCodeExpiry / 60) + " minutes. Share privately with the child; only its hash is stored.")
+                                OutlinedButton(
+                                    onClick = {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("EduLock pairing code", lastPairingCode))
+                                        notice = "Pairing code copied. Share it privately with the child."
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { AppUiText("Copy pairing code") }
                                 OutlinedButton(onClick = { lastPairingCode = "" }, modifier = Modifier.fillMaxWidth()) { AppUiText("Hide code") }
                             }
                         }
@@ -4629,7 +4775,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    AppUiText("Choose a subject")
+                    AppUiText("Choose one or more subjects. You can combine questions from the selected subject banks in one task.")
                     val savedChildSubjectIds = selectedChild?.id?.let { childSubjectSelections[it] }
                     val assignableSubjects = subjects.filter { subject ->
                         val allowedByChildSelection = savedChildSubjectIds == null || subject.id in savedChildSubjectIds
@@ -4642,7 +4788,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             (religionTrack == null || (selectedChildTrack != "none" && religionTrack == selectedChildTrack))
                     }
                     val selectedTaskSubjects = assignableSubjects.filter { it.id in selectedTaskSubjectIds }
-                    AppUiText("Choose one subject bank per task. Create separate Mathematics, Physics, and other subject tasks so each task contains questions from only its selected subject.")
+                    AppUiText("Select questions below for an exact task, or leave them unselected to let EduLock pick the requested number automatically.")
                     if (assignableSubjects.isEmpty()) {
                         AppUiText("No subject is available for this child's Grade " + (selectedChild?.schoolGrade ?: 1) + " and age " + (selectedChild?.ageYears ?: 8) + ". Create a subject for the correct class or import matching curriculum questions.")
                         OutlinedButton(
@@ -4656,16 +4802,114 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                     }
                     assignableSubjects.forEach { subject ->
-                        OutlinedButton(onClick = {
-                            selectedTaskSubjectIds = setOf(subject.id)
-                            selectedSubject = subject
-                            notice = "Selected " + subject.title + ". Only its questions will be assigned to this task."
-                        }, modifier = Modifier.fillMaxWidth()) {
-                            AppUiText((if (subject.id in selectedTaskSubjectIds) "✓ Selected • " else "") + subject.title + " • Grade " + subject.gradeLevel + " (" + subject.languageCode + ")")
+                        OutlinedButton(
+                            onClick = {
+                                val nextIds = if (subject.id in selectedTaskSubjectIds) {
+                                    selectedTaskSubjectIds - subject.id
+                                } else {
+                                    selectedTaskSubjectIds + subject.id
+                                }
+                                selectedTaskSubjectIds = nextIds
+                                execute {
+                                    val latestSubjects = assignableSubjects.filter { it.id in nextIds }
+                                    val pool = latestSubjects.flatMap { repository.loadQuestions(it.id, 500) }
+                                        .filter { question ->
+                                            question.gradeLevel == selectedChild?.schoolGrade &&
+                                                selectedChild?.ageYears?.let { it in question.ageMin..question.ageMax } == true
+                                        }
+                                        .distinctBy { it.id }
+                                    taskQuestionChoices = pool
+                                    selectedTaskQuestionIds = selectedTaskQuestionIds.intersect(pool.map { it.id }.toSet())
+                                    if (selectedTaskQuestionIds.isNotEmpty()) taskQuestionCount = selectedTaskQuestionIds.size.toString()
+                                    notice = if (nextIds.isEmpty()) "No subjects selected. Choose at least one subject." else
+                                        "${nextIds.size} subject(s) selected and ${pool.size} matching questions available."
+                                }
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            AppUiText((if (subject.id in selectedTaskSubjectIds) "✓ Remove • " else "＋ Add • ") + subject.title + " • Grade " + subject.gradeLevel + " (" + subject.languageCode + ")")
+                        }
+                    }
+                    if (selectedTaskSubjectIds.isNotEmpty()) {
+                        OutlinedTextField(
+                            value = taskQuestionSearchQuery,
+                            onValueChange = { taskQuestionSearchQuery = it.take(200) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { AppUiText("Search questions to include") },
+                            placeholder = { AppUiText("Find by question text, concept, or language") }
+                        )
+                        val visibleTaskQuestions = taskQuestionChoices.filter { question ->
+                            taskQuestionSearchQuery.isBlank() ||
+                                question.prompt.contains(taskQuestionSearchQuery, ignoreCase = true) ||
+                                question.conceptKey.contains(taskQuestionSearchQuery, ignoreCase = true) ||
+                                question.languageCode.contains(taskQuestionSearchQuery, ignoreCase = true)
+                        }
+                        AppUiText(
+                            if (selectedTaskQuestionIds.isEmpty())
+                                "${taskQuestionChoices.size} matching questions. Select any questions to combine them in one task, or use automatic selection."
+                            else "${selectedTaskQuestionIds.size} questions selected for this task.",
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    val count = (taskQuestionCount.toIntOrNull() ?: 4).coerceIn(1, 20)
+                                    selectedTaskQuestionIds = visibleTaskQuestions.shuffled().take(count).map { it.id }.toSet()
+                                    taskQuestionCount = selectedTaskQuestionIds.size.toString()
+                                },
+                                enabled = !busy && visibleTaskQuestions.isNotEmpty(),
+                                modifier = Modifier.weight(1f)
+                            ) { AppUiText("Auto-select questions") }
+                            OutlinedButton(
+                                onClick = {
+                                    selectedTaskQuestionIds = emptySet()
+                                },
+                                enabled = selectedTaskQuestionIds.isNotEmpty(),
+                                modifier = Modifier.weight(1f)
+                            ) { AppUiText("Clear selection") }
+                        }
+                        visibleTaskQuestions.take(200).forEach { question ->
+                            Row(
+                                Modifier.fillMaxWidth().clickable {
+                                    selectedTaskQuestionIds = if (question.id in selectedTaskQuestionIds) {
+                                        selectedTaskQuestionIds - question.id
+                                    } else selectedTaskQuestionIds + question.id
+                                    if (selectedTaskQuestionIds.isNotEmpty()) taskQuestionCount = selectedTaskQuestionIds.size.toString()
+                                }.padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = question.id in selectedTaskQuestionIds,
+                                    onCheckedChange = { checked ->
+                                        selectedTaskQuestionIds = if (checked) selectedTaskQuestionIds + question.id else selectedTaskQuestionIds - question.id
+                                        if (selectedTaskQuestionIds.isNotEmpty()) taskQuestionCount = selectedTaskQuestionIds.size.toString()
+                                    }
+                                )
+                                Column(Modifier.weight(1f)) {
+                                    AppUiText(question.prompt, style = MaterialTheme.typography.bodyMedium)
+                                    AppUiText(
+                                        question.conceptKey + " • " + question.languageCode.uppercase() + " • " +
+                                            (if (question.gradeLevel == 0) "Kindergarten" else "Grade ${question.gradeLevel}"),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        if (taskQuestionChoices.size > visibleTaskQuestions.size) {
+                            AppUiText("Showing matching results. Use search to narrow the list.", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     Field(taskTitle, { taskTitle = it }, "Task title")
-                    Field(taskQuestionCount, { taskQuestionCount = it.filter(Char::isDigit).take(3) }, "Questions in task (1–500)", keyboardType = KeyboardType.Number)
+                    Field(
+                        if (selectedTaskQuestionIds.isNotEmpty()) selectedTaskQuestionIds.size.toString() else taskQuestionCount,
+                        { value -> if (selectedTaskQuestionIds.isEmpty()) taskQuestionCount = value.filter(Char::isDigit).take(3) },
+                        "Questions in task (1–500; manual selection overrides this)",
+                        keyboardType = KeyboardType.Number
+                    )
                     Field(taskPassPercent, { taskPassPercent = it.filter(Char::isDigit).take(3) }, "Passing score percent (0–100)", keyboardType = KeyboardType.Number)
                     Field(taskRewardMinutes, { taskRewardMinutes = it.filter(Char::isDigit).take(4) }, "Reward minutes per correct answer (0–1440)", keyboardType = KeyboardType.Number)
                     AppUiText("Each correct answer earns this many minutes, even if the child does not pass. Rewards can go to general mobile time, one app, or a group of apps, within daily caps.")
@@ -4727,7 +4971,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                         execute {
                             val child = selectedChild ?: throw IllegalArgumentException("Select a child.")
                             val chosenSubjects = assignableSubjects.filter { it.id in selectedTaskSubjectIds }
-                            if (chosenSubjects.size != 1) throw IllegalArgumentException("Choose exactly one subject for this task.")
+                            if (chosenSubjects.isEmpty()) throw IllegalArgumentException("Choose at least one subject for this task.")
+                            val manualQuestionIds = selectedTaskQuestionIds.toList()
+                            val requestedQuestionCount = if (manualQuestionIds.isNotEmpty()) manualQuestionIds.size
+                                else taskQuestionCount.toIntOrNull() ?: 0
                             val totalTimeLimit = taskTimeLimitSeconds.toIntOrNull() ?: 0
                             require(totalTimeLimit == 0 || totalTimeLimit in 10..3600) {
                                 "Total task time must be 0 (off) or between 10 and 3600 seconds."
@@ -4738,7 +4985,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             }
                             repository.addTask(
                                 familyId, child, chosenSubjects, taskTitle,
-                                taskQuestionCount.toIntOrNull() ?: 0,
+                                requestedQuestionCount,
                                 taskPassPercent.toIntOrNull() ?: -1,
                                 taskRewardMinutes.toIntOrNull() ?: -1,
                                 taskDailyCapMinutes.toIntOrNull() ?: -1,
@@ -4746,7 +4993,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 taskRewardGroupId.takeIf { it.isNotBlank() },
                                 totalTimeLimit.takeIf { it in 10..3600 },
                                 taskRewardToBank,
-                                perQuestionTimeLimit.takeIf { it in 5..600 }
+                                perQuestionTimeLimit.takeIf { it in 5..600 },
+                                manualQuestionIds
                             )
                             tasks = emptyList()
                             screen = AppScreen.PARENT_HOME
@@ -4755,7 +5003,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                             taskRewardGroupId = ""
                             taskRewardToBank = true
                             selectedTaskSubjectIds = emptySet()
-                            notice = "Task assigned to " + child.displayName + ". Each correct answer earns the configured minutes, within task and daily caps."
+                            taskQuestionChoices = emptyList()
+                            selectedTaskQuestionIds = emptySet()
+                            taskQuestionSearchQuery = ""
+                            notice = "Task assigned to " + child.displayName + " with " + requestedQuestionCount + " question(s). Correct answers earn the configured reward, within task and daily caps."
                         }
                     }, enabled = !busy && selectedChild != null && selectedTaskSubjects.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { AppUiText("Assign task") }
                 }
@@ -5728,13 +5979,24 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                     )
                     AppUiText("My apps", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    val uniqueChildApps = allowedApps.filter { it.enabled }
-                        .distinctBy { it.packageName.lowercase(Locale.ROOT) }
+                    val uniqueChildApps = allowedApps.filter { app ->
+                        app.enabled && if (app.packageName == "com.android.settings") true else {
+                            val info = try { context.packageManager.getApplicationInfo(app.packageName, 0) } catch (_: Exception) { null }
+                            info != null &&
+                                (info.flags and ApplicationInfo.FLAG_SYSTEM) == 0 &&
+                                (info.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) == 0
+                        }
+                    }.distinctBy { it.packageName.lowercase(Locale.ROOT) }
                         .sortedWith(compareBy<AllowedApp> { it.displayName.lowercase(Locale.ROOT) }.thenBy { it.packageName })
+                    var childAppsExpanded by remember { mutableStateOf(false) }
                     if (uniqueChildApps.isEmpty()) {
                         AppUiText("No parent-approved apps are currently available.")
                     } else {
-                        uniqueChildApps.forEach { app ->
+                        OutlinedButton(
+                            onClick = { childAppsExpanded = !childAppsExpanded },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { AppUiText((if (childAppsExpanded) "Hide apps" else "Show apps") + " • " + uniqueChildApps.size + " available") }
+                        if (childAppsExpanded) uniqueChildApps.forEach { app ->
                             val lockPrefs = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
                             val usedMs = lockPrefs.getLong("app_used_millis_" + app.packageName, 0L).coerceAtLeast(0L)
                             val earnedMs = lockPrefs.getStringSet("app_earned_minutes", emptySet()).orEmpty()
@@ -5757,12 +6019,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 remaining <= 0 -> "Time's up • answer to unlock"
                                 else -> "$remaining min left"
                             }
-                            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                        AppUiText(app.displayName, fontWeight = FontWeight.SemiBold)
-                                        AppUiText(status, color = if (remaining <= 0) Color(0xFFB45309) else MaterialTheme.colorScheme.onSurfaceVariant)
-                                        if (hasTask) AppUiText("A learning task unlocks this app.", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(15.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                                Row(Modifier.fillMaxWidth().padding(horizontal = 9.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        AppUiText(app.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                        AppUiText(status, color = if (remaining <= 0) Color(0xFFB45309) else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                        if (hasTask) AppUiText("A learning task unlocks this app.", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
                                     }
                                     Button(
                                         onClick = {
