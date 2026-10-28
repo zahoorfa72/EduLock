@@ -58,7 +58,7 @@ create index if not exists practical_submissions_child_time_idx
 create table if not exists edulock.child_concept_progress (
   child_id uuid not null references edulock.children(id) on delete cascade,
   concept_key text not null check (char_length(concept_key) between 1 and 160),
-  subject_id uuid references edulock.subjects(id) on delete set null,
+  subject_id uuid not null references edulock.subjects(id) on delete cascade,
   attempts integer not null default 0 check (attempts >= 0),
   correct_attempts integer not null default 0 check (correct_attempts between 0 and attempts),
   wrong_attempts integer not null default 0 check (wrong_attempts >= 0),
@@ -67,7 +67,7 @@ create table if not exists edulock.child_concept_progress (
   next_review_at timestamptz,
   last_question_id uuid references edulock.questions(id) on delete set null,
   updated_at timestamptz not null default now(),
-  primary key(child_id, concept_key)
+  primary key(child_id, concept_key, subject_id)
 );
 create index if not exists child_concept_review_idx
   on edulock.child_concept_progress(child_id, focus_score desc, next_review_at);
