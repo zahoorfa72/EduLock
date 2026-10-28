@@ -20,6 +20,15 @@ import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+data class ParentLearningSettings(
+    val familyId: String,
+    val displayName: String,
+    val countryCode: String = "PK",
+    val learningLanguageCode: String = "ur",
+    val studyTrack: String = "none",
+    val displayLanguageCode: String = "en"
+)
+
 data class PracticalTaskRow(
     val id: String,
     val childId: String,
