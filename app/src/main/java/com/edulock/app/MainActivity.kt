@@ -587,6 +587,8 @@ private fun EduLockApp(repository: EduLockRepository) {
     var taskRewardGroupId by remember { mutableStateOf("") }
     var physicalChallenges by remember { mutableStateOf(emptyList<PhysicalChallenge>()) }
     var challengeSubmissions by remember { mutableStateOf(emptyList<ChallengeSubmission>()) }
+    var challengeVideoPreviewFiles by remember { mutableStateOf<Map<String, File>>(emptyMap()) }
+    var previewingSubmissionId by remember { mutableStateOf<String?>(null) }
     var challengeTitle by remember { mutableStateOf("") }
     var challengeDescription by remember { mutableStateOf("") }
     var challengeTargetChildId by remember { mutableStateOf("all") }
@@ -3699,22 +3701,26 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         else AppUiText("Photo evidence could not be previewed.")
                                     } else {
                                         AppUiText("Video evidence attached • " + submission.mimeType)
-                                        OutlinedButton(onClick = {
-                                            try {
-                                                val bytes = android.util.Base64.decode(submission.mediaBase64, android.util.Base64.DEFAULT)
-                                                val file = File(context.cacheDir, "challenge_" + submission.id + ".mp4")
-                                                file.writeBytes(bytes)
-                                                notice = "Video evidence is ready below. Tap play."
-                                                selectedChallenge = physicalChallenges.firstOrNull { it.id == submission.challengeId }
-                                            } catch (e: Exception) { notice = "Could not open video evidence: " + (e.message ?: "unknown error") }
-                                        }, modifier = Modifier.fillMaxWidth()) { AppUiText("Prepare video for review") }
-                                        val videoFile = remember(submission.id, submission.mediaBase64) {
-                                            try {
-                                                val bytes = android.util.Base64.decode(submission.mediaBase64, android.util.Base64.DEFAULT)
-                                                File(context.cacheDir, "challenge_" + submission.id + ".mp4").apply { if (!exists() || length() != bytes.size.toLong()) writeBytes(bytes) }
-                                            } catch (_: Exception) { null }
+                                        OutlinedButton(onClick = { execute {
+                                            if (previewingSubmissionId == submission.id) {
+                                                previewingSubmissionId = null
+                                            } else {
+                                                try {
+                                                    val bytes = android.util.Base64.decode(submission.mediaBase64, android.util.Base64.DEFAULT)
+                                                    val file = File(context.cacheDir, "challenge_" + submission.id + ".mp4")
+                                                    if (!file.exists() || file.length() != bytes.size.toLong()) file.writeBytes(bytes)
+                                                    challengeVideoPreviewFiles = challengeVideoPreviewFiles + (submission.id to file)
+                                                    previewingSubmissionId = submission.id
+                                                    notice = "Playing compressed video evidence for parent review."
+                                                } catch (e: Exception) {
+                                                    notice = "Could not open video evidence: " + (e.message ?: "unknown error")
+                                                }
+                                            }
+                                        } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                                            AppUiText(if (previewingSubmissionId == submission.id) "Hide video preview" else "▶ Play video evidence")
                                         }
-                                        if (videoFile != null) AndroidView(
+                                        val videoFile = challengeVideoPreviewFiles[submission.id]
+                                        if (previewingSubmissionId == submission.id && videoFile != null) AndroidView(
                                             factory = { ctx -> VideoView(ctx).apply {
                                                 setVideoURI(Uri.fromFile(videoFile))
                                                 setMediaController(android.widget.MediaController(ctx))
