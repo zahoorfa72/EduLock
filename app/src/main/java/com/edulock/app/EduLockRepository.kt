@@ -29,6 +29,41 @@ data class ParentLearningSettings(
     val displayLanguageCode: String = "en"
 )
 
+data class PracticalTaskRow(
+    val id: String,
+    val childId: String,
+    val title: String,
+    val instructions: String,
+    val materialsJson: String = "[]",
+    val safetyNotes: String = "",
+    val ageMin: Int = 3,
+    val ageMax: Int = 19,
+    val activityKind: String = "practical",
+    val expectedMinutes: Int = 10
+)
+
+data class PracticalTaskSubmission(
+    val id: String,
+    val status: String,
+    val submittedAt: String
+)
+
+data class WrittenAnswerFeedback(
+    val id: String,
+    val attemptId: String,
+    val questionId: String,
+    val childId: String,
+    val conceptKey: String,
+    val suppliedAnswer: String,
+    val expectedAnswer: String,
+    val accuracyScore: Int,
+    val spellingScore: Int,
+    val finalScore: Int,
+    val detectedErrorsJson: String,
+    val feedback: String,
+    val createdAt: String
+)
+
 data class ChildProfile(
     val id: String,
     val familyId: String,
