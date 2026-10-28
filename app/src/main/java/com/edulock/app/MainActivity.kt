@@ -2189,7 +2189,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     ) { AppUiText("This is the child's phone — pair with code") }
                 }
                 AppScreen.AUTH -> if (isRestoringSession) {
-                    ScreenFrame("Welcome back", busy = true) {
+                    ScreenFrame("Welcome back", notice = null, busy = true) {
                         CircularProgressIndicator()
                         AppUiText("Restoring your signed-in account…")
                     }
