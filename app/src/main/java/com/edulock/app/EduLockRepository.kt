@@ -1859,7 +1859,7 @@ class EduLockRepository(context: Context) {
         require(ageMin in 3..19 && ageMax in ageMin..19) { "Choose a valid age range." }
         require(expectedMinutes in 1..180) { "Duration must be 1–180 minutes." }
         val materials = try { JSONArray(materialsJson.ifBlank { "[]" }) } catch (_: Exception) {
-            throw IllegalArgumentException("Materials must be a JSON list, for example ["paper","pencil"].")
+            throw IllegalArgumentException("Materials must be a JSON array, for example [paper, pencil].")
         }
         val body = JSONObject()
             .put("family_id",familyId)
