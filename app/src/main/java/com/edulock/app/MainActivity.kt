@@ -91,6 +91,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.IOException
+import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
 import java.util.Locale
@@ -315,6 +316,31 @@ private fun EduLockApp(repository: EduLockRepository) {
     var taskResult by remember { mutableStateOf<TaskResult?>(null) }
     var taskDeadlineAtMillis by remember { mutableStateOf<Long?>(null) }
     var taskSecondsRemaining by remember { mutableStateOf(0) }
+    val taskDraftPrefs = remember { context.getSharedPreferences("edulock_task_drafts", Context.MODE_PRIVATE) }
+    fun saveTaskDraft(taskId: String, draftAnswers: Map<String, String>, draftIndex: Int) {
+        val encodedAnswers = JSONObject()
+        draftAnswers.forEach { (id, value) -> encodedAnswers.put(id, value) }
+        taskDraftPrefs.edit().putString(taskId, JSONObject()
+            .put("answers", encodedAnswers)
+            .put("question_index", draftIndex)
+            .put("updated_at", System.currentTimeMillis()).toString()).apply()
+    }
+    fun readTaskDraft(taskId: String): Pair<Map<String, String>, Int> {
+        return try {
+            val saved = JSONObject(taskDraftPrefs.getString(taskId, "{}") ?: "{}")
+            val savedAnswers = saved.optJSONObject("answers") ?: JSONObject()
+            val parsed = linkedMapOf<String, String>()
+            val keys = savedAnswers.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                parsed[key] = savedAnswers.optString(key, "")
+            }
+            parsed to saved.optInt("question_index", 0)
+        } catch (_: Exception) { emptyMap<String, String>() to 0 }
+    }
+    LaunchedEffect(activeTask?.id, answers, questionIndex) {
+        activeTask?.id?.let { saveTaskDraft(it, answers, questionIndex) }
+    }
 
     var childName by remember { mutableStateOf("") }
     var childLanguage by remember { mutableStateOf("en") }
@@ -3585,6 +3611,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                             }
                         }
                     }
+                    Button(
+                        onClick = { screen = AppScreen.CHILD_HOME },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { AppUiText("Learning • Continue tasks") }
                     // Large illustrated tiles make the child dashboard feel like a learning game hub.
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         DashboardIconTile(
@@ -3778,9 +3808,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             val translated = loadedTranslations[item.id].orEmpty().any { it.languageCode.equals(preferred, ignoreCase = true) }
                                             item.id to if (translated) preferred.lowercase() else item.languageCode
                                         }
+                                        val draft = readTaskDraft(task.id)
                                         activeTask = task
-                                        questionIndex = 0
-                                        answers = emptyMap()
+                                        answers = draft.first.filterKeys { key -> loadedQuestions.any { it.id == key } }
+                                        questionIndex = draft.second.coerceIn(0, (loadedQuestions.size - 1).coerceAtLeast(0))
+                                        taskDeadlineAtMillis = null
+                                        taskSecondsRemaining = 0
                                         screen = AppScreen.PLAY_TASK
                                     }
                                 }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Start task") }
@@ -4329,6 +4362,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     }
                                     val submitted = repository.submitTask(task.id, answers, answerLanguages)
                                     taskResult = submitted
+                                    taskDraftPrefs.edit().remove(task.id).apply()
                                     val linked = childProfile
                                     if (linked != null) {
                                         try {
