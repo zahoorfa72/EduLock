@@ -8,9 +8,16 @@ create table if not exists edulock.child_emergency_access (
   emergency_code_hash text not null default '',
   logout_code_salt text not null default '',
   logout_code_hash text not null default '',
+  logout_code_expires_at timestamptz,
   allowed_packages text[] not null default '{}',
   access_minutes integer not null default 10 check (access_minutes between 1 and 30),
   expires_at timestamptz,
+  emergency_last_used_date date,
+  emergency_last_used_at timestamptz,
+  emergency_failed_attempts integer not null default 0 check (emergency_failed_attempts between 0 and 100),
+  emergency_locked_until timestamptz,
+  logout_failed_attempts integer not null default 0 check (logout_failed_attempts between 0 and 100),
+  logout_locked_until timestamptz,
   updated_at timestamptz not null default now()
 );
 
@@ -45,14 +52,8 @@ create policy child_emergency_access_parent_manage on edulock.child_emergency_ac
     )
   );
 
+-- The child must never be able to read salted code hashes directly.
+-- Child actions are validated by the service-role Edge Function with rate limiting.
 drop policy if exists child_emergency_access_child_read on edulock.child_emergency_access;
-create policy child_emergency_access_child_read on edulock.child_emergency_access
-  for select to authenticated
-  using (
-    exists (
-      select 1 from edulock.children c
-      where c.id = child_emergency_access.child_id
-        and c.child_user_id = (select auth.uid())
-        and c.family_id = child_emergency_access.family_id
-    )
-  );
+
+grant select, insert, update, delete on edulock.child_emergency_access to service_role;
