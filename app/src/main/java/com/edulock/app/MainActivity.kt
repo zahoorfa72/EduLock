@@ -3665,7 +3665,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         if (videoFile != null) AndroidView(
                                             factory = { ctx -> VideoView(ctx).apply {
                                                 setVideoURI(Uri.fromFile(videoFile))
-                                                setOnPreparedListener { player -> player.isLooping = false }
+                                                setMediaController(android.widget.MediaController(ctx))
+                                                setOnPreparedListener { player -> player.isLooping = false; start() }
                                             } },
                                             modifier = Modifier.fillMaxWidth().height(220.dp)
                                         )
