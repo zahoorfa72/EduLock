@@ -214,7 +214,7 @@ create or replace function edulock.adaptive_question_candidates(
   p_child_id uuid, p_subject_ids uuid[], p_grade integer, p_age integer, p_limit integer default 20
 ) returns table(question_id uuid, concept_key text, priority numeric, reason text)
 language sql stable security definer set search_path = ''
-as $$ 
+as $function$
   with eligible as (
     select q.id, q.concept_key, q.subject_id, q.created_at, q.difficulty_level,
       coalesce(cp.focus_score, 0)::numeric as focus_score,
@@ -245,7 +245,7 @@ as $$
       + case when e.next_review_at is not null and e.next_review_at <= now() then 5 else 0 end desc,
     e.created_at desc, e.id
   limit greatest(1, least(coalesce(p_limit,20),100));
-$$;
+$function$;
 revoke all on function edulock.adaptive_question_candidates(uuid, uuid[], integer, integer, integer) from public, anon, authenticated;
 grant execute on function edulock.adaptive_question_candidates(uuid, uuid[], integer, integer, integer) to service_role;
 
