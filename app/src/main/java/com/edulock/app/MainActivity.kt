@@ -439,6 +439,11 @@ private fun EduLockApp(repository: EduLockRepository) {
     var children by remember { mutableStateOf(emptyList<ChildProfile>()) }
     var childProfileSearchQuery by remember { mutableStateOf("") }
     var subjects by remember { mutableStateOf(emptyList<SubjectRow>()) }
+    var subjectSearchQuery by remember { mutableStateOf("") }
+    var questionSearchQuery by remember { mutableStateOf("") }
+    var groupRewardSearchQuery by remember { mutableStateOf("") }
+    var settingsSearchQuery by remember { mutableStateOf("") }
+    var childSecurityAppSearchQuery by remember { mutableStateOf("") }
     var selectedChild by remember { mutableStateOf<ChildProfile?>(null) }
     var childSecurityApps by remember { mutableStateOf(emptyList<AllowedApp>()) }
     var childEmergencyEnabled by remember { mutableStateOf(false) }
@@ -2302,10 +2307,25 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     }
                                 }
                                 AppUiText("Choose the apps that can be temporarily opened. Only currently enabled parent-approved apps can be selected.", style = MaterialTheme.typography.bodySmall)
+                                OutlinedTextField(
+                                    value = childSecurityAppSearchQuery,
+                                    onValueChange = { childSecurityAppSearchQuery = it.take(120) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    label = { AppUiText("Search emergency apps") },
+                                    placeholder = { AppUiText("Find an app by name or package") }
+                                )
+                                val visibleChildSecurityApps = childSecurityApps.filter { app ->
+                                    childSecurityAppSearchQuery.isBlank() ||
+                                        app.displayName.contains(childSecurityAppSearchQuery, ignoreCase = true) ||
+                                        app.packageName.contains(childSecurityAppSearchQuery, ignoreCase = true)
+                                }
                                 if (childSecurityApps.isEmpty()) {
                                     AppUiText("No parent-approved apps are enabled yet. Enable apps in Apps & limits first.")
+                                } else if (visibleChildSecurityApps.isEmpty()) {
+                                    AppUiText("No approved apps match '${childSecurityAppSearchQuery}'.")
                                 } else {
-                                    childSecurityApps.forEach { app ->
+                                    visibleChildSecurityApps.forEach { app ->
                                         Row(
                                             Modifier.fillMaxWidth().clickable {
                                                 childEmergencyAllowedPackages = if (app.packageName in childEmergencyAllowedPackages) {
@@ -2410,6 +2430,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.APP_SETTINGS -> ScreenFrame("App settings", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
                     AppUiText("Everything in one place", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
                     AppUiText("Choose the curriculum country, learning language and app language. Religious-education subjects are chosen separately for each child profile.")
+                    OutlinedTextField(
+                        value = settingsSearchQuery,
+                        onValueChange = { settingsSearchQuery = it.take(120) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { AppUiText("Search settings") },
+                        placeholder = { AppUiText("Find country, languages, limits, emergency, location or protection") }
+                    )
+                    if (settingsSearchQuery.isBlank()) {
                     AppUiText("Family learning preferences", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -2495,6 +2524,72 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                     }
                     AppUiText("Religious learning content is optional and follows the track selected by the parent. Country selection helps filter curriculum; it does not assume a family's personal beliefs.")
+                    } else {
+                        val query = settingsSearchQuery.trim()
+                        val settingsEntries = listOf(
+                            "Country" to "Curriculum country and regional question suggestions",
+                            "Learning language" to "Language used for learning content",
+                            "App language" to "Language used by the app interface",
+                            "Child profiles" to "Child profiles, pairing codes, delink, questions and rewards",
+                            "App limits" to "Allowed apps, blocked apps and daily screen-time limits",
+                            "Emergency access" to "Parent-created emergency access and strict daily limits",
+                            "Location & alerts" to "Child location sharing and family alerts",
+                            "Device protection" to "Accessibility and managed-device protection",
+                            "Notifications" to "Android notification permission",
+                            "Sign out" to "Sign out of the parent account"
+                        ).filter { (label, description) ->
+                            label.contains(query, ignoreCase = true) || description.contains(query, ignoreCase = true)
+                        }
+                        if (settingsEntries.isEmpty()) {
+                            AppUiText("No settings match '${query}'. Try words such as apps, limits, language or protection.")
+                        }
+                        settingsEntries.forEach { (label, description) ->
+                            OutlinedButton(
+                                onClick = {
+                                    when (label) {
+                                        "Country" -> { countryPickerTarget = "parent"; countrySearch = ""; countryPickerOpen = true }
+                                        "Learning language" -> { languagePickerTarget = "parent-learning"; languageSearch = ""; languagePickerOpen = true }
+                                        "App language" -> { languagePickerTarget = "display"; languageSearch = ""; languagePickerOpen = true }
+                                        "Child profiles", "App limits", "Emergency access" -> {
+                                            screen = AppScreen.CHILDREN
+                                            execute { children = repository.loadChildren(familyId) }
+                                        }
+                                        "Location & alerts" -> {
+                                            screen = AppScreen.CHILD_LOCATIONS
+                                            execute {
+                                                val latestChildren = repository.loadChildren(familyId)
+                                                children = latestChildren
+                                                childLocationRows = latestChildren.map { repository.loadChildLocationSnapshot(it.id) }
+                                            }
+                                        }
+                                        "Device protection" -> { refreshProtectionStatus(); screen = AppScreen.PROTECTION_STATUS }
+                                        "Notifications" -> {
+                                            if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                            } else {
+                                                notice = "Notification permission is already granted or is managed by Android on this device."
+                                            }
+                                        }
+                                        "Sign out" -> {
+                                            repository.signOut()
+                                            session = null
+                                            childProfile = null
+                                            screen = AppScreen.AUTH
+                                            isRegistering = false
+                                            notice = "Signed out."
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 9.dp)
+                            ) {
+                                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    AppUiText(label, fontWeight = FontWeight.SemiBold)
+                                    AppUiText(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 AppScreen.PARENT_HOME -> ScreenFrame("Parent dashboard", notice = notice, busy = busy) {
