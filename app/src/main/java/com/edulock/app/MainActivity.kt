@@ -3256,6 +3256,14 @@ private fun EduLockApp(repository: EduLockRepository) {
 
                 AppScreen.SUBJECTS -> ScreenFrame("Subjects & questions", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
                     AppUiText("Open any subject to add, review, translate, or edit its questions. Each subject has its own separate question bank.")
+                    OutlinedTextField(
+                        value = subjectSearchQuery,
+                        onValueChange = { subjectSearchQuery = it.take(120) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { AppUiText("Search subjects") },
+                        placeholder = { AppUiText("Find by subject, language or curriculum") }
+                    )
                     Button(onClick = {
                         editingSubjectId = null
                         subjectTitle = ""; subjectLanguage = "en"
@@ -3288,8 +3296,18 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 subject.curriculumSubjectCode.trim().lowercase(Locale.ROOT)
                             ).joinToString("|")
                         }
-                    if (visibleSubjects.isEmpty()) AppUiText("No subjects yet. Create a subject to begin.")
-                    visibleSubjects.forEach { subject ->
+                    val searchedSubjects = visibleSubjects.filter { subject ->
+                        subjectSearchQuery.isBlank() ||
+                            subject.title.contains(subjectSearchQuery, ignoreCase = true) ||
+                            subject.languageCode.contains(subjectSearchQuery, ignoreCase = true) ||
+                            subject.countryCode.contains(subjectSearchQuery, ignoreCase = true) ||
+                            subject.curriculumSubjectCode.contains(subjectSearchQuery, ignoreCase = true) ||
+                            subject.gradeLevel.toString().contains(subjectSearchQuery, ignoreCase = true)
+                    }
+                    if (searchedSubjects.isEmpty()) {
+                        AppUiText(if (subjects.isEmpty()) "No subjects yet. Create a subject to begin." else "No subjects match '${subjectSearchQuery}'.")
+                    }
+                    searchedSubjects.forEach { subject ->
                         Card(
                             modifier = Modifier.fillMaxWidth().clickable {
                                 selectedSubject = subject
@@ -3669,6 +3687,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                     val subject = selectedSubject
                     if (subject != null) {
                         val subjectQuestions = questions.filter { it.subjectId == subject.id }
+                        val filteredSubjectQuestions = subjectQuestions.filter { question ->
+                            questionSearchQuery.isBlank() ||
+                                question.prompt.contains(questionSearchQuery, ignoreCase = true) ||
+                                question.conceptKey.contains(questionSearchQuery, ignoreCase = true) ||
+                                question.languageCode.contains(questionSearchQuery, ignoreCase = true) ||
+                                question.questionType.contains(questionSearchQuery, ignoreCase = true) ||
+                                question.options.any { it.contains(questionSearchQuery, ignoreCase = true) }
+                        }
                         AppUiText("Create a question in " + subject.languageCode + " and give related questions the same concept tag. The tag lets Concept Bridge report understanding separately from language.")
                         AppUiText("Questions are added one at a time. Choosing a template only fills the form; it is not saved until you press Save question.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         val eligibleRewardConcepts = subjectQuestions
@@ -3684,7 +3710,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 AppUiText("🏅 Concept group rewards", fontWeight = FontWeight.Bold)
                                 AppUiText(
-                                    "Bonus minutes when every assigned question with a concept tag is correct.",
+                                    "Extra minutes for a related-question group. The child earns the bonus only when every question with that concept tag in the assigned task is correct.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -3706,14 +3732,27 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         if (groupRewardsExpanded) {
                             AppUiText(
-                                "Set a bonus for each concept tag, then press Save group bonus. The bonus is awarded only when every question in that concept group assigned to a task is correct.",
+                                "How it works: give each concept tag a bonus. Example: set 'place-value' to 5 minutes. In a task, if the child answers every place-value question correctly, EduLock adds 5 extra minutes once. If any of those questions is wrong, that group bonus is not awarded. This is not 5 minutes per question.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            OutlinedTextField(
+                                value = groupRewardSearchQuery,
+                                onValueChange = { groupRewardSearchQuery = it.take(120) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                label = { AppUiText("Search concept tags") },
+                                placeholder = { AppUiText("Find a question group, e.g. place-value") }
+                            )
+                            val filteredRewardConcepts = eligibleRewardConcepts.filter {
+                                it.contains(groupRewardSearchQuery, ignoreCase = true)
+                            }
                             if (eligibleRewardConcepts.isEmpty()) {
                                 AppUiText("No concept tags are available yet. Add questions with a concept tag to configure group bonuses.")
+                            } else if (filteredRewardConcepts.isEmpty()) {
+                                AppUiText("No concept tags match '${groupRewardSearchQuery}'.")
                             } else {
-                                eligibleRewardConcepts.forEach { concept ->
+                                filteredRewardConcepts.forEach { concept ->
                                     val savedGroupMinutes = questionRewardGroups.firstOrNull { it.conceptKey == concept }?.rewardMinutes ?: 0
                                     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                                         Row(
@@ -3852,8 +3891,20 @@ private fun EduLockApp(repository: EduLockRepository) {
                             enabled = !busy,
                             modifier = Modifier.fillMaxWidth()
                         ) { AppUiText("✨ Create a custom interactive 4D question") }
-                        if (subjectQuestions.isEmpty()) AppUiText("No questions yet.")
-                        subjectQuestions.forEachIndexed { index, question ->
+                        OutlinedTextField(
+                            value = questionSearchQuery,
+                            onValueChange = { questionSearchQuery = it.take(200) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { AppUiText("Search questions") },
+                            placeholder = { AppUiText("Find by prompt, concept tag, language or type") }
+                        )
+                        if (subjectQuestions.isEmpty()) {
+                            AppUiText("No questions yet.")
+                        } else if (filteredSubjectQuestions.isEmpty()) {
+                            AppUiText("No questions match '${questionSearchQuery}'.")
+                        }
+                        filteredSubjectQuestions.forEachIndexed { index, question ->
                             CompositionLocalProvider(LocalLayoutDirection provides directionFor(question.languageCode)) {
                                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
