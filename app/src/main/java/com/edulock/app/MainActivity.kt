@@ -4431,10 +4431,20 @@ private fun EduLockApp(repository: EduLockRepository) {
                         AppUiText("Question " + (questionIndex + 1) + " of " + questions.size, style = MaterialTheme.typography.titleMedium)
                         if (task.timeLimitSeconds != null) {
                             SummaryCard(
-                                "Time remaining",
+                                "Task time remaining",
                                 String.format(java.util.Locale.ROOT, "%d:%02d", taskSecondsRemaining / 60, taskSecondsRemaining % 60),
-                                "Answers submit automatically when the countdown reaches zero."
+                                "The task is submitted when this countdown reaches zero."
                             )
+                        }
+                        if (task.questionTimeLimitSeconds != null && question.id !in expiredQuestionIds) {
+                            SummaryCard(
+                                "Question time remaining",
+                                questionSecondsRemaining.toString() + " sec",
+                                "Each question has its own countdown. When it reaches zero, this question locks and the next one opens."
+                            )
+                        }
+                        if (question.id in expiredQuestionIds) {
+                            SummaryCard("Question locked", "Time ended", "Your saved answer cannot be changed after this question's timer expires.")
                         }
                         LinearProgressIndicator(progress = { (questionIndex + 1).toFloat() / questions.size.toFloat() }, modifier = Modifier.fillMaxWidth())
                         AppUiText("Concept: " + question.conceptKey, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
@@ -4458,7 +4468,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         CompositionLocalProvider(LocalLayoutDirection provides directionFor(selectedLanguage)) {
                             AppUiText(promptForLanguage, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                            if (question.questionType == "picture") {
+                            if (question.id in expiredQuestionIds) {
+                                AppUiText("Time for this question has ended. This question is locked; move to the next question.")
+                            } else if (question.questionType == "picture") {
                                 when {
                                     questionImageLoading -> AppUiText("Loading family picture…")
                                     displayedQuestionImageUrl != null -> AndroidView(
@@ -4573,6 +4585,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     val submitted = repository.submitTask(task.id, answers, answerLanguages)
                                     taskResult = submitted
                                     taskDraftPrefs.edit().remove(task.id).apply()
+                                    taskDeadlineAtMillis = null
+                                    questionDeadlineAtMillis = null
+                                    questionDeadlineQuestionId = null
+                                    questionSecondsRemaining = 0
+                                    expiredQuestionIds = emptySet()
                                     val linked = childProfile
                                     if (linked != null) {
                                         try {
@@ -4582,6 +4599,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             earnedToday = submitted.dailyUsedMinutes
                                             notice = "Your answers were submitted, but the updated reward balance could not be refreshed. Open the learning space while connected and sync again."
                                         }
+                                        try { tasks = repository.loadChildTasks(linked.id) } catch (_: Exception) { /* preserve current list if the network is unavailable */ }
                                     }
                                     screen = AppScreen.TASK_RESULT
                                 }
@@ -4591,6 +4609,18 @@ private fun EduLockApp(repository: EduLockRepository) {
                         ) {
                             AppUiText(if (busy) "Submitting answers…" else "Submit answers (" + answers.count { it.value.isNotBlank() } + "/" + questions.size + ")")
                         }
+                        OutlinedButton(
+                            onClick = {
+                                saveTaskDraft(
+                                    task.id, answers, questionIndex, expiredQuestionIds,
+                                    taskDeadlineAtMillis, questionDeadlineAtMillis, questionDeadlineQuestionId
+                                )
+                                screen = AppScreen.CHILD_HOME
+                                notice = "Progress saved. Open Learning again whenever you are ready to continue this task."
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { AppUiText("Save progress & leave task") }
                     } else {
                         AppUiText("No question is available. Return to your task list and sync again.")
                     }
