@@ -264,6 +264,7 @@ data class ChildEmergencyAccessConfig(
     val childId: String,
     val familyId: String,
     val enabled: Boolean = false,
+    val blockEmergencyAfterDailyLimit: Boolean = false,
     val emergencyCodeSalt: String = "",
     val emergencyCodeHash: String = "",
     val logoutCodeSalt: String = "",
@@ -280,6 +281,7 @@ data class ChildEmergencyAccessConfig(
 )
 data class ChildEmergencyOptions(
     val enabled: Boolean = false,
+    val blockEmergencyAfterDailyLimit: Boolean = false,
     val allowedPackages: Set<String> = emptySet(),
     val accessMinutes: Int = 10,
     val expiresAt: String? = null,
@@ -740,6 +742,7 @@ class EduLockRepository(context: Context) {
             childId = optString("child_id", childId),
             familyId = optString("family_id", familyId),
             enabled = optBoolean("enabled", false),
+            blockEmergencyAfterDailyLimit = optBoolean("block_emergency_after_daily_limit", false),
             emergencyCodeSalt = optString("emergency_code_salt"),
             emergencyCodeHash = optString("emergency_code_hash"),
             logoutCodeSalt = optString("logout_code_salt"),
@@ -760,6 +763,7 @@ class EduLockRepository(context: Context) {
         .put("child_id", childId)
         .put("family_id", familyId)
         .put("enabled", enabled)
+        .put("block_emergency_after_daily_limit", blockEmergencyAfterDailyLimit)
         .put("emergency_code_salt", emergencyCodeSalt)
         .put("emergency_code_hash", emergencyCodeHash)
         .put("logout_code_salt", logoutCodeSalt)
@@ -804,7 +808,8 @@ class EduLockRepository(context: Context) {
         childId: String,
         enabled: Boolean,
         allowedPackages: Set<String>,
-        accessMinutes: Int
+        accessMinutes: Int,
+        blockEmergencyAfterDailyLimit: Boolean
     ): ChildEmergencyAccessConfig {
         requireSession("parent")
         require(familyId.matches(Regex("[0-9a-fA-F-]{36}")) && childId.matches(Regex("[0-9a-fA-F-]{36}"))) {
@@ -820,18 +825,26 @@ class EduLockRepository(context: Context) {
         }
         val current = loadChildEmergencyAccess(childId)
         require(current.familyId == familyId) { "This child does not belong to the selected family." }
-        return upsertChildEmergencyAccess(current.copy(enabled = enabled, allowedPackages = normalized, accessMinutes = accessMinutes))
+        return upsertChildEmergencyAccess(current.copy(
+            enabled = enabled,
+            allowedPackages = normalized,
+            accessMinutes = accessMinutes,
+            blockEmergencyAfterDailyLimit = blockEmergencyAfterDailyLimit
+        ))
     }
 
     suspend fun generateChildEmergencyCode(
         familyId: String,
         childId: String,
         allowedPackages: Set<String>,
-        accessMinutes: Int
+        accessMinutes: Int,
+        blockEmergencyAfterDailyLimit: Boolean
     ): String {
         requireSession("parent")
         require(allowedPackages.isNotEmpty()) { "Select at least one parent-approved app." }
-        val current = saveChildEmergencySettings(familyId, childId, true, allowedPackages, accessMinutes)
+        val current = saveChildEmergencySettings(
+            familyId, childId, true, allowedPackages, accessMinutes, blockEmergencyAfterDailyLimit
+        )
         val code = randomEmergencyCode()
         val salt = randomEmergencySalt()
         val expires = java.time.Instant.now().plusSeconds(30L * 24L * 60L * 60L).toString()
@@ -867,6 +880,7 @@ class EduLockRepository(context: Context) {
         val packages = response.optJSONArray("allowed_packages") ?: JSONArray()
         return ChildEmergencyOptions(
             enabled = response.optBoolean("enabled", false),
+            blockEmergencyAfterDailyLimit = response.optBoolean("block_emergency_after_daily_limit", false),
             allowedPackages = (0 until packages.length()).mapNotNull { packages.optString(it).takeIf(String::isNotBlank) }.toSet(),
             accessMinutes = response.optInt("access_minutes", 10).coerceIn(1, 30),
             expiresAt = response.optString("expires_at").takeIf { it.isNotBlank() && it != "null" },

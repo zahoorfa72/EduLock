@@ -441,6 +441,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var selectedChild by remember { mutableStateOf<ChildProfile?>(null) }
     var childSecurityApps by remember { mutableStateOf(emptyList<AllowedApp>()) }
     var childEmergencyEnabled by remember { mutableStateOf(false) }
+    var childBlockEmergencyAfterDailyLimit by remember { mutableStateOf(false) }
     var childEmergencyAllowedPackages by remember { mutableStateOf<Set<String>>(emptySet()) }
     var childEmergencyMinutesText by remember { mutableStateOf("10") }
     var childSecurityCodeDisplay by remember { mutableStateOf("") }
@@ -2251,6 +2252,24 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     "Emergency access minutes (1–30)",
                                     keyboardType = KeyboardType.Number
                                 )
+                                Row(
+                                    Modifier.fillMaxWidth().clickable {
+                                        childBlockEmergencyAfterDailyLimit = !childBlockEmergencyAfterDailyLimit
+                                    },
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = childBlockEmergencyAfterDailyLimit,
+                                        onCheckedChange = { childBlockEmergencyAfterDailyLimit = it }
+                                    )
+                                    Column(Modifier.weight(1f)) {
+                                        AppUiText("Never bypass an app's daily limit", fontWeight = FontWeight.Bold)
+                                        AppUiText(
+                                            "When enabled, emergency access is blocked after the selected app reaches its daily time limit.",
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                }
                                 AppUiText("Choose the apps that can be temporarily opened. Only currently enabled parent-approved apps can be selected.", style = MaterialTheme.typography.bodySmall)
                                 if (childSecurityApps.isEmpty()) {
                                     AppUiText("No parent-approved apps are enabled yet. Enable apps in Apps & limits first.")
@@ -2290,7 +2309,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 ?: throw IllegalArgumentException("Enter emergency access minutes from 1 to 30.")
                                             repository.saveChildEmergencySettings(
                                                 familyId, child.id, childEmergencyEnabled,
-                                                childEmergencyAllowedPackages, minutes
+                                                childEmergencyAllowedPackages, minutes,
+                                                childBlockEmergencyAfterDailyLimit
                                             )
                                             notice = "Emergency access settings saved for " + child.displayName + "."
                                         }
@@ -2305,7 +2325,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             val minutes = childEmergencyMinutesText.toIntOrNull()
                                                 ?: throw IllegalArgumentException("Enter emergency access minutes from 1 to 30.")
                                             val code = repository.generateChildEmergencyCode(
-                                                familyId, child.id, childEmergencyAllowedPackages, minutes
+                                                familyId, child.id, childEmergencyAllowedPackages, minutes,
+                                                childBlockEmergencyAfterDailyLimit
                                             )
                                             childEmergencyEnabled = true
                                             childSecurityCodeDisplay = code
@@ -2764,6 +2785,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                     .sortedBy { it.displayName.lowercase(Locale.ROOT) }
                                                 val config = repository.loadChildEmergencyAccess(child.id)
                                                 childEmergencyEnabled = config.enabled
+                                                childBlockEmergencyAfterDailyLimit = config.blockEmergencyAfterDailyLimit
                                                 childEmergencyAllowedPackages = config.allowedPackages.intersect(childSecurityApps.map { it.packageName }.toSet())
                                                 childEmergencyMinutesText = config.accessMinutes.toString()
                                             }
@@ -5318,6 +5340,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 AppUiText("🆘 Emergency app access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = Color(0xFF72500A))
                                 AppUiText("One approved app can be opened for " + childEmergencyOptions.accessMinutes + " minutes, once per Pakistan calendar day.", color = Color(0xFF72500A))
                                 AppUiText("Your parent does not need to be online, but this phone needs internet to verify the code.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF72500A))
+                                if (childEmergencyOptions.blockEmergencyAfterDailyLimit) {
+                                    AppUiText(
+                                        "Strict daily limit is on. Emergency access cannot extend an app after its daily limit is reached.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF9A3412)
+                                    )
+                                }
                                 if (childEmergencyOptions.lastUsedDate == todayInPakistan) {
                                     AppUiText("Emergency access has already been used today.", fontWeight = FontWeight.SemiBold, color = Color(0xFF9A3412))
                                 } else if (emergencyApps.isEmpty()) {
@@ -5359,6 +5388,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             execute {
                                                 val launch = context.packageManager.getLaunchIntentForPackage(childEmergencyTargetPackage)
                                                     ?: throw IllegalStateException("This app is not installed on this phone. Ask your parent to refresh the approved app list.")
+                                                val linkedChildId = childProfile?.id
+                                                    ?: throw IllegalStateException("This child profile is no longer linked.")
+                                                // Push the latest local usage total before the server checks strict daily limits.
+                                                repository.syncAppUsage(linkedChildId)
                                                 val result = repository.redeemChildEmergencyAccess(
                                                     childEmergencyCodeInput, childEmergencyTargetPackage
                                                 )

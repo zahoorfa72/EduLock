@@ -83,6 +83,7 @@ Deno.serve(async (req) => {
         settings.emergency_code_hash.length > 0;
       return json({
         enabled: available,
+        block_emergency_after_daily_limit: settings.block_emergency_after_daily_limit === true,
         allowed_packages: available && Array.isArray(settings.allowed_packages) ? settings.allowed_packages : [],
         access_minutes: Math.max(1, Math.min(30, Number(settings.access_minutes) || 10)),
         expires_at: available ? settings.expires_at : null,
@@ -139,8 +140,35 @@ Deno.serve(async (req) => {
     }
     // Approval is limited to apps that are still enabled by the parent at redemption time.
     const { data: appRule, error: appError } = await admin.schema("edulock").from("allowed_apps")
-      .select("package_name,enabled").eq("child_id", child.id).eq("package_name", packageName).eq("enabled", true).maybeSingle();
+      .select("package_name,enabled,daily_limit_minutes").eq("child_id", child.id).eq("package_name", packageName).eq("enabled", true).maybeSingle();
     if (appError || !appRule) return json({ error: "The parent has not currently enabled this app." }, 403);
+
+    // This setting prevents a parent-issued emergency code from extending the app's daily cap.
+    // The Android client syncs current usage immediately before redemption; use the server's UTC
+    // date because app_usage_daily is written with UTC usage_date.
+    if (settings.block_emergency_after_daily_limit === true) {
+      const dailyLimitMinutes = Math.max(0, Number(appRule.daily_limit_minutes) || 0);
+      if (dailyLimitMinutes > 0) {
+        const usageDate = new Date().toISOString().slice(0, 10);
+        const { data: usage, error: usageError } = await admin.schema("edulock")
+          .from("app_usage_daily")
+          .select("used_seconds")
+          .eq("child_id", child.id)
+          .eq("usage_date", usageDate)
+          .eq("package_name", packageName)
+          .maybeSingle();
+        if (usageError) {
+          console.error("Emergency usage verification failed", usageError.code);
+          return json({ error: "Today's app usage could not be verified. Sync EduLock and try again." }, 503);
+        }
+        const usedSeconds = Math.max(0, Number(usage?.used_seconds) || 0);
+        if (usedSeconds >= dailyLimitMinutes * 60) {
+          return json({
+            error: "This app's daily limit has been reached. Your parent enabled strict limits, so emergency access cannot extend today's app time.",
+          }, 429);
+        }
+      }
+    }
 
     const duration = Math.max(1, Math.min(30, Number(settings.access_minutes) || 10));
     const { data: used, error: useError } = await admin.schema("edulock").from("child_emergency_access")

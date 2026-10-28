@@ -14,7 +14,7 @@ Native Android parental-control and learning app built with Kotlin, Jetpack Comp
 - Server-side answer grading. Correct-answer keys are not granted to clients. Rewards are written by a trusted database function, not calculated by the client, with a per-child daily cap and a task cap enforced in the same transaction.
 - Progress reports with score, pass/fail and awarded minutes.
 - Parent-facing daily usage reports for approved apps, showing package/display name and total foreground time only. Usage is synced from the child's device while EduLock is open; it is not a live screen view.
-- Per-app daily usage limits are configurable from the parent account and applied locally when the child syncs device rules.
+- Per-app daily usage limits are configurable from the parent account and applied locally when the child syncs device rules. Parents can enable strict emergency access limits to prevent a one-time emergency code from extending an app after its daily cap is exhausted.
 - Opt-in Android Accessibility service observes app/package changes only (not screen text), displays a transparent restriction overlay over unapproved apps and blocks approved apps when their allowed time is used up. This requires a parent-approved one-time activation on the child's physical device.
 - If the phone was provisioned as an Android device owner, EduLock applies Android policies to block app uninstall and app-management actions (including clearing app data through Settings). The app cannot grant itself device-owner status.
 - Shared rounded, high-contrast kid-friendly styling across app screens, with a colorful gradient header and clearer status cards.
@@ -48,6 +48,7 @@ Use the intended EduLock Supabase project. EduLock uses its own `edulock` schema
    - `supabase functions deploy submit-task-attempt`
    - `supabase functions deploy curriculum-library`
    - `supabase functions deploy import-curriculum-questions`
+   - `supabase functions deploy child-emergency-access`
 4. Confirm the Edge Function environment has Supabase's server-provided `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. The service-role key is used only inside Edge Functions; it must never be copied into Android, GitHub Actions build variables, or chat.
 5. In Supabase Auth, choose the appropriate email-confirmation policy for parent accounts. Child device pairing does not use email confirmation, because child devices do not create email/password accounts.
 6. In Supabase Auth settings, enable **Anonymous Sign-Ins** for the EduLock project. Create a parent account in EduLock, add a child profile and generate a pairing code. On the child's device, choose **Set up a child's device with pairing code** and enter the six-digit code. No child email/password account is created. Codes expire after ten minutes and work once.
@@ -83,6 +84,7 @@ This command can fail if the device does not meet Android's provisioning require
 - [ ] Test all question types, empty submissions, changed question IDs, repeat submissions, fail/pass boundaries and concurrent reward requests.
 - [ ] Verify child clients cannot read answer keys or directly insert attempts/reward ledger rows.
 - [ ] Test daily cap at zero, exactly at the cap, and across UTC day boundaries.
+- [ ] Enable strict emergency limits, exhaust an app's daily cap, and verify the emergency code is rejected server-side; disable the setting and verify normal one-use emergency access still works.
 - [ ] On each target device/OEM, enable Accessibility, test unapproved-app blocking, allowed-app time accounting, restart/reboot, permission revocation and the recovery path in Android Settings.
 - [ ] Review Google Play Accessibility API policy and parental-control disclosure requirements before public release.
 
