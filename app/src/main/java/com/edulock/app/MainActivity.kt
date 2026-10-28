@@ -3076,8 +3076,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                     ) { AppUiText("🌌 Preview all interactive 4D learning models") }
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         val templateCategoriesForContext = if (selectedSubject != null) {
+                            val selectedTitle = selectedSubject!!.title.substringBefore(" — Grade ").trim()
                             LearningTemplates.all
-                                .filter { it.subjectTitle.equals(selectedSubject!!.title, ignoreCase = true) }
+                                .filter { it.subjectTitle.equals(selectedTitle, ignoreCase = true) }
                                 .map { it.category }
                                 .distinct()
                         } else learningTemplateCategories(templateCountryCode)
@@ -3097,7 +3098,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                     val countryTemplates = LearningTemplates.all.filter { template ->
                         template.category == templateCategory &&
-                            (selectedSubject == null || template.subjectTitle.equals(selectedSubject!!.title, ignoreCase = true)) &&
+                            (selectedSubject == null || template.subjectTitle.equals(
+                                selectedSubject!!.title.substringBefore(" — Grade ").trim(), ignoreCase = true
+                            )) &&
                             (template.countryCode == "ZZ" || template.countryCode.equals(templateCountryCode, ignoreCase = true)) &&
                             (templateCategory != "Religious Education" ||
                                 (templateStudyTrack != "none" &&
