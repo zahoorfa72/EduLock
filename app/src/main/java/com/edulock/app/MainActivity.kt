@@ -2863,15 +2863,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         groupRewardsExpanded = false
                                         screen = AppScreen.QUESTIONS
                                         execute {
-                                                                                        val loadedQuestions = repository.loadQuestions(subject.id)
-                                                                                questions = loadedQuestions
-                                                                                val questionIds = loadedQuestions.map { it.id }
-                                                                                coroutineScope {
-                                                                                    val translationsDeferred = async { repository.loadQuestionTranslations(questionIds) }
-                                                                                    val solutionsDeferred = async { repository.loadQuestionSolutions(questionIds) }
-                                                                                    questionTranslations = translationsDeferred.await()
-                                                                                    questionSolutions = solutionsDeferred.await()
-                                                                                }
+                                            val loadedQuestions = repository.loadQuestions(subject.id)
+                                            questions = loadedQuestions
+                                            val questionIds = loadedQuestions.map { it.id }
+                                            coroutineScope {
+                                                val translationsDeferred = async { repository.loadQuestionTranslations(questionIds) }
+                                                val solutionsDeferred = async { repository.loadQuestionSolutions(questionIds) }
+                                                questionTranslations = translationsDeferred.await()
+                                                questionSolutions = solutionsDeferred.await()
+                                            }
                                             notice = null
                                         }
                                     },
