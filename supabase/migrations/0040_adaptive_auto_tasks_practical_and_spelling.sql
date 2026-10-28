@@ -256,7 +256,7 @@ as $daily$
 declare
   v_child edulock.children%rowtype;
   v_preferences edulock.child_learning_preferences%rowtype;
-  v_daily_settings edulock.daily_task_settings%rowtype;
+  v_daily_settings record;
   v_subject record;
   v_ids uuid[];
   v_question record;
@@ -285,14 +285,17 @@ begin
     v_kindergarten := coalesce(v_preferences.kindergarten_mode,false);
   end if;
 
-  select * into v_daily_settings from edulock.daily_task_settings ds
-    where ds.child_id = v_child.id and ds.enabled = true;
+  -- Read the existing per-child daily task configuration when present. The preferences
+  -- table already supplies safe defaults for installations with no daily automation setup.
+  select ds.daily_task_count, ds.questions_per_task, ds.pass_percent, ds.reward_minutes, ds.daily_cap_minutes
+    into v_daily_settings
+    from edulock.daily_task_settings ds where ds.child_id = v_child.id and ds.enabled = true;
   if found then
-    v_daily_task_count := greatest(1, least(coalesce(v_daily_settings.daily_task_count,1),3));
-    v_question_limit := greatest(1, least(coalesce(v_daily_settings.questions_per_task,4),100));
-    v_pass_percent := greatest(0, least(coalesce(v_daily_settings.pass_percent,70),100));
-    v_reward_minutes := greatest(0, least(coalesce(v_daily_settings.reward_minutes,1),1440));
-    v_daily_cap := greatest(0, least(coalesce(v_daily_settings.daily_cap_minutes,30),1440));
+    v_daily_task_count := greatest(1, least(coalesce((v_daily_settings).daily_task_count,1),3));
+    v_question_limit := greatest(1, least(coalesce((v_daily_settings).questions_per_task,4),100));
+    v_pass_percent := greatest(0, least(coalesce((v_daily_settings).pass_percent,70),100));
+    v_reward_minutes := greatest(0, least(coalesce((v_daily_settings).reward_minutes,1),1440));
+    v_daily_cap := greatest(0, least(coalesce((v_daily_settings).daily_cap_minutes,30),1440));
   end if;
   v_kindergarten := v_kindergarten or coalesce(v_child.age_years,8) <= 6 or coalesce(v_child.school_grade,1) <= 0;
   v_task_count := case when v_kindergarten then least(v_daily_task_count,2) else least(v_daily_task_count,3) end;
