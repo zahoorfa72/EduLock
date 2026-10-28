@@ -3455,7 +3455,6 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 onClick = {
                                                     if (translationEditorQuestionId == question.id) {
                                                         translationEditorQuestionId = null
-                                                        translationEditorQuestionId = null
                                                     } else {
                                                         translationEditorQuestionId = question.id
                                                         val existingTranslation = savedTranslationsForQuestion.firstOrNull()
