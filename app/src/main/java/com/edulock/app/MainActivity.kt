@@ -92,6 +92,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.IOException
 import org.json.JSONObject
+import org.json.JSONArray
 import java.time.Instant
 import java.time.LocalDate
 import java.util.Locale
@@ -268,6 +269,15 @@ private fun learningTemplateCategories(countryCode: String): List<String> {
     return (common + localLanguageSubjects).distinct()
 }
 
+private data class LocalTaskDraft(
+    val answers: Map<String, String> = emptyMap(),
+    val questionIndex: Int = 0,
+    val expiredQuestionIds: Set<String> = emptySet(),
+    val taskDeadlineAtMillis: Long? = null,
+    val questionDeadlineAtMillis: Long? = null,
+    val questionDeadlineQuestionId: String? = null
+)
+
 private enum class AppScreen {
     DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ, KIDS_GAMES, LEARNING_3D_LAB, DRAWING_STUDIO,
     SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK,
@@ -337,30 +347,68 @@ private fun EduLockApp(repository: EduLockRepository) {
     var taskResult by remember { mutableStateOf<TaskResult?>(null) }
     var taskDeadlineAtMillis by remember { mutableStateOf<Long?>(null) }
     var taskSecondsRemaining by remember { mutableStateOf(0) }
+    var questionDeadlineAtMillis by remember { mutableStateOf<Long?>(null) }
+    var questionDeadlineQuestionId by remember { mutableStateOf<String?>(null) }
+    var questionSecondsRemaining by remember { mutableStateOf(0) }
+    var expiredQuestionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val taskDraftPrefs = remember { context.getSharedPreferences("edulock_task_drafts", Context.MODE_PRIVATE) }
-    fun saveTaskDraft(taskId: String, draftAnswers: Map<String, String>, draftIndex: Int) {
+    fun saveTaskDraft(
+        taskId: String,
+        draftAnswers: Map<String, String>,
+        draftIndex: Int,
+        draftExpiredQuestionIds: Set<String> = expiredQuestionIds,
+        taskDeadline: Long? = taskDeadlineAtMillis,
+        questionDeadline: Long? = questionDeadlineAtMillis,
+        deadlineQuestionId: String? = questionDeadlineQuestionId
+    ) {
         val encodedAnswers = JSONObject()
         draftAnswers.forEach { (id, value) -> encodedAnswers.put(id, value) }
+        val encodedExpiredIds = JSONArray()
+        draftExpiredQuestionIds.forEach { encodedExpiredIds.put(it) }
         taskDraftPrefs.edit().putString(taskId, JSONObject()
             .put("answers", encodedAnswers)
             .put("question_index", draftIndex)
+            .put("expired_question_ids", encodedExpiredIds)
+            .put("task_deadline_at_ms", taskDeadline ?: JSONObject.NULL)
+            .put("question_deadline_at_ms", questionDeadline ?: JSONObject.NULL)
+            .put("question_deadline_question_id", deadlineQuestionId ?: JSONObject.NULL)
             .put("updated_at", System.currentTimeMillis()).toString()).apply()
     }
-    fun readTaskDraft(taskId: String): Pair<Map<String, String>, Int> {
+    fun readTaskDraft(taskId: String): LocalTaskDraft {
         return try {
             val saved = JSONObject(taskDraftPrefs.getString(taskId, "{}") ?: "{}")
             val savedAnswers = saved.optJSONObject("answers") ?: JSONObject()
-            val parsed = linkedMapOf<String, String>()
+            val parsedAnswers = linkedMapOf<String, String>()
             val keys = savedAnswers.keys()
             while (keys.hasNext()) {
                 val key = keys.next()
-                parsed[key] = savedAnswers.optString(key, "")
+                parsedAnswers[key] = savedAnswers.optString(key, "")
             }
-            parsed to saved.optInt("question_index", 0)
-        } catch (_: Exception) { emptyMap<String, String>() to 0 }
+            val expiredJson = saved.optJSONArray("expired_question_ids") ?: JSONArray()
+            val expired = (0 until expiredJson.length()).mapNotNull { index ->
+                expiredJson.optString(index).takeIf { it.isNotBlank() && it != "null" }
+            }.toSet()
+            LocalTaskDraft(
+                answers = parsedAnswers,
+                questionIndex = saved.optInt("question_index", 0),
+                expiredQuestionIds = expired,
+                taskDeadlineAtMillis = saved.optLong("task_deadline_at_ms", 0L).takeIf { it > 0L },
+                questionDeadlineAtMillis = saved.optLong("question_deadline_at_ms", 0L).takeIf { it > 0L },
+                questionDeadlineQuestionId = saved.optString("question_deadline_question_id")
+                    .takeIf { it.isNotBlank() && it != "null" }
+            )
+        } catch (_: Exception) { LocalTaskDraft() }
     }
-    LaunchedEffect(activeTask?.id, answers, questionIndex) {
-        activeTask?.id?.let { saveTaskDraft(it, answers, questionIndex) }
+    LaunchedEffect(
+        activeTask?.id, answers, questionIndex, expiredQuestionIds,
+        taskDeadlineAtMillis, questionDeadlineAtMillis, questionDeadlineQuestionId
+    ) {
+        activeTask?.id?.let {
+            saveTaskDraft(
+                it, answers, questionIndex, expiredQuestionIds,
+                taskDeadlineAtMillis, questionDeadlineAtMillis, questionDeadlineQuestionId
+            )
+        }
     }
 
     var childName by remember { mutableStateOf("") }
