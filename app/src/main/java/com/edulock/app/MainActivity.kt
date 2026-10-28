@@ -252,6 +252,24 @@ private fun religiousSubjectTitle(track: String): String = when (track) {
     else -> ""
 }
 
+private fun appIconGlyph(packageName: String, displayName: String): String = when {
+    packageName.contains("chrome", true) || packageName.contains("browser", true) || displayName.contains("browser", true) -> "🌐"
+    packageName.contains("youtube", true) || packageName.contains("video", true) -> "▶️"
+    packageName.contains("camera", true) || packageName.contains("photo", true) -> "📷"
+    packageName.contains("whatsapp", true) || packageName.contains("message", true) || packageName.contains("sms", true) -> "💬"
+    packageName.contains("phone", true) || packageName.contains("dialer", true) -> "📞"
+    packageName.contains("game", true) || displayName.contains("game", true) -> "🎮"
+    packageName.contains("maps", true) || packageName.contains("navigation", true) -> "📍"
+    packageName.contains("music", true) || packageName.contains("spotify", true) -> "🎵"
+    packageName.contains("edu", true) || displayName.contains("learn", true) || displayName.contains("classroom", true) -> "📚"
+    packageName.contains("assistant", true) -> "🤖"
+    packageName.contains("calculator", true) -> "🧮"
+    packageName.contains("calendar", true) -> "🗓️"
+    packageName.contains("settings", true) -> "⚙️"
+    packageName.contains("mail", true) || packageName.contains("gmail", true) -> "✉️"
+    else -> "📱"
+}
+
 private data class SubjectSuggestion(val title: String, val languageCode: String = "en", val studyTrack: String? = null)
 
 private fun suggestedSubjectsForCountry(countryCode: String): List<SubjectSuggestion> {
@@ -2290,9 +2308,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         )
                                         AppUiText(
                                             if (child.kidsModeEnabled)
-                                                "Only apps explicitly enabled by the parent can open. The launcher/navigation and essential phone/permission components remain available. Accessibility must be active on the child phone; true kiosk enforcement additionally requires device-owner setup."
+                                                "Only parent-approved apps can open after the child device syncs. Accessibility is required; full kiosk enforcement also needs device-owner setup."
                                             else
-                                                "Enable Kids Mode to block apps that are not explicitly allowed for this child."
+                                                "Block apps that the parent has not explicitly allowed."
                                         )
                                         OutlinedButton(
                                             onClick = {
@@ -2334,71 +2352,96 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     "Daily educational game limit in minutes (0 disables games)",
                                     keyboardType = KeyboardType.Number
                                 )
-                                OutlinedButton(
-                                    onClick = {
-                                        execute {
-                                            val limit = (childGameLimitEdits[child.id] ?: child.dailyGameLimitMinutes.toString()).toIntOrNull()
-                                                ?: throw IllegalArgumentException("Enter a game limit from 0 to 1440 minutes.")
-                                            require(limit in 0..1440) { "Game limit must be from 0 to 1440 minutes." }
-                                            repository.updateChildGameLimit(child.id, limit)
-                                            children = repository.loadChildren(familyId)
-                                            childGameLimitEdits = childGameLimitEdits - child.id
-                                            notice = "Daily educational game allowance saved for ${child.displayName}."
-                                        }
-                                    },
-                                    enabled = !busy,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { AppUiText("Save educational game limit") }
-                                OutlinedButton(
-                                    onClick = {
-                                        selectedChild = child
-                                        curriculumCountryCode = child.countryCode
-                                        curriculumGradeLevel = child.schoolGrade.toString()
-                                        curriculumAgeYears = child.ageYears.toString()
-                                        curriculumLanguageCode = child.preferredLanguage
-                                        curriculumSubjectCode = "math"
-                                        curriculumSearchResult = null
-                                        curriculumSelectedIds = emptySet()
-                                        screen = AppScreen.CURRICULUM_LIBRARY
-                                    },
-                                    enabled = !busy,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { AppUiText("📚  Country syllabus & question bank") }
+                                LaunchedEffect(child.id, childGameLimitEdits[child.id], child.dailyGameLimitMinutes) {
+                                    delay(700)
+                                    val rawLimit = childGameLimitEdits[child.id] ?: return@LaunchedEffect
+                                    val limit = rawLimit.toIntOrNull() ?: return@LaunchedEffect
+                                    if (limit !in 0..1440) {
+                                        notice = "Enter a daily educational game limit from 0 to 1440 minutes."
+                                        return@LaunchedEffect
+                                    }
+                                    if (limit == child.dailyGameLimitMinutes) return@LaunchedEffect
+                                    execute {
+                                        repository.updateChildGameLimit(child.id, limit)
+                                        children = repository.loadChildren(familyId)
+                                        childGameLimitEdits = childGameLimitEdits - child.id
+                                        notice = "Daily educational game allowance auto-saved for ${child.displayName}."
+                                    }
+                                }
                                 AppUiText("Device & learning controls", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                OutlinedButton(onClick = {
-                                    selectedChild = child
-                                    lastPairingCode = ""
-                                    execute {
-                                        val generated = repository.createPairingCode(child.id)
-                                        lastPairingCode = generated.first
-                                        pairingCodeExpiry = generated.second
-                                        pairingChildName = child.displayName
-                                    }
-                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("Generate pairing code") }
-                                OutlinedButton(onClick = {
-                                    selectedChild = child
-                                    screen = AppScreen.ALLOWED_APPS
-                                    execute {
-                                        allowedApps = repository.loadAllowedApps(child.id)
-                                        childInstalledApps = repository.loadInstalledApps(child.id)
-                                        appGroups = repository.loadAppGroups(child.id)
-                                    }
-                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("🎮  App access & daily limits") }
-                                OutlinedButton(
-                                    onClick = { pendingChildAction = child to "unlink" },
-                                    enabled = !busy,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { AppUiText("Deactivate device link") }
-                                OutlinedButton(
-                                    onClick = { pendingChildAction = child to "delete" },
-                                    enabled = !busy,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { AppUiText("Delete child profile") }
-                                OutlinedButton(onClick = {
-                                    appUsageChild = child
-                                    screen = AppScreen.APP_USAGE_REPORT
-                                    execute { appUsageReports = repository.loadAppUsageReports(child.id) }
-                                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppUiText("📊  App usage report") }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            selectedChild = child
+                                            curriculumCountryCode = child.countryCode
+                                            curriculumGradeLevel = child.schoolGrade.toString()
+                                            curriculumAgeYears = child.ageYears.toString()
+                                            curriculumLanguageCode = child.preferredLanguage
+                                            curriculumSubjectCode = "math"
+                                            curriculumSearchResult = null
+                                            curriculumSelectedIds = emptySet()
+                                            screen = AppScreen.CURRICULUM_LIBRARY
+                                        },
+                                        enabled = !busy,
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 5.dp)
+                                    ) { AppUiText("📚 Curriculum", fontSize = 12.sp) }
+                                    OutlinedButton(
+                                        onClick = {
+                                            selectedChild = child
+                                            lastPairingCode = ""
+                                            execute {
+                                                val generated = repository.createPairingCode(child.id)
+                                                lastPairingCode = generated.first
+                                                pairingCodeExpiry = generated.second
+                                                pairingChildName = child.displayName
+                                            }
+                                        },
+                                        enabled = !busy,
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 5.dp)
+                                    ) { AppUiText("🔗 Pairing code", fontSize = 12.sp) }
+                                }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            selectedChild = child
+                                            screen = AppScreen.ALLOWED_APPS
+                                            execute {
+                                                allowedApps = repository.loadAllowedApps(child.id)
+                                                childInstalledApps = repository.loadInstalledApps(child.id)
+                                                appGroups = repository.loadAppGroups(child.id)
+                                            }
+                                        },
+                                        enabled = !busy,
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 5.dp)
+                                    ) { AppUiText("🎮 Apps & limits", fontSize = 12.sp) }
+                                    OutlinedButton(
+                                        onClick = {
+                                            appUsageChild = child
+                                            screen = AppScreen.APP_USAGE_REPORT
+                                            execute { appUsageReports = repository.loadAppUsageReports(child.id) }
+                                        },
+                                        enabled = !busy,
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 5.dp)
+                                    ) { AppUiText("📊 Usage report", fontSize = 12.sp) }
+                                }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    OutlinedButton(
+                                        onClick = { pendingChildAction = child to "unlink" },
+                                        enabled = !busy,
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 5.dp)
+                                    ) { AppUiText("Unlink device", fontSize = 12.sp) }
+                                    OutlinedButton(
+                                        onClick = { pendingChildAction = child to "delete" },
+                                        enabled = !busy,
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 5.dp)
+                                    ) { AppUiText("Delete profile", fontSize = 12.sp) }
+                                }
                             }
                         }
                     }
@@ -4070,24 +4113,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     else "${installed.displayName}: ${limit}-minute daily limit saved."
                             }
                         }
-                        val appGlyph = when {
-                            installed.packageName.contains("chrome", true) || installed.displayName.contains("browser", true) -> "🌐"
-                            installed.packageName.contains("youtube", true) || installed.displayName.contains("video", true) -> "▶️"
-                            installed.packageName.contains("camera", true) || installed.displayName.contains("photo", true) -> "📷"
-                            installed.packageName.contains("whatsapp", true) || installed.displayName.contains("message", true) -> "💬"
-                            installed.packageName.contains("phone", true) || installed.displayName.contains("dialer", true) -> "📞"
-                            installed.packageName.contains("game", true) -> "🎮"
-                            installed.packageName.contains("maps", true) -> "📍"
-                            installed.packageName.contains("music", true) || installed.packageName.contains("spotify", true) -> "🎵"
-                            installed.packageName.contains("edu", true) || installed.displayName.contains("learn", true) -> "📚"
-                            else -> "📱"
-                        }
+                        val appGlyph = appIconGlyph(installed.packageName, installed.displayName)
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
-                            Column(Modifier.padding(horizontal = 8.dp, vertical = 5.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Column(Modifier.padding(horizontal = 7.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -4116,9 +4148,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 }
                                             },
                                             enabled = !busy,
-                                            modifier = Modifier.size(width = 40.dp, height = 36.dp),
+                                            modifier = Modifier.size(width = 34.dp, height = 32.dp),
                                             contentPadding = PaddingValues(0.dp)
-                                        ) { AppUiText("🗓", fontSize = 17.sp) }
+                                        ) { AppUiText("🗓", fontSize = 15.sp) }
                                     }
                                     Switch(
                                         checked = appIsEnabled,
@@ -4147,14 +4179,13 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     OutlinedTextField(
                                         value = limitText,
                                         onValueChange = { value -> installedAppLimitEdits = installedAppLimitEdits + (installed.packageName to value.filter(Char::isDigit).take(4)) },
-                                        modifier = Modifier.weight(1f).height(48.dp),
+                                        modifier = Modifier.width(154.dp).height(48.dp),
                                         singleLine = true,
-                                        label = { AppUiText("Daily limit · min") },
+                                        label = { AppUiText("Daily min") },
                                         placeholder = { AppUiText("0 = unlimited") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                                     )
-                                    AppUiText("0 / blank\n= no cap", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
-                                }
+                                    }
                                 if (existingRule != null && existingRule.id in weeklyScheduleEditIds) {
                                     val schedule = weeklyScheduleEdits[existingRule.id] ?: AppWeeklySchedule.parse(existingRule.weeklyScheduleJson)
                                     AppUiText("Choose allowed days and hours. Disabled days block this app all day. Times use the child's local 24-hour clock; overnight windows are supported.")
@@ -4245,12 +4276,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                             }
                         }
                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                            Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Column(Modifier.padding(horizontal = 7.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                                     Box(
                                         Modifier.size(30.dp).background(if (app.enabled) Color(0xFFE2F7EC) else Color(0xFFFDE8E8), RoundedCornerShape(10.dp)),
                                         contentAlignment = Alignment.Center
-                                    ) { AppUiText("📱", fontSize = 20.sp) }
+                                    ) { AppUiText(appIconGlyph(app.packageName, app.displayName), fontSize = 18.sp) }
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                         AppUiText(app.displayName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
                                         AppUiText(if (app.enabled) "Enabled" else "Disabled", color = if (app.enabled) Color(0xFF16804A) else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
@@ -4261,9 +4292,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             if (app.id !in weeklyScheduleEdits) weeklyScheduleEdits = weeklyScheduleEdits + (app.id to AppWeeklySchedule.parse(app.weeklyScheduleJson))
                                         },
                                         enabled = !busy,
-                                        modifier = Modifier.size(width = 40.dp, height = 36.dp),
+                                        modifier = Modifier.size(width = 34.dp, height = 32.dp),
                                         contentPadding = PaddingValues(0.dp)
-                                    ) { AppUiText("🗓", fontSize = 17.sp) }
+                                    ) { AppUiText("🗓", fontSize = 15.sp) }
                                     Switch(
                                         checked = app.enabled,
                                         onCheckedChange = { checked ->
@@ -4280,10 +4311,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     OutlinedTextField(
                                         value = limitText,
                                         onValueChange = { value -> appLimitEdits = appLimitEdits + (app.id to value.filter(Char::isDigit).take(4)) },
-                                        modifier = Modifier.weight(1f).height(56.dp),
+                                        modifier = Modifier.width(154.dp).height(48.dp),
                                         singleLine = true,
-                                        label = { AppUiText("Daily limit (min)") },
-                                        placeholder = { AppUiText("0 = no limit") },
+                                        label = { AppUiText("Daily min") },
+                                        placeholder = { AppUiText("0 = unlimited") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                                     )
                                     OutlinedButton(
@@ -4294,9 +4325,9 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             }
                                         },
                                         enabled = !busy,
-                                        modifier = Modifier.size(width = 38.dp, height = 36.dp),
+                                        modifier = Modifier.size(width = 34.dp, height = 32.dp),
                                         contentPadding = PaddingValues(0.dp)
-                                    ) { AppUiText("🗑", fontSize = 16.sp) }
+                                    ) { AppUiText("🗑", fontSize = 15.sp) }
                                 }
                                 if (app.id in weeklyScheduleEditIds) {
                                     val schedule = weeklyScheduleEdits[app.id] ?: AppWeeklySchedule.parse(app.weeklyScheduleJson)
