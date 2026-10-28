@@ -2231,16 +2231,21 @@ private fun EduLockApp(repository: EduLockRepository) {
                     children.forEach { child ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
-                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Box(Modifier.size(48.dp).background(Color(0xFFE8E7FF), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-                                        AppUiText(child.avatarIcon, fontSize = 28.sp)
+                            Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Box(Modifier.size(42.dp).background(Color(0xFFE8E7FF), RoundedCornerShape(13.dp)), contentAlignment = Alignment.Center) {
+                                        AppUiText(child.avatarIcon, fontSize = 24.sp)
                                     }
-                                    Column {
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                         AppUiText(child.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                        AppUiText("🎮 Educational games: ${child.dailyGameLimitMinutes} min/day", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        AppUiText("🎮 Games: ${child.dailyGameLimitMinutes} min/day", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                                     }
                                 }
                                 AppUiText("Language: " + child.preferredLanguage + " • Daily reward cap: " + child.dailyCapMinutes + " minutes")
