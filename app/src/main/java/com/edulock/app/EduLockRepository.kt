@@ -97,7 +97,8 @@ data class QuestionRow(
     val picturePath: String? = null,
     val gradeLevel: Int = 1,
     val ageMin: Int = 3,
-    val ageMax: Int = 19
+    val ageMax: Int = 19,
+    val rewardMinutes: Int = 0
 )
 
 data class QuestionTranslation(
@@ -1023,7 +1024,7 @@ class EduLockRepository(context: Context) {
 
     suspend fun loadQuestions(subjectId: String, limit: Int = 500): List<QuestionRow> {
         requireSession()
-        val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,picture_path,grade_level,age_min,age_max,created_at&subject_id=eq.$subjectId&order=created_at.asc,id.asc&limit=${limit.coerceIn(1, 500)}")
+        val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,picture_path,grade_level,age_min,age_max,reward_minutes,created_at&subject_id=eq.$subjectId&order=created_at.asc,id.asc&limit=${limit.coerceIn(1, 500)}")
         return (0 until rows.length()).mapNotNull { i ->
             rows.optJSONObject(i)?.let { row -> row.toQuestionRow() }
         }
@@ -1538,7 +1539,7 @@ class EduLockRepository(context: Context) {
         }
         val byId = linkedMapOf<String, QuestionRow>()
         ids.chunked(50).forEach { chunk ->
-            val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,picture_path,grade_level,age_min,age_max,created_at&id=in.(" +
+            val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,picture_path,grade_level,age_min,age_max,reward_minutes,created_at&id=in.(" +
                 chunk.joinToString(",") + ")&limit=50")
             for (i in 0 until rows.length()) {
                 val row = rows.optJSONObject(i) ?: continue
@@ -2304,7 +2305,8 @@ class EduLockRepository(context: Context) {
             picturePath = optString("picture_path").takeIf { it.isNotBlank() && it != "null" },
             gradeLevel = optInt("grade_level", 1),
             ageMin = optInt("age_min", 3),
-            ageMax = optInt("age_max", 19)
+            ageMax = optInt("age_max", 19),
+            rewardMinutes = optInt("reward_minutes", 0).coerceIn(0,1440)
         )
     }
 
