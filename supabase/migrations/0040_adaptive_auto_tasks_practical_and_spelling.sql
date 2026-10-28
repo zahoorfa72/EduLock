@@ -253,3 +253,290 @@ create index if not exists questions_subject_mode_difficulty_idx
 
 notify pgrst, 'reload schema';
 commit;
+
+
+-- Trusted grading extension. This version retains the existing translation-aware grader,
+-- records partial credit, and updates concept mastery in the same transaction.
+create or replace function edulock.grade_and_award_task(
+  p_user_id uuid, p_task_id uuid, p_answers jsonb
+) returns jsonb
+language plpgsql security definer set search_path = ''
+as $grade$
+declare
+  v_child edulock.children%rowtype;
+  v_task edulock.tasks%rowtype;
+  v_question edulock.questions%rowtype;
+  v_answer jsonb;
+  v_candidate jsonb;
+  v_matches integer;
+  v_total integer := 0;
+  v_correct integer := 0;
+  v_score integer := 0;
+  v_passed boolean := false;
+  v_daily_used integer := 0;
+  v_task_used integer := 0;
+  v_award integer := 0;
+  v_attempt_id uuid;
+  v_today timestamptz;
+  v_expected text;
+  v_actual text;
+  v_lang text;
+  v_accept jsonb;
+  v_is_correct boolean;
+  v_accuracy integer;
+  v_spelling integer;
+  v_final integer;
+  v_details jsonb := '[]'::jsonb;
+  v_errors jsonb;
+  v_feedback text;
+  v_concept text;
+  v_diff integer;
+  v_focus numeric;
+  v_old_attempts integer;
+  v_old_correct integer;
+  v_old_wrong integer;
+  v_streak edulock.child_task_streaks%rowtype;
+  v_streak_bonus integer := 0;
+  v_yesterday date := (now() at time zone 'UTC')::date - 1;
+  v_today_date date := (now() at time zone 'UTC')::date;
+begin
+  if jsonb_typeof(p_answers) <> 'array' then raise exception 'Answers must be an array'; end if;
+  if jsonb_array_length(p_answers) > 500 then raise exception 'Too many answers'; end if;
+
+  select c.* into v_child from edulock.children c where c.child_user_id = p_user_id;
+  if not found then raise exception 'No linked child profile was found'; end if;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_child.id::text, 0));
+
+  select t.* into v_task from edulock.tasks t
+    where t.id = p_task_id and t.child_id = v_child.id and t.active = true;
+  if not found then raise exception 'Task is unavailable for this child'; end if;
+  if v_task.reward_package_name is not null and not exists (
+    select 1 from edulock.allowed_apps aa
+    where aa.child_id = v_child.id and aa.package_name = v_task.reward_package_name and aa.enabled = true
+  ) then raise exception 'The selected reward app is no longer enabled for this child'; end if;
+  if v_task.reward_group_id is not null and not exists (
+    select 1 from edulock.app_groups g
+    join edulock.app_group_apps ga on ga.group_id = g.id and ga.child_id = g.child_id
+    join edulock.allowed_apps aa on aa.child_id = ga.child_id and aa.package_name = ga.package_name
+    where g.id = v_task.reward_group_id and g.child_id = v_child.id and aa.enabled = true
+  ) then raise exception 'The selected reward app group has no enabled apps for this child'; end if;
+  if not exists (select 1 from edulock.task_questions tq where tq.task_id = v_task.id)
+     and v_task.subject_id is null then raise exception 'This task has no subject or linked questions'; end if;
+
+  select count(*) into v_total from (
+    select q.id from edulock.questions q
+    where q.learning_mode = 'written'
+      and q.grade_level = v_task.target_grade_level
+      and v_task.target_age_years between q.age_min and q.age_max
+      and (q.id in (select tq.question_id from edulock.task_questions tq where tq.task_id = v_task.id)
+        or (not exists (select 1 from edulock.task_questions tq where tq.task_id = v_task.id)
+          and q.subject_id = v_task.subject_id))
+    order by q.created_at, q.id limit v_task.question_count
+  ) chosen;
+  if v_total < 1 then raise exception 'This task has no written questions yet'; end if;
+  if jsonb_array_length(p_answers) <> v_total then raise exception 'Please answer every question before submitting'; end if;
+
+  for v_question in
+    select q.* from edulock.questions q
+    where q.learning_mode = 'written'
+      and q.grade_level = v_task.target_grade_level
+      and v_task.target_age_years between q.age_min and q.age_max
+      and (q.id in (select tq.question_id from edulock.task_questions tq where tq.task_id = v_task.id)
+        or (not exists (select 1 from edulock.task_questions tq where tq.task_id = v_task.id)
+          and q.subject_id = v_task.subject_id))
+    order by q.created_at, q.id limit v_task.question_count
+  loop
+    select count(*) into v_matches from jsonb_array_elements(p_answers) item
+      where item ->> 'question_id' = v_question.id::text;
+    if v_matches <> 1 then raise exception 'Each question must have exactly one answer'; end if;
+    select item into v_answer from jsonb_array_elements(p_answers) item
+      where item ->> 'question_id' = v_question.id::text limit 1;
+
+    v_lang := coalesce(nullif(v_answer ->> 'language_code',''),v_question.language_code);
+    if char_length(v_lang) > 16 then raise exception 'Invalid language code'; end if;
+    v_actual := coalesce(v_answer ->> 'answer','');
+    if char_length(v_actual) > 10000 then raise exception 'Answer is too long'; end if;
+    v_accept := null;
+    select qt.accepted_answers into v_accept from edulock.question_translations qt
+      where qt.question_id = v_question.id and qt.language_code = v_lang;
+    v_expected := '';
+    v_is_correct := false;
+    if v_accept is not null and jsonb_typeof(v_accept) = 'array' then
+      for v_candidate in select value from jsonb_array_elements(v_accept)
+      loop
+        v_expected := coalesce(v_candidate #>> '{}','');
+        if v_expected <> '' and
+          regexp_replace(lower(btrim(v_expected)), '\s+', ' ', 'g') =
+          regexp_replace(lower(btrim(v_actual)), '\s+', ' ', 'g') then
+          v_is_correct := true; exit;
+        end if;
+      end loop;
+    else
+      v_expected := coalesce(v_question.answer_key ->> 'answer','');
+      v_is_correct := v_expected <> '' and
+        regexp_replace(lower(btrim(v_expected)), '\s+', ' ', 'g') =
+        regexp_replace(lower(btrim(v_actual)), '\s+', ' ', 'g');
+    end if;
+
+    -- Accuracy is a blend of exact answer, accepted-keyword coverage and edit similarity.
+    -- Spelling is separately measured on normalized words; child-friendly feedback never shames.
+    v_accuracy := 0; v_spelling := 0;
+    v_errors := '[]'::jsonb;
+    v_feedback := '';
+    if length(btrim(v_actual)) = 0 then
+      v_accuracy := 0; v_spelling := 0;
+      v_errors := jsonb_build_array('No answer entered');
+      v_feedback := 'Try writing one important word first, then build your answer.';
+    elsif v_is_correct then
+      v_accuracy := 100; v_spelling := 100;
+      v_feedback := 'Great work! Your answer is accurate.';
+    else
+      v_accuracy := case
+        when lower(btrim(v_expected)) = lower(btrim(v_actual)) then 100
+        when length(btrim(v_expected)) > 0 and
+          (lower(btrim(v_expected)) like '%' || lower(btrim(v_actual)) || '%'
+           or lower(btrim(v_actual)) like '%' || lower(btrim(v_expected)) || '%') then 70
+        when coalesce(v_question.accepted_keywords,'[]'::jsonb) <> '[]'::jsonb and
+          exists (select 1 from jsonb_array_elements_text(v_question.accepted_keywords) k
+            where lower(v_actual) like '%' || lower(k) || '%') then 65
+        else 0 end;
+      v_spelling := case
+        when length(btrim(v_expected)) = 0 then 100
+        when lower(regexp_replace(btrim(v_actual), '[^[:alnum:] ]', '', 'g')) =
+             lower(regexp_replace(btrim(v_expected), '[^[:alnum:] ]', '', 'g')) then 100
+        when similarity(lower(btrim(v_actual)), lower(btrim(v_expected))) >= 0.8 then 80
+        when similarity(lower(btrim(v_actual)), lower(btrim(v_expected))) >= 0.6 then 60
+        else 30 end;
+      if v_accuracy < 70 then v_errors := v_errors || jsonb_build_array('Check answer accuracy and key concepts'); end if;
+      if v_spelling < 80 then v_errors := v_errors || jsonb_build_array('Review spelling'); end if;
+      v_feedback := coalesce(nullif(v_question.feedback_hint,''),'Let us practice this idea again. Small mistakes are part of learning.');
+    end if;
+    v_final := floor(v_accuracy * 0.8 + v_spelling * 0.2)::integer;
+    if v_final >= 80 then v_correct := v_correct + 1; end if;
+    v_concept := coalesce(nullif(v_question.concept_key,''),'general');
+    v_details := v_details || jsonb_build_array(jsonb_build_object(
+      'question_id',v_question.id,'concept_key',v_concept,'language_code',v_lang,
+      'is_correct',(v_final >= 80),'accuracy_score',v_accuracy,
+      'spelling_score',v_spelling,'final_score',v_final,
+      'expected_answer',v_expected,'supplied_answer',v_actual,
+      'detected_errors',v_errors,'feedback',v_feedback,'subject_id',v_question.subject_id
+    ));
+  end loop;
+
+  v_score := floor((v_correct::numeric * 100) / v_total)::integer;
+  v_passed := v_score >= v_task.pass_percent;
+  v_today := date_trunc('day', now() at time zone 'UTC') at time zone 'UTC';
+  select coalesce(sum(l.minutes_delta),0)::integer + coalesce((
+    select sum(b.minutes_awarded)::integer from edulock.child_reward_bank b
+    where b.child_id = v_child.id and b.earned_at >= v_today),0)
+    into v_daily_used from edulock.screen_time_ledger l
+    where l.child_id = v_child.id and l.created_at >= v_today and l.reason not like 'Reward bank redemption:%';
+  select coalesce(sum(l.minutes_delta),0)::integer + coalesce((
+    select sum(b.minutes_awarded)::integer from edulock.child_reward_bank b
+    join edulock.attempts ba on ba.id = b.source_attempt_id
+    where b.child_id = v_child.id and ba.task_id = v_task.id and b.earned_at >= v_today),0)
+    into v_task_used from edulock.screen_time_ledger l
+    join edulock.attempts a on a.id = l.source_attempt_id
+    where l.child_id = v_child.id and a.task_id = v_task.id and l.created_at >= v_today
+      and l.reason not like 'Reward bank redemption:%';
+  if v_correct > 0 then
+    v_award := greatest(0, least(v_correct * v_task.reward_minutes,
+      v_child.daily_cap_minutes - v_daily_used, v_task.daily_cap_minutes - v_task_used));
+  end if;
+
+  insert into edulock.attempts(task_id,child_id,answers,score_percent,passed,awarded_minutes)
+    values(v_task.id,v_child.id,p_answers,v_score,v_passed,v_award) returning id into v_attempt_id;
+
+  for v_candidate in select value from jsonb_array_elements(v_details)
+  loop
+    insert into edulock.attempt_answers(attempt_id,question_id,concept_key,language_code,is_correct)
+    values(v_attempt_id,(v_candidate->>'question_id')::uuid,v_candidate->>'concept_key',
+      v_candidate->>'language_code',(v_candidate->>'is_correct')::boolean);
+    insert into edulock.attempt_answer_feedback(
+      attempt_id,question_id,child_id,concept_key,supplied_answer,expected_answer,
+      accuracy_score,spelling_score,final_score,detected_errors,feedback
+    ) values (
+      v_attempt_id,(v_candidate->>'question_id')::uuid,v_child.id,v_candidate->>'concept_key',
+      coalesce(v_candidate->>'supplied_answer',''),coalesce(v_candidate->>'expected_answer',''),
+      coalesce((v_candidate->>'accuracy_score')::integer,0),coalesce((v_candidate->>'spelling_score')::integer,0),
+      coalesce((v_candidate->>'final_score')::integer,0),coalesce(v_candidate->'detected_errors','[]'::jsonb),
+      coalesce(v_candidate->>'feedback','')
+    );
+    v_concept := v_candidate->>'concept_key';
+    select coalesce(focus_score,0),coalesce(attempts,0),coalesce(correct_attempts,0),coalesce(wrong_attempts,0)
+      into v_focus,v_old_attempts,v_old_correct,v_old_wrong
+      from edulock.child_concept_progress where child_id=v_child.id and concept_key=v_concept
+      for update;
+    if not found then v_focus:=0;v_old_attempts:=0;v_old_correct:=0;v_old_wrong:=0; end if;
+    if coalesce((v_candidate->>'is_correct')::boolean,false) then v_focus:=greatest(0,v_focus-1.5);
+    else v_focus:=least(100,v_focus+2); end if;
+    insert into edulock.child_concept_progress(
+      child_id,concept_key,subject_id,attempts,correct_attempts,wrong_attempts,focus_score,
+      last_attempt_at,next_review_at,last_question_id,updated_at
+    ) values (
+      v_child.id,v_concept,(v_candidate->>'subject_id')::uuid,v_old_attempts+1,
+      v_old_correct + case when coalesce((v_candidate->>'is_correct')::boolean,false) then 1 else 0 end,
+      v_old_wrong + case when coalesce((v_candidate->>'is_correct')::boolean,false) then 0 else 1 end,
+      v_focus,now(),now() + case when v_focus >= 4 then interval '1 hour' else interval '1 day' end,
+      (v_candidate->>'question_id')::uuid,now()
+    ) on conflict(child_id,concept_key) do update set
+      subject_id=excluded.subject_id,attempts=excluded.attempts,correct_attempts=excluded.correct_attempts,
+      wrong_attempts=excluded.wrong_attempts,focus_score=excluded.focus_score,
+      last_attempt_at=excluded.last_attempt_at,next_review_at=excluded.next_review_at,
+      last_question_id=excluded.last_question_id,updated_at=now();
+  end loop;
+
+  if v_award > 0 then
+    if v_task.reward_to_bank then
+      insert into edulock.child_reward_bank(child_id,source_attempt_id,minutes_awarded,minutes_remaining)
+      values(v_child.id,v_attempt_id,v_award,v_award);
+    else
+      insert into edulock.screen_time_ledger(child_id,source_attempt_id,minutes_delta,reason,target_package_name,target_group_id)
+      values(v_child.id,v_attempt_id,v_award,'Correct-answer reward: '||v_task.title,v_task.reward_package_name,v_task.reward_group_id);
+    end if;
+  end if;
+
+  if v_passed then
+    insert into edulock.child_task_streaks(child_id,last_passed_day,consecutive_days,last_streak_bonus_day)
+      values(v_child.id,null,0,null) on conflict(child_id) do nothing;
+    select * into v_streak from edulock.child_task_streaks where child_id=v_child.id for update;
+    if v_streak.last_passed_day is distinct from v_today_date then
+      if v_streak.last_passed_day = v_yesterday then
+        update edulock.child_task_streaks set consecutive_days=least(consecutive_days+1,30),
+          last_passed_day=v_today_date where child_id=v_child.id returning * into v_streak;
+      else
+        update edulock.child_task_streaks set consecutive_days=1,last_passed_day=v_today_date
+          where child_id=v_child.id returning * into v_streak;
+      end if;
+    end if;
+    if v_streak.last_streak_bonus_day is distinct from v_today_date then
+      v_streak_bonus:=least(30,greatest(0,v_streak.consecutive_days*5),
+        greatest(0,v_child.daily_cap_minutes-v_daily_used-v_award));
+      if v_streak_bonus>0 then
+        update edulock.child_task_streaks set last_streak_bonus_day=v_today_date where child_id=v_child.id;
+        if v_task.reward_to_bank then
+          insert into edulock.child_reward_bank(child_id,source_attempt_id,minutes_awarded,minutes_remaining)
+            values(v_child.id,v_attempt_id,v_streak_bonus,v_streak_bonus)
+          on conflict(source_attempt_id) do update set
+            minutes_awarded=edulock.child_reward_bank.minutes_awarded+excluded.minutes_awarded,
+            minutes_remaining=edulock.child_reward_bank.minutes_remaining+excluded.minutes_remaining;
+        else
+          insert into edulock.screen_time_ledger(child_id,source_attempt_id,minutes_delta,reason,target_package_name,target_group_id)
+            values(v_child.id,v_attempt_id,v_streak_bonus,'Daily streak bonus',v_task.reward_package_name,v_task.reward_group_id);
+        end if;
+        v_award:=v_award+v_streak_bonus;
+        update edulock.attempts set awarded_minutes=v_award where id=v_attempt_id;
+      end if;
+    end if;
+  end if;
+
+  return jsonb_build_object(
+    'attempt_id',v_attempt_id,'score_percent',v_score,'passed',v_passed,'awarded_minutes',v_award,
+    'daily_used_minutes_after',v_daily_used+v_award,'daily_cap_minutes',v_child.daily_cap_minutes,
+    'reward_to_bank',v_task.reward_to_bank,'answer_feedback',v_details
+  );
+end;
+$grade$;
+revoke all on function edulock.grade_and_award_task(uuid,uuid,jsonb) from public,anon,authenticated;
+grant execute on function edulock.grade_and_award_task(uuid,uuid,jsonb) to service_role;
+
