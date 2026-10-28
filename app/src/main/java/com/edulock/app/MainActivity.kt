@@ -5424,9 +5424,23 @@ private fun EduLockApp(repository: EduLockRepository) {
                             val earnedMs = lockPrefs.getStringSet("app_earned_minutes", emptySet()).orEmpty()
                                 .firstOrNull { it.startsWith(app.packageName + "=") }?.substringAfter("=")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
                             val remaining = if (app.dailyLimitMinutes <= 0) Int.MAX_VALUE else (app.dailyLimitMinutes + earnedMs - (usedMs / 60_000L).toInt()).coerceAtLeast(0)
+                            val currentBootCount = try {
+                                Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1)
+                            } catch (_: Exception) { -1 }
+                            val emergencyGrantActive = lockPrefs.getStringSet("emergency_access_grants", emptySet()).orEmpty().any { grant ->
+                                val parts = grant.split("=")
+                                parts.size == 3 && parts[0] == app.packageName &&
+                                    (parts[1].toLongOrNull() ?: 0L) > android.os.SystemClock.elapsedRealtime() &&
+                                    (parts[2].toIntOrNull() ?: -2) == currentBootCount
+                            }
                             val hasTask = tasks.any { it.rewardPackageName == app.packageName } ||
                                 tasks.any { task -> !task.rewardGroupId.isNullOrBlank() && appGroups.any { it.id == task.rewardGroupId && app.packageName in it.packageNames } }
-                            val status = if (app.dailyLimitMinutes <= 0) "No app-specific daily cap" else if (remaining <= 0) "Time's up • answer to unlock" else "$remaining min left"
+                            val status = when {
+                                emergencyGrantActive -> "Emergency access • temporary"
+                                app.dailyLimitMinutes <= 0 -> "No app-specific daily cap"
+                                remaining <= 0 -> "Time's up • answer to unlock"
+                                else -> "$remaining min left"
+                            }
                             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -5439,7 +5453,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             val launch = context.packageManager.getLaunchIntentForPackage(app.packageName)
                                             if (launch == null) {
                                                 notice = "This app is not installed on the child phone."
-                                            } else if (remaining <= 0) {
+                                            } else if (remaining <= 0 && !emergencyGrantActive) {
                                                 val task = tasks.firstOrNull { it.rewardPackageName == app.packageName }
                                                     ?: tasks.firstOrNull { t -> !t.rewardGroupId.isNullOrBlank() && appGroups.any { it.id == t.rewardGroupId && app.packageName in it.packageNames } }
                                                 if (task != null) {
@@ -5454,7 +5468,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         },
                                         enabled = !busy,
                                         modifier = Modifier.width(116.dp)
-                                    ) { AppUiText(if (remaining <= 0) "Unlock" else "Open") }
+                                    ) { AppUiText(if (remaining <= 0 && !emergencyGrantActive) "Unlock" else "Open") }
                                 }
                             }
                         }
