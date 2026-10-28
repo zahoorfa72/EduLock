@@ -309,6 +309,15 @@ private fun learningTemplateCategories(countryCode: String): List<String> {
     return (common + localLanguageSubjects).distinct()
 }
 
+private data class QuestionEditDraft(
+    val prompt: String,
+    val options: String,
+    val answer: String,
+    val languageCode: String,
+    val conceptKey: String,
+    val solution: String
+)
+
 private data class LocalTaskDraft(
     val answers: Map<String, String> = emptyMap(),
     val questionIndex: Int = 0,
@@ -625,6 +634,8 @@ private fun EduLockApp(repository: EduLockRepository) {
     var groupRewardsExpanded by remember { mutableStateOf(false) }
     var translationEditorQuestionId by remember { mutableStateOf<String?>(null) }
     var questionDeleteConfirmation by remember { mutableStateOf<QuestionRow?>(null) }
+    var questionEditExpandedId by remember { mutableStateOf<String?>(null) }
+    var questionEditDrafts by remember { mutableStateOf<Map<String, QuestionEditDraft>>(emptyMap()) }
     var selectedTaskSubjectIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var appGroups by remember { mutableStateOf(emptyList<AppGroup>()) }
     var appGroupName by remember { mutableStateOf("") }
@@ -3408,12 +3419,42 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         }
                                         Row(
                                             Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             OutlinedButton(
                                                 onClick = {
+                                                    if (questionEditExpandedId == question.id) {
+                                                        questionEditExpandedId = null
+                                                        questionEditDrafts = questionEditDrafts - question.id
+                                                    } else execute {
+                                                        val answerKey = repository.loadQuestionAnswerKeys(listOf(question.id))[question.id].orEmpty()
+                                                        val editableOptions = if (question.questionType == "matching") {
+                                                            answerKey.split(";").mapNotNull { pair ->
+                                                                val parts = pair.split("=", limit = 2)
+                                                                if (parts.size == 2) parts[0] + "|" + parts[1] else null
+                                                            }.joinToString("\n")
+                                                        } else question.options.joinToString("\n")
+                                                        questionEditDrafts = questionEditDrafts + (question.id to QuestionEditDraft(
+                                                            prompt = question.prompt,
+                                                            options = editableOptions,
+                                                            answer = if (question.questionType == "matching") "" else answerKey,
+                                                            languageCode = question.languageCode,
+                                                            conceptKey = question.conceptKey,
+                                                            solution = questionSolutions[question.id].orEmpty()
+                                                        ))
+                                                        questionEditExpandedId = question.id
+                                                        translationEditorQuestionId = null
+                                                    }
+                                                },
+                                                enabled = !busy,
+                                                modifier = Modifier.weight(0.8f),
+                                                contentPadding = PaddingValues(horizontal = 5.dp, vertical = 5.dp)
+                                            ) { AppUiText(if (questionEditExpandedId == question.id) "Close edit" else "✏ Edit", fontSize = 12.sp) }
+                                            OutlinedButton(
+                                                onClick = {
                                                     if (translationEditorQuestionId == question.id) {
+                                                        translationEditorQuestionId = null
                                                         translationEditorQuestionId = null
                                                     } else {
                                                         translationEditorQuestionId = question.id
@@ -3444,6 +3485,84 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 enabled = !busy,
                                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp)
                                             ) { AppUiText("🗑 Remove", fontSize = 12.sp) }
+                                        }
+                                        val questionEditDraft = questionEditDrafts[question.id]
+                                        if (questionEditExpandedId == question.id && questionEditDraft != null) {
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = RoundedCornerShape(12.dp),
+                                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                            ) {
+                                                Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                                    AppUiText("Edit question", fontWeight = FontWeight.Bold)
+                                                    Field(
+                                                        questionEditDraft.prompt,
+                                                        { value -> questionEditDrafts = questionEditDrafts + (question.id to questionEditDraft.copy(prompt = value)) },
+                                                        "Question prompt"
+                                                    )
+                                                    if (question.questionType == "multiple_choice" || question.questionType == "matching" || question.questionType == "picture") {
+                                                        Field(
+                                                            questionEditDraft.options,
+                                                            { value -> questionEditDrafts = questionEditDrafts + (question.id to questionEditDraft.copy(options = value)) },
+                                                            if (question.questionType == "matching") "Matching pairs (one per line: left|right)" else "Options (one per line)"
+                                                        )
+                                                    }
+                                                    if (question.questionType != "matching") {
+                                                        Field(
+                                                            questionEditDraft.answer,
+                                                            { value -> questionEditDrafts = questionEditDrafts + (question.id to questionEditDraft.copy(answer = value)) },
+                                                            "Canonical correct answer (private)"
+                                                        )
+                                                    } else {
+                                                        AppUiText("Matching answers are rebuilt from the pairs above.", style = MaterialTheme.typography.bodySmall)
+                                                    }
+                                                    Field(
+                                                        questionEditDraft.languageCode,
+                                                        { value -> questionEditDrafts = questionEditDrafts + (question.id to questionEditDraft.copy(languageCode = value.trim().lowercase(Locale.ROOT).take(16))) },
+                                                        "Question language code"
+                                                    )
+                                                    Field(
+                                                        questionEditDraft.conceptKey,
+                                                        { value -> questionEditDrafts = questionEditDrafts + (question.id to questionEditDraft.copy(conceptKey = value)) },
+                                                        "Concept tag (same tag groups related questions)"
+                                                    )
+                                                    Field(
+                                                        questionEditDraft.solution,
+                                                        { value -> questionEditDrafts = questionEditDrafts + (question.id to questionEditDraft.copy(solution = value)) },
+                                                        "Parent-only worked solution (blank removes it)"
+                                                    )
+                                                    Button(
+                                                        onClick = {
+                                                            execute {
+                                                                val draft = questionEditDrafts[question.id]
+                                                                    ?: throw IllegalStateException("The question edit draft is missing.")
+                                                                repository.updateQuestion(
+                                                                    question,
+                                                                    draft.prompt,
+                                                                    draft.options.lines().map { it.trim() }.filter { it.isNotEmpty() },
+                                                                    draft.answer,
+                                                                    draft.languageCode,
+                                                                    draft.conceptKey,
+                                                                    draft.solution
+                                                                )
+                                                                val refreshedQuestions = repository.loadQuestions(subject.id)
+                                                                questions = refreshedQuestions
+                                                                questionTranslations = repository.loadQuestionTranslations(refreshedQuestions.map { it.id })
+                                                                questionSolutions = repository.loadQuestionSolutions(refreshedQuestions.map { it.id })
+                                                                questionRewardGroups = repository.loadQuestionRewardGroups(subject.id)
+                                                                questionGroupRewardEdits = questionRewardGroups.associate { it.conceptKey to it.rewardMinutes.toString() }
+                                                                questionEditExpandedId = null
+                                                                questionEditDrafts = questionEditDrafts - question.id
+                                                                notice = "Question updated. Its original ID and existing progress references were preserved."
+                                                            }
+                                                        },
+                                                        enabled = !busy && questionEditDraft.prompt.isNotBlank() &&
+                                                            questionEditDraft.languageCode.isNotBlank() && questionEditDraft.conceptKey.isNotBlank() &&
+                                                            (question.questionType == "matching" || questionEditDraft.answer.isNotBlank()),
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) { AppUiText("Save question changes") }
+                                                }
+                                            }
                                         }
                                         if (translationEditorQuestionId == question.id) {
                                             Card(
