@@ -487,6 +487,10 @@ private fun EduLockApp(repository: EduLockRepository) {
     var dailyTaskPassPercentText by remember { mutableStateOf("70") }
     var dailyTaskRewardMinutesText by remember { mutableStateOf("1") }
     var dailyTaskCapMinutesText by remember { mutableStateOf("30") }
+    var kindergartenModeEnabled by remember { mutableStateOf(false) }
+    var gentleLearningRemindersEnabled by remember { mutableStateOf(true) }
+    var practicalTasksEnabled by remember { mutableStateOf(true) }
+    var dailyWrittenLimitText by remember { mutableStateOf("8") }
     var subjects by remember { mutableStateOf(emptyList<SubjectRow>()) }
     var subjectSearchQuery by remember { mutableStateOf("") }
     var questionSearchQuery by remember { mutableStateOf("") }
