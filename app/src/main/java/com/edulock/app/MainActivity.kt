@@ -1283,6 +1283,35 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         Switch(checked = dailyTasksEnabled, onCheckedChange = { dailyTasksEnabled = it })
                     }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            AppUiText("Kindergarten / easy learning", fontWeight = FontWeight.SemiBold)
+                            AppUiText("Shorter sessions and simpler daily practice.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Switch(checked = kindergartenModeEnabled, onCheckedChange = { kindergartenModeEnabled = it })
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            AppUiText("Gentle focus reminders", fontWeight = FontWeight.SemiBold)
+                            AppUiText("Encouraging reminders to revisit weak concepts.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Switch(checked = gentleLearningRemindersEnabled, onCheckedChange = { gentleLearningRemindersEnabled = it })
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            AppUiText("Practical tasks", fontWeight = FontWeight.SemiBold)
+                            AppUiText("Allow a separate hands-on task portal for this child.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Switch(checked = practicalTasksEnabled, onCheckedChange = { practicalTasksEnabled = it })
+                    }
+                    OutlinedTextField(
+                        value = dailyWrittenLimitText,
+                        onValueChange = { dailyWrittenLimitText = it.filter(Char::isDigit).take(3) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { AppUiText("Maximum written questions per day (1–100)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
                     OutlinedTextField(
                         value = dailyTaskCountText,
                         onValueChange = { dailyTaskCountText = it.filter(Char::isDigit).take(1) },
