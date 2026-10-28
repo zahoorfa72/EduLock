@@ -381,10 +381,6 @@ grant execute on function edulock.ensure_daily_tasks_for_child(uuid) to service_
 create index if not exists questions_subject_mode_difficulty_idx
   on edulock.questions(subject_id, learning_mode, difficulty_level, created_at);
 
-notify pgrst, 'reload schema';
-commit;
-
-
 -- Trusted grading extension. This version retains the existing translation-aware grader,
 -- records partial credit, and updates concept mastery in the same transaction.
 create or replace function edulock.grade_and_award_task(
@@ -675,3 +671,5 @@ $grade$;
 revoke all on function edulock.grade_and_award_task(uuid,uuid,jsonb) from public,anon,authenticated;
 grant execute on function edulock.grade_and_award_task(uuid,uuid,jsonb) to service_role;
 
+notify pgrst, 'reload schema';
+commit;
