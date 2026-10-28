@@ -932,7 +932,7 @@ class EduLockRepository(context: Context) {
                 saveQuestionSolution(questionId, solution)
             } catch (e: Exception) {
                 // Avoid leaving a template question half-saved without its private worked solution.
-                try { restArray("questions?id=eq.$questionId", "DELETE") } catch (_: Exception) { }
+                try { restArray("questions?id=eq.$questionId", "DELETE", prefer = "return=minimal") } catch (_: Exception) { }
                 throw IOException("Could not save the parent-only worked solution. Apply the latest EduLock Supabase migration and try again.", e)
             }
         }
@@ -989,7 +989,8 @@ class EduLockRepository(context: Context) {
                 .put("options", JSONArray(storedOptions))
                 .put("answer_key", JSONObject().put("answer", storedAnswer))
                 .put("language_code", languageCode.trim().lowercase())
-                .put("concept_key", conceptKey.trim().replace(Regex("\\s+"), " ").take(160))
+                .put("concept_key", conceptKey.trim().replace(Regex("\\s+"), " ").take(160)),
+            prefer = "return=minimal"
         )
         if (solution.isBlank()) {
             restArray("question_solutions?question_id=eq." + question.id, "DELETE")
