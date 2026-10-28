@@ -745,6 +745,21 @@ class EduLockRepository(context: Context) {
         )
     }
 
+    suspend fun deleteSubject(subjectId: String) {
+        requireSession("parent")
+        require(subjectId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid subject." }
+        // Ask PostgREST to return the deleted row so an RLS-filtered no-op
+        // cannot be mistaken for a successful delete.
+        val deleted = restArray(
+            "subjects?id=eq.$subjectId&select=id",
+            "DELETE",
+            prefer = "return=representation"
+        )
+        require((0 until deleted.length()).any { deleted.optJSONObject(it)?.optString("id") == subjectId }) {
+            "Supabase did not confirm that this subject was deleted. Check parent permissions and whether dependent records prevent deletion."
+        }
+    }
+
     suspend fun findOrCreateSubject(
         familyId: String, title: String, languageCode: String, countryCode: String = "PK"
     ): SubjectRow {
