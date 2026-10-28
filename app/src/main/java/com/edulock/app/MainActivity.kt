@@ -1459,7 +1459,11 @@ private fun EduLockApp(repository: EduLockRepository) {
         childProfile = linked
         runCatching {
             val learningPrefs = repository.loadCurrentChildLearningPreferences(linked.id)
-            LearningReminderScheduler.setEnabled(context, learningPrefs.gentleReminders, linked.displayName)
+            if (learningPrefs.gentleReminders) {
+                requestLearningReminderPermission(linked.displayName)
+            } else {
+                LearningReminderScheduler.setEnabled(context, false, linked.displayName)
+            }
         }.onFailure { error ->
             android.util.Log.w("EduLockLearningReminder", "Could not sync learning reminder preference", error)
         }
