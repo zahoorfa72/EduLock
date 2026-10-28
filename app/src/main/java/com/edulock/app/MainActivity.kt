@@ -5964,14 +5964,34 @@ private fun RewardBankPanel(
             } else if (approvedApps.isEmpty()) {
                 AppUiText("Your parent has not enabled any apps for reward time yet. Ask them to approve an app in App access.", color = Color(0xFF72500A))
             } else {
-                AppUiText("Choose where to use your reward", fontWeight = FontWeight.Bold, color = Color(0xFF72500A))
-                approvedApps.forEach { app ->
+                val uniqueApprovedApps = approvedApps
+                    .distinctBy { it.packageName.lowercase(java.util.Locale.ROOT) }
+                    .sortedWith(compareBy<AllowedApp> { it.displayName.lowercase(java.util.Locale.ROOT) }.thenBy { it.packageName })
+                val selectedRewardApp = uniqueApprovedApps.firstOrNull { it.packageName == selectedPackage }
+                var rewardAppsExpanded by remember { mutableStateOf(false) }
+                AppUiText("Use reward on", fontWeight = FontWeight.Bold, color = Color(0xFF72500A))
+                Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(
-                        onClick = { onSelectPackage(app.packageName) },
+                        onClick = { rewardAppsExpanded = true },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !busy
+                        enabled = !busy && uniqueApprovedApps.isNotEmpty()
                     ) {
-                        AppUiText((if (selectedPackage == app.packageName) "✓  " else "") + app.displayName)
+                        AppUiText((selectedRewardApp?.displayName ?: "Choose an approved app") + "  ▾")
+                    }
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = rewardAppsExpanded,
+                        onDismissRequest = { rewardAppsExpanded = false },
+                        modifier = Modifier.heightIn(max = 320.dp)
+                    ) {
+                        uniqueApprovedApps.forEach { app ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { AppUiText((if (selectedPackage == app.packageName) "✓  " else "") + app.displayName) },
+                                onClick = {
+                                    onSelectPackage(app.packageName)
+                                    rewardAppsExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
                 Field(
