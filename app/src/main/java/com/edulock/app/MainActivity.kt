@@ -2314,9 +2314,14 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                                 ) {
-                                    Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(
+                                        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
                                         AppUiText(
-                                            if (child.kidsModeEnabled) "🔒 Kids Mode: ON" else "🔓 Kids Mode: OFF",
+                                            if (child.kidsModeEnabled) "🔒 Kids Mode ON" else "🔓 Kids Mode OFF",
+                                            modifier = Modifier.weight(1f),
                                             fontWeight = FontWeight.Bold
                                         )
                                         OutlinedButton(
@@ -2347,8 +2352,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 }
                                             },
                                             enabled = !busy,
-                                            modifier = Modifier.fillMaxWidth().height(38.dp),
-                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                                            modifier = Modifier.height(36.dp),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
                                         ) {
                                             AppUiText(if (child.kidsModeEnabled) "Turn off" else "Enable")
                                         }
@@ -4275,13 +4280,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                     ) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             AppUiText("App access overview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            AppUiText("$cleanedAppCount apps detected • " + allowedApps.count { it.enabled } + " enabled allowlist entries • " + allowedApps.count { !it.enabled } + " disabled entries")
-                            AppUiText(
-                                if (child?.kidsModeEnabled == true)
-                                    "Kids Mode is ON: an enabled app rule is required. Individual daily limits and weekday windows still apply to enabled apps."
-                                else
-                                    "Normal mode allows apps unless individually disabled or restricted. Parent controls include daily minute caps and weekday access windows."
-                            )
+                            AppUiText("$cleanedAppCount apps detected • " + allowedApps.count { it.enabled } + " allowed • " + allowedApps.count { !it.enabled } + " blocked")
+                            AppUiText(if (child?.kidsModeEnabled == true) "Kids Mode on • enabled apps only" else "Kids Mode off • app rules still apply")
                         }
                     }
                     OutlinedTextField(
