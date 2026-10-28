@@ -251,6 +251,7 @@ class EduLockRepository(context: Context) {
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
 
     private val baseUrl = BuildConfig.SUPABASE_URL.trim().trimEnd('/')
@@ -1944,9 +1945,23 @@ class EduLockRepository(context: Context) {
         } else {
             builder.get()
         }
-        http.newCall(builder.build()).execute().use { response ->
-            RawResult(response.code, response.body?.string().orEmpty())
+        val request = builder.build()
+        var lastNetworkError: IOException? = null
+        for (attempt in 0..2) {
+            try {
+                return@withContext http.newCall(request).execute().use { response ->
+                    RawResult(response.code, response.body?.string().orEmpty())
+                }
+            } catch (error: IOException) {
+                lastNetworkError = error
+                if (attempt < 2) Thread.sleep(350L * (attempt + 1))
+            }
         }
+        val cause = lastNetworkError
+        if (cause?.message.orEmpty().contains("resolve host", ignoreCase = true)) {
+            throw IOException("EduLock cannot resolve the Supabase server address. Check Wi-Fi/mobile data and Android Private DNS (set it to Automatic), then try again. Your saved account is unchanged.", cause)
+        }
+        throw IOException("EduLock could not connect to its server. Check your connection and try again. Your saved account is unchanged.", cause)
     }
 
     private fun sessionFrom(json: JSONObject, role: String, fallbackUserId: String? = null): AuthSession? {
