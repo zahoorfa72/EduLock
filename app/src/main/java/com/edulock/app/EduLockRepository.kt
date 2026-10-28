@@ -1487,6 +1487,14 @@ class EduLockRepository(context: Context) {
         restArray("questions?id=eq.$questionId","PATCH",JSONObject().put("reward_minutes",minutes ?: JSONObject.NULL))
     }
 
+    suspend fun deleteQuestion(questionId: String) {
+        requireSession("parent")
+        require(questionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid question." }
+        // The database cascades dependent translations and private solution rows.
+        // Parent ownership is enforced by the questions table RLS policy.
+        restArray("questions?id=eq.$questionId", "DELETE")
+    }
+
     suspend fun loadQuestionRewardGroups(subjectId: String): List<QuestionRewardGroup> {
         requireSession("parent")
         val rows=restArray("question_reward_groups?select=id,subject_id,concept_key,reward_minutes&subject_id=eq.$subjectId&order=concept_key")
