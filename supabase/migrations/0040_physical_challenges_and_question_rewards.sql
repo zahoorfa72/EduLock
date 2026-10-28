@@ -1,5 +1,4 @@
--- Activity challenges, database-backed (not Supabase Storage) photo/video evidence,
--- and question/group-specific rewards.
+-- Per-question and question-group rewards, plus parent-approved physical activity challenges.
 begin;
 
 alter table edulock.questions
@@ -28,16 +27,16 @@ create policy question_reward_groups_parent_manage on edulock.question_reward_gr
     exists (
       select 1 from edulock.subjects s
       join edulock.family_profiles f on f.id = s.family_id
-      join edulock.user_profiles u on u.user_id = auth.uid() and u.account_role = 'parent'
-      where s.id = subject_id and f.owner_user_id = auth.uid()
+      where s.id = question_reward_groups.subject_id and f.owner_user_id = auth.uid()
+        and exists (select 1 from edulock.user_profiles u where u.user_id = auth.uid() and u.account_role = 'parent')
     )
   )
   with check (
     exists (
       select 1 from edulock.subjects s
       join edulock.family_profiles f on f.id = s.family_id
-      join edulock.user_profiles u on u.user_id = auth.uid() and u.account_role = 'parent'
-      where s.id = subject_id and f.owner_user_id = auth.uid()
+      where s.id = question_reward_groups.subject_id and f.owner_user_id = auth.uid()
+        and exists (select 1 from edulock.user_profiles u where u.user_id = auth.uid() and u.account_role = 'parent')
     )
   );
 
@@ -105,18 +104,15 @@ declare
   v_award integer := 0;
   v_today timestamptz;
 begin
-  select u.account_role into v_role
-  from edulock.user_profiles u where u.user_id = p_user_id;
+  select u.account_role into v_role from edulock.user_profiles u where u.user_id = p_user_id;
   if v_role is distinct from 'parent' then raise exception 'Parent access is required'; end if;
-
   select * into v_sub from edulock.physical_challenge_submissions s
-  where s.id = p_submission_id for update;
+    where s.id = p_submission_id for update;
   if not found then raise exception 'Submission not found'; end if;
   select * into v_challenge from edulock.physical_challenges c where c.id = v_sub.challenge_id;
   select * into v_child from edulock.children c where c.id = v_sub.child_id;
   select f.owner_user_id into v_owner from edulock.family_profiles f where f.id = v_challenge.family_id;
   if v_owner is distinct from p_user_id then raise exception 'You cannot review another family submission'; end if;
-
   if v_sub.status <> 'submitted' then
     if (p_approved and v_sub.status = 'approved') or (not p_approved and v_sub.status = 'rejected') then
       return jsonb_build_object('submission_id', v_sub.id, 'status', v_sub.status,
@@ -124,12 +120,10 @@ begin
     end if;
     raise exception 'This submission has already been reviewed';
   end if;
-
   v_today := pg_catalog.date_trunc('day', now() at time zone 'UTC') at time zone 'UTC';
   if p_approved then
     select coalesce(sum(l.minutes_delta), 0)::integer into v_used
-    from edulock.screen_time_ledger l
-    where l.child_id = v_child.id and l.created_at >= v_today;
+      from edulock.screen_time_ledger l where l.child_id = v_child.id and l.created_at >= v_today;
     v_award := greatest(0, least(v_challenge.reward_minutes, v_child.daily_cap_minutes - v_used));
     update edulock.physical_challenge_submissions
       set status = 'approved', review_note = left(coalesce(p_review_note,''),500),
@@ -179,7 +173,6 @@ declare
   v_award integer := 0;
   v_base_award integer := 0;
   v_group_award integer := 0;
-  v_group record;
   v_attempt_id uuid;
   v_today timestamptz;
   v_expected text;
@@ -302,39 +295,33 @@ begin
     join edulock.attempts a on a.id = l.source_attempt_id
     where l.child_id = v_child.id and a.task_id = v_task.id and l.created_at >= v_today;
 
-  -- Add group bonuses only when every question in that group selected for this task is correct.
+  -- A group bonus is awarded only if every question from that group
+  -- in this task is correct. An unused group never receives a bonus.
   select coalesce(sum(g.reward_minutes), 0)::integer into v_group_award
   from edulock.question_reward_groups g
   where g.subject_id = v_task.subject_id
     and exists (
-      select 1
-      from edulock.questions q
+      select 1 from edulock.questions q
       where q.subject_id = g.subject_id and q.concept_key = g.concept_key
         and q.grade_level = v_task.target_grade_level
         and v_task.target_age_years between q.age_min and q.age_max
         and (
           q.id in (select tq.question_id from edulock.task_questions tq where tq.task_id = v_task.id)
-          or (
-            not exists (select 1 from edulock.task_questions tq where tq.task_id = v_task.id)
-            and q.subject_id = v_task.subject_id
-          )
+          or (not exists (select 1 from edulock.task_questions tq where tq.task_id = v_task.id)
+              and q.subject_id = v_task.subject_id)
         )
         and q.id in (select (d.value ->> 'question_id')::uuid from jsonb_array_elements(v_details) d(value))
     )
     and not exists (
-      select 1
-      from edulock.questions q
-      join jsonb_to_recordset(v_details) d(question_id uuid, is_correct boolean)
-        on d.question_id = q.id
+      select 1 from edulock.questions q
+      join jsonb_to_recordset(v_details) d(question_id uuid, is_correct boolean) on d.question_id = q.id
       where q.subject_id = g.subject_id and q.concept_key = g.concept_key
         and q.grade_level = v_task.target_grade_level
         and v_task.target_age_years between q.age_min and q.age_max
         and (
           q.id in (select tq.question_id from edulock.task_questions tq where tq.task_id = v_task.id)
-          or (
-            not exists (select 1 from edulock.task_questions tq where tq.task_id = v_task.id)
-            and q.subject_id = v_task.subject_id
-          )
+          or (not exists (select 1 from edulock.task_questions tq where tq.task_id = v_task.id)
+              and q.subject_id = v_task.subject_id)
         )
         and not d.is_correct
     );
