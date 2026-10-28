@@ -1210,6 +1210,48 @@ class EduLockRepository(context: Context) {
     }
 
 
+    /** Parent-only list of all tasks for the signed-in family's children, including inactive tasks. */
+    suspend fun loadParentTasks(): List<TaskRow> {
+        requireSession("parent")
+        val rows = restArray(
+            "tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id,time_limit_seconds,question_time_limit_seconds,reward_to_bank&order=created_at.desc&limit=500"
+        )
+        return (0 until rows.length()).mapNotNull { index -> rows.optJSONObject(index)?.toTaskRow() }
+    }
+
+    /** Update parent-configurable task settings. Existing question links are retained. */
+    suspend fun updateTaskSettings(
+        taskId: String, title: String, questionCount: Int, passPercent: Int,
+        rewardMinutes: Int, dailyCapMinutes: Int, timeLimitSeconds: Int?,
+        questionTimeLimitSeconds: Int?, active: Boolean
+    ) {
+        requireSession("parent")
+        require(taskId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid task." }
+        require(title.trim().isNotEmpty()) { "Enter a task title." }
+        require(questionCount in 1..500 && passPercent in 0..100) { "Check the question count and passing score." }
+        require(rewardMinutes in 0..1440 && dailyCapMinutes in 0..1440) { "Reward limits must be between 0 and 1440 minutes." }
+        require(timeLimitSeconds == null || timeLimitSeconds in 10..3600) { "Task time limit must be 10–3600 seconds." }
+        require(questionTimeLimitSeconds == null || questionTimeLimitSeconds in 5..600) { "Question time limit must be 5–600 seconds." }
+        send(
+            "rest/v1/tasks?id=eq.$taskId", "PATCH",
+            JSONObject().put("title", title.trim().take(160))
+                .put("question_count", questionCount).put("pass_percent", passPercent)
+                .put("reward_minutes", rewardMinutes).put("daily_cap_minutes", dailyCapMinutes)
+                .put("time_limit_seconds", timeLimitSeconds ?: JSONObject.NULL)
+                .put("question_time_limit_seconds", questionTimeLimitSeconds ?: JSONObject.NULL)
+                .put("active", active),
+            authenticated = true, profile = true
+        )
+    }
+
+    /** Delete a task and its linked question rows, but retain historical attempts. */
+    suspend fun deleteTask(taskId: String) {
+        requireSession("parent")
+        require(taskId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid task." }
+        send("rest/v1/task_questions?task_id=eq.$taskId", "DELETE", null, authenticated = true, profile = true)
+        send("rest/v1/tasks?id=eq.$taskId", "DELETE", null, authenticated = true, profile = true)
+    }
+
     /**
      * Submit a completed child task through the trusted server grading function.
      * Answer keys remain server-side; the client sends only question IDs, answers and
