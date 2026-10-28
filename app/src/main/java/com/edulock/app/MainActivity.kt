@@ -3319,7 +3319,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             val visibleCurriculumQuestionIds = visibleCurriculumQuestions.map { it.id }.toSet()
                             val allVisibleQuestionsSelected = visibleCurriculumQuestionIds.isNotEmpty() &&
                                 visibleCurriculumQuestionIds.all { it in curriculumSelectedIds }
-                            if (visibleCurriculumQuestions.isNotEmpty()) {
+                            if (curriculumQuestionSearchQuery.isNotBlank() && visibleCurriculumQuestions.isNotEmpty()) {
                                 OutlinedButton(
                                     onClick = {
                                         curriculumSelectedIds = if (allVisibleQuestionsSelected) {
