@@ -108,6 +108,20 @@ data class QuestionTranslation(
     val options: List<String>
 )
 
+data class PhysicalChallenge(
+    val id: String, val familyId: String, val childId: String?, val title: String,
+    val description: String, val rewardMinutes: Int, val evidenceType: String,
+    val active: Boolean
+)
+data class ChallengeSubmission(
+    val id: String, val challengeId: String, val childId: String, val title: String,
+    val description: String, val evidenceType: String, val mimeType: String,
+    val mediaBase64: String, val note: String, val status: String,
+    val rewardMinutes: Int, val reviewNote: String, val submittedAt: String
+)
+data class QuestionRewardGroup(val id: String, val subjectId: String, val conceptKey: String, val rewardMinutes: Int)
+
+
 data class ConceptProgress(
     val conceptKey: String,
     val languageCode: String,
@@ -1380,6 +1394,116 @@ class EduLockRepository(context: Context) {
             )
         }
     }
+
+
+    suspend fun loadPhysicalChallenges(familyId: String, childId: String? = null): List<PhysicalChallenge> {
+        val session = sessionStore.read() ?: throw IOException("Sign in to view challenges.")
+        val path = if (session.accountRole == "parent") {
+            "physical_challenges?select=id,family_id,child_id,title,description,reward_minutes,evidence_type,active&family_id=eq.$familyId&order=created_at.desc"
+        } else {
+            "physical_challenges?select=id,family_id,child_id,title,description,reward_minutes,evidence_type,active&active=eq.true&order=created_at.desc"
+        }
+        val rows = restArray(path)
+        return (0 until rows.length()).mapNotNull { i ->
+            rows.optJSONObject(i)?.let { row ->
+                PhysicalChallenge(row.optString("id"), row.optString("family_id"),
+                    row.optString("child_id").takeIf { it.isNotBlank() && it != "null" },
+                    row.optString("title"), row.optString("description"),
+                    row.optInt("reward_minutes").coerceIn(0,1440), row.optString("evidence_type","either"),
+                    row.optBoolean("active",true))
+            }
+        }.filter { session.accountRole != "child" || (it.active && (it.childId == null || it.childId == childId)) }
+    }
+
+    suspend fun createPhysicalChallenge(
+        familyId: String, childId: String?, title: String, description: String,
+        rewardMinutes: Int, evidenceType: String
+    ): PhysicalChallenge {
+        requireSession("parent")
+        require(title.trim().length in 2..120) { "Enter a challenge title (2–120 characters)." }
+        require(description.length <= 1000) { "Challenge instructions are too long." }
+        require(rewardMinutes in 0..1440) { "Reward must be 0–1440 minutes." }
+        require(evidenceType in setOf("photo","video","either")) { "Choose photo, video or either." }
+        val userId = sessionStore.read()?.userId ?: throw IOException("Please sign in again.")
+        val body = JSONObject().put("family_id",familyId).put("title",title.trim())
+            .put("description",description.trim()).put("reward_minutes",rewardMinutes)
+            .put("evidence_type",evidenceType).put("active",true).put("created_by",userId)
+        if (!childId.isNullOrBlank()) body.put("child_id",childId)
+        val rows = restArray("physical_challenges?select=id,family_id,child_id,title,description,reward_minutes,evidence_type,active","POST",body)
+        val row = rows.optJSONObject(0) ?: throw IOException("Challenge could not be saved.")
+        return PhysicalChallenge(row.optString("id"),row.optString("family_id"),
+            row.optString("child_id").takeIf { it.isNotBlank() && it!="null" },row.optString("title"),
+            row.optString("description"),row.optInt("reward_minutes"),row.optString("evidence_type"),row.optBoolean("active"))
+    }
+
+    suspend fun loadChallengeSubmissions(familyId: String, childId: String? = null): List<ChallengeSubmission> {
+        requireSession()
+        val session = sessionStore.read() ?: throw IOException("Sign in to view submissions.")
+        val path = if (session.accountRole == "parent") {
+            "physical_challenge_submissions?select=id,challenge_id,child_id,evidence_type,mime_type,media_base64,note,status,reward_minutes_awarded,review_note,submitted_at,physical_challenges!inner(title,description,family_id)&physical_challenges.family_id=eq.$familyId&order=submitted_at.desc&limit=20"
+        } else {
+            "physical_challenge_submissions?select=id,challenge_id,child_id,evidence_type,mime_type,media_base64,note,status,reward_minutes_awarded,review_note,submitted_at,physical_challenges!inner(title,description)&child_id=eq.${childId ?: ""}&order=submitted_at.desc&limit=20"
+        }
+        val rows=restArray(path)
+        return (0 until rows.length()).mapNotNull { i ->
+            rows.optJSONObject(i)?.let { row ->
+                val challenge=row.optJSONObject("physical_challenges") ?: JSONObject()
+                ChallengeSubmission(row.optString("id"),row.optString("challenge_id"),row.optString("child_id"),
+                    challenge.optString("title","Physical challenge"),challenge.optString("description"),
+                    row.optString("evidence_type"),row.optString("mime_type"),row.optString("media_base64"),
+                    row.optString("note"),row.optString("status"),row.optInt("reward_minutes_awarded"),
+                    row.optString("review_note"),row.optString("submitted_at"))
+            }
+        }
+    }
+
+    suspend fun submitChallengeEvidence(
+        challengeId: String, childId: String, evidenceType: String, mimeType: String,
+        mediaBase64: String, compressedBytes: Int, note: String
+    ) {
+        requireSession("child")
+        require(challengeId.matches(Regex("[0-9a-fA-F-]{36}")) && childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid challenge." }
+        require(evidenceType in setOf("photo","video") && mimeType in setOf("image/jpeg","video/mp4")) { "Choose a supported photo or MP4 video." }
+        require(mediaBase64.length in 100..5_000_000 && compressedBytes in 1..3_750_000) { "The compressed evidence must be smaller than 3.75 MB. Please choose a shorter video or smaller photo." }
+        require(note.length <= 500) { "Your note is too long." }
+        val body=JSONObject().put("challenge_id",challengeId).put("child_id",childId)
+            .put("evidence_type",evidenceType).put("mime_type",mimeType)
+            .put("media_base64",mediaBase64).put("compressed_size_bytes",compressedBytes)
+            .put("note",note.trim()).put("status","submitted").put("reward_minutes_awarded",0)
+        restArray("physical_challenge_submissions?select=id","POST",body)
+    }
+
+    suspend fun reviewChallengeSubmission(submissionId: String, approve: Boolean, note: String = ""): JSONObject {
+        requireSession("parent")
+        require(submissionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid submission." }
+        return requestFunction("review-physical-challenge",JSONObject().put("submission_id",submissionId)
+            .put("approve",approve).put("review_note",note.take(500)))
+    }
+
+    suspend fun setQuestionReward(questionId: String, minutes: Int) {
+        requireSession("parent")
+        require(minutes in 0..1440 && questionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Reward must be 0–1440 minutes." }
+        restArray("questions?id=eq.$questionId","PATCH",JSONObject().put("reward_minutes",minutes))
+    }
+
+    suspend fun loadQuestionRewardGroups(subjectId: String): List<QuestionRewardGroup> {
+        requireSession("parent")
+        val rows=restArray("question_reward_groups?select=id,subject_id,concept_key,reward_minutes&subject_id=eq.$subjectId&order=concept_key")
+        return (0 until rows.length()).mapNotNull { i -> rows.optJSONObject(i)?.let {
+            QuestionRewardGroup(it.optString("id"),it.optString("subject_id"),it.optString("concept_key"),it.optInt("reward_minutes"))
+        } }
+    }
+
+    suspend fun saveQuestionRewardGroup(subjectId: String, conceptKey: String, minutes: Int) {
+        requireSession("parent")
+        require(subjectId.matches(Regex("[0-9a-fA-F-]{36}")) && conceptKey.isNotBlank() && conceptKey.length<=120 && minutes in 0..1440) {
+            "Enter a valid concept group and reward (0–1440 minutes)."
+        }
+        restArray("question_reward_groups?on_conflict=subject_id,concept_key","POST",
+            JSONObject().put("subject_id",subjectId).put("concept_key",conceptKey.trim()).put("reward_minutes",minutes)
+                .put("updated_at",java.time.Instant.now().toString()),prefer="resolution=merge-duplicates,return=representation")
+    }
+
 
     suspend fun loadChildTasks(
         childId: String, schoolGrade: Int? = null, ageYears: Int? = null
