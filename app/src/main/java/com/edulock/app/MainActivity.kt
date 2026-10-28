@@ -435,6 +435,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var taskRewardMinutes by remember { mutableStateOf("3") }
     var taskDailyCapMinutes by remember { mutableStateOf("60") }
     var taskTimeLimitSeconds by remember { mutableStateOf("0") }
+    var taskQuestionTimeLimitSeconds by remember { mutableStateOf("0") }
     var taskRewardToBank by remember { mutableStateOf(true) }
     var taskRewardPackageName by remember { mutableStateOf("") }
     var taskRewardGroupId by remember { mutableStateOf("") }
@@ -2377,6 +2378,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 }
 
                 AppScreen.SUBJECTS -> ScreenFrame("Subjects & questions", onBack = { screen = AppScreen.PARENT_HOME }, notice = notice, busy = busy) {
+                    AppUiText("Open any subject to add, review, translate, or edit its questions. Each subject has its own separate question bank.")
                     Button(onClick = {
                         editingSubjectId = null
                         subjectTitle = ""; subjectLanguage = "en"
@@ -2463,7 +2465,31 @@ private fun EduLockApp(repository: EduLockRepository) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 AppUiText(subject.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                                 AppUiText("Language: " + subject.languageCode + " • " + displayCountryName(subject.countryCode) + " • Grade " + subject.gradeLevel)
-                                AppUiText("Tap the card to manage questions")
+                                AppUiText("Tap the card or use the button below to manage this subject's questions.")
+                                OutlinedButton(
+                                    onClick = {
+                                        selectedSubject = subject
+                                        expandedFourDQuestionId = null
+                                        screen = AppScreen.QUESTIONS
+                                        execute {
+                                            val addedStarterCount = repository.ensureTemplateQuestions(
+                                                subject.id,
+                                                fourDTemplatesForSubject(
+                                                    subject.title, subject.languageCode, subject.gradeLevel,
+                                                    selectedChild?.ageYears ?: (subject.gradeLevel + 5).coerceIn(3, 19)
+                                                )
+                                            )
+                                            questions = repository.loadQuestions(subject.id)
+                                            questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
+                                            questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
+                                            notice = if (addedStarterCount > 0) {
+                                                "Added " + addedStarterCount + " missing starter questions to " + subject.title + ". Existing questions were kept."
+                                            } else null
+                                        }
+                                    },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { AppUiText("📘 Open subject • Manage questions") }
                                 OutlinedButton(onClick = {
                                     editingSubjectId = subject.id
                                     subjectTitle = subject.title
@@ -2706,14 +2732,18 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 selectedChild?.ageYears ?: (grade + 5).coerceIn(3, 19)
                             )
                             val addedQuestionCount = repository.ensureTemplateQuestions(savedSubject.id, starterQuestions)
-                            notice = if (currentSubjectId == null) {
-                                "Subject saved with " + addedQuestionCount + " 4D starter questions."
-                            } else {
-                                "Subject updated. " + addedQuestionCount + " missing 4D starter questions added."
-                            }
+                            selectedSubject = savedSubject
+                            questions = repository.loadQuestions(savedSubject.id)
+                            questionTranslations = repository.loadQuestionTranslations(questions.map { it.id })
+                            questionSolutions = repository.loadQuestionSolutions(questions.map { it.id })
                             subjects = repository.loadSubjects(familyId, parentCountryCode)
                             editingSubjectId = null
-                            screen = AppScreen.SUBJECTS
+                            screen = AppScreen.QUESTIONS
+                            notice = if (currentSubjectId == null) {
+                                "Subject created with " + addedQuestionCount + " starter questions. Add, review, or translate questions on this subject page."
+                            } else {
+                                "Subject updated. " + addedQuestionCount + " missing starter questions added. You can manage its questions here."
+                            }
                         }
                     }, enabled = !busy && subjectTitle.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
                         AppUiText(if (editingSubjectId == null) "Save subject" else "Save subject changes")
@@ -3061,7 +3091,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             (selectedChildTrack != "none" && religionTrack == selectedChildTrack))
                     }
                     val selectedTaskSubjects = assignableSubjects.filter { it.id in selectedTaskSubjectIds }
-                    AppUiText("Select one or more subject banks. Questions from the selected subjects are mixed into one task.")
+                    AppUiText("Choose one subject bank per task. Create separate Mathematics, Physics, and other subject tasks so each task contains questions from only its selected subject.")
                     if (assignableSubjects.isEmpty()) {
                         AppUiText("No matching subjects yet. Open the country-specific learning templates, add a subject, then return here to assign its task.")
                         OutlinedButton(
@@ -3076,10 +3106,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                     }
                     assignableSubjects.forEach { subject ->
                         OutlinedButton(onClick = {
-                            selectedTaskSubjectIds = if (subject.id in selectedTaskSubjectIds) selectedTaskSubjectIds - subject.id else selectedTaskSubjectIds + subject.id
+                            selectedTaskSubjectIds = setOf(subject.id)
                             selectedSubject = subject
+                            notice = "Selected " + subject.title + ". Only its questions will be assigned to this task."
                         }, modifier = Modifier.fillMaxWidth()) {
-                            AppUiText((if (subject.id in selectedTaskSubjectIds) "✓ " else "") + subject.title + " (" + subject.languageCode + ")")
+                            AppUiText((if (subject.id in selectedTaskSubjectIds) "✓ Selected • " else "") + subject.title + " (" + subject.languageCode + ")")
                         }
                     }
                     Field(taskTitle, { taskTitle = it }, "Task title")
@@ -3088,8 +3119,10 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Field(taskRewardMinutes, { taskRewardMinutes = it.filter(Char::isDigit).take(4) }, "Reward minutes per correct answer (0–1440)", keyboardType = KeyboardType.Number)
                     AppUiText("Each correct answer earns this many minutes, even if the child does not pass. Rewards can go to general mobile time, one app, or a group of apps, within daily caps.")
                     Field(taskDailyCapMinutes, { taskDailyCapMinutes = it.filter(Char::isDigit).take(4) }, "Task daily reward cap (0–1440)", keyboardType = KeyboardType.Number)
-                    Field(taskTimeLimitSeconds, { taskTimeLimitSeconds = it.filter(Char::isDigit).take(4) }, "Task countdown seconds (0 = no timer; 10–3600)", keyboardType = KeyboardType.Number)
-                    AppUiText("When a timer is set, answers submit automatically at zero. Use 0 to keep the task untimed.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Field(taskTimeLimitSeconds, { taskTimeLimitSeconds = it.filter(Char::isDigit).take(4) }, "Total task time in seconds (0 = no timer; 10–3600)", keyboardType = KeyboardType.Number)
+                    AppUiText("When the total task timer ends, the task is submitted and marked completed. Use 0 for no task-wide timer.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Field(taskQuestionTimeLimitSeconds, { taskQuestionTimeLimitSeconds = it.filter(Char::isDigit).take(3) }, "Time per question in seconds (0 = no timer; 5–600)", keyboardType = KeyboardType.Number)
+                    AppUiText("When a question timer ends, that question locks and the next question opens. Use 0 if each question should have no separate timer.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     AppUiText("Reward destination", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     OutlinedButton(
                         onClick = {
@@ -3153,7 +3186,8 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 taskRewardPackageName.takeIf { it.isNotBlank() },
                                 taskRewardGroupId.takeIf { it.isNotBlank() },
                                 taskTimeLimitSeconds.toIntOrNull()?.takeIf { it in 10..3600 },
-                                taskRewardToBank
+                                taskRewardToBank,
+                                taskQuestionTimeLimitSeconds.toIntOrNull()?.takeIf { it in 5..600 }
                             )
                             tasks = emptyList()
                             screen = AppScreen.PARENT_HOME
