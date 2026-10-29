@@ -492,6 +492,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var questionSearchQuery by remember { mutableStateOf("") }
     var groupRewardSearchQuery by remember { mutableStateOf("") }
     var settingsSearchQuery by remember { mutableStateOf("") }
+    var parentSecurityDialogOpen by remember { mutableStateOf(false) }
     var childSecurityAppSearchQuery by remember { mutableStateOf("") }
     var templateSearchQuery by remember { mutableStateOf("") }
     var curriculumQuestionSearchQuery by remember { mutableStateOf("") }
@@ -1256,6 +1257,13 @@ private fun EduLockApp(repository: EduLockRepository) {
             dismissButton = {
                 TextButton(onClick = { pendingChildAction = null }) { AppUiText("Cancel") }
             }
+        )
+    }
+
+    if (parentSecurityDialogOpen) {
+        ParentSecuritySettingsDialog(
+            onDismiss = { parentSecurityDialogOpen = false },
+            onSaved = { notice = it }
         )
     }
 
@@ -2663,6 +2671,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                         )
                     }
                     AppUiText("App & child controls", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    DashboardIconTile(
+                        icon = "🔐", title = "Parent PIN & fingerprint",
+                        subtitle = if (ParentSecurity.isPinSet(context)) "PIN configured • biometric ${if (ParentSecurity.isBiometricEnabled(context)) "enabled" else "off"}" else "Set a PIN and configure biometric sign-in",
+                        accent = Color(0xFF9A6B19),
+                        onClick = { parentSecurityDialogOpen = true }
+                    )
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             DashboardIconTile(
@@ -2738,6 +2752,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                             "Emergency & logout codes" to "Parent-generated one-time logout PIN, no time expiry, emergency access and strict daily limits",
                             "Question rewards" to "Question reward minutes, concept group bonuses and learning tasks",
                             "Location & alerts" to "Child location sharing and family alerts",
+                            "Parent PIN & fingerprint" to "Secure parent settings with a PIN and fingerprint",
                             "Device protection" to "Accessibility and managed-device protection",
                             "Notifications" to "Android notification permission",
                             "Sign out" to "Sign out of the parent account"
@@ -2770,6 +2785,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                                 childLocationRows = latestChildren.map { repository.loadChildLocationSnapshot(it.id) }
                                             }
                                         }
+                                        "Parent PIN & fingerprint" -> parentSecurityDialogOpen = true
                                         "Device protection" -> { refreshProtectionStatus(); screen = AppScreen.PROTECTION_STATUS }
                                         "Notifications" -> {
                                             if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
