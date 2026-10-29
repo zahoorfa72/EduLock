@@ -822,7 +822,7 @@ internal fun PdfBookImportScreen(
                             val detected = detectPdfQuestions(extractedText, languageCode)
                             val before = candidates.size
                             val merged = (candidates + detected)
-                                .distinctBy { it.prompt.lowercase(Locale.ROOT).replace(Regex("""[^\\p{L}\\p{N}]+"""), " ").trim() }
+                                .distinctBy { it.prompt.lowercase(Locale.ROOT).replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim() }
                                 .take(80)
                             candidates = merged
                             status = if (merged.size > before) {
@@ -841,7 +841,7 @@ internal fun PdfBookImportScreen(
                             } else {
                                 val before = candidates.size
                                 val merged = (candidates + generated)
-                                    .distinctBy { it.prompt.lowercase(Locale.ROOT).replace(Regex("""[^\\p{L}\\p{N}]+"""), " ").trim() }
+                                    .distinctBy { it.prompt.lowercase(Locale.ROOT).replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim() }
                                     .take(80)
                                 candidates = merged
                                 status = "Generated " + generated.size + " source-based question-and-answer draft(s); " +
@@ -1566,41 +1566,71 @@ private fun detectPdfQuestions(rawText: String, language: String): List<PdfQuest
         .replace('\r', '\n')
         .replace('\u0000', ' ')
     val lines = normalized.lines()
-    val numberedPattern = Regex("""(?i)^\s*(?:(?:question|ques|q)\s*)?\d{1,3}\s*[\).:\-]\s*\S.*$""")
-    val starts = lines.indices.filter { numberedPattern.matches(lines[it]) }
     val blocks = mutableListOf<String>()
-    if (starts.size >= 3) {
-        for (i in starts.indices) {
-            val start = starts[i]
-            val end = if (i + 1 < starts.size) starts[i + 1] else lines.size
-            val block = lines.subList(start, end).joinToString("\n").trim()
-            if (block.length >= 12) blocks.add(block)
+
+    // Some OCR/PDF text places labels inline ("Question B ... Question C ...").
+    // Split those labels before parsing so unrelated exercises are not merged together.
+    val labelPattern = Regex("""(?i)\b(?:question|ques)\s+(?:[A-Z]|\d{1,3})\b""")
+    val labels = labelPattern.findAll(normalized).toList()
+    if (labels.size >= 2) {
+        val commandPattern = Regex(
+            """(?i)\b(?:complete|fill|write|answer|choose|match|explain|define|describe|calculate|find|solve|state|compare|mention|name|list|identify|tell|select|give|draw|label|tick|circle)\b"""
+        )
+        for (i in labels.indices) {
+            val from = labels[i].range.last + 1
+            val to = if (i + 1 < labels.size) labels[i + 1].range.first else normalized.length
+            var body = normalized.substring(from, to).trim()
+            if (body.isBlank()) continue
+
+            // OCRed image-matching keys are data, not questions.
+            if (Regex("""(?i)\b\d+(?:st|nd|rd|th)\s+image\s*=""").containsMatchIn(body)) continue
+
+            val command = commandPattern.find(body)
+            if (command != null && command.range.first <= 180) {
+                body = body.substring(command.range.first).trim()
+            }
+            if (body.length >= 10) blocks.add(body)
         }
     } else {
-        val paragraphs = normalized.split(Regex("""\n\s*\n+"""))
-            .map { it.trim() }
-            .filter { it.length >= 12 }
-        for (paragraph in paragraphs) {
-            if (paragraph.contains('?') || paragraph.contains('؟') ||
-                Regex("""(?i)^\s*(?:what|why|how|when|where|who|which|explain|define|describe|calculate|find|solve|state|write|compare|choose|mention|name)\b""").containsMatchIn(paragraph)) {
-                blocks.add(paragraph)
-            } else {
-                val questions = Regex("""(?s)([^?؟\n]{8,420}[?؟])""").findAll(paragraph).map { it.value.trim() }.toList()
-                blocks.addAll(questions)
+        val numberedPattern = Regex("""(?i)^\s*(?:(?:question|ques|q)\s*)?\d{1,3}\s*[).:\-]\s*\S.*$""")
+        val starts = lines.indices.filter { numberedPattern.matches(lines[it]) }
+        if (starts.size >= 3) {
+            for (i in starts.indices) {
+                val startLine = starts[i]
+                val endLine = if (i + 1 < starts.size) starts[i + 1] else lines.size
+                val block = lines.subList(startLine, endLine).joinToString("\n").trim()
+                if (block.length >= 12) blocks.add(block)
+            }
+        } else {
+            val paragraphs = normalized.split(Regex("""\n\s*\n+"""))
+                .map { it.trim() }
+                .filter { it.length >= 12 }
+            for (paragraph in paragraphs) {
+                if (paragraph.contains('?') || paragraph.contains('؟') ||
+                    Regex("""(?i)^\s*(?:what|why|how|when|where|who|which|explain|define|describe|calculate|find|solve|state|write|compare|choose|mention|name|complete|fill in|list)\b""").containsMatchIn(paragraph)) {
+                    blocks.add(paragraph)
+                } else {
+                    val questions = Regex("""(?s)([^?؟\n]{8,420}[?؟])""").findAll(paragraph).map { it.value.trim() }.toList()
+                    blocks.addAll(questions)
+                }
             }
         }
     }
 
     val optionPattern = Regex("""(?im)^\s*(?:\(?[A-Da-d]\)?[).:]|\([1-4]\)|[1-4][).]|(?:الف|ا|ب|پ|ت|ث|ج|چ|ح|خ|د|ڈ|ر|ز|س|ش|ف|ق|ک|گ|ل|م|ن|و|ہ|ھ|ی)[).:])\s*(.+?)\s*$""")
-    val answerPattern = Regex("""(?im)^\s*(?:correct\s+answer|answer|ans)\s*[:\-]\s*(.+?)\s*$""")
+    val answerPattern = Regex("""(?im)^\s*(?:correct\s+answer|answer\s+key|answer|ans|solution)\s*[:\-]\s*(.+?)\s*$""")
     val unique = linkedMapOf<String, PdfQuestionDraft>()
     for (block in blocks) {
-        val trimmed = block.replace(Regex("""(?m)^\s*(?:Page\s*)?\d+\s*$"""), "").trim()
+        val trimmed = block
+            .replace(Regex("""(?m)^\s*(?:Page\s*)?\d+\s*$"""), "")
+            .replace(Regex("""(?i)^\s*(?:question|ques)\s+(?:[A-Z]|\d{1,3})\s*[:.)\-]?\s*"""), "")
+            .trim()
+        if (trimmed.contains("=") && Regex("""(?i)\b\d+(?:st|nd|rd|th)?\s+image\s*=""").containsMatchIn(trimmed)) continue
         val options = optionPattern.findAll(trimmed).map { it.groupValues[1].trim() }.filter { it.isNotBlank() }.distinct().toList()
         val answerLine = answerPattern.find(trimmed)?.groupValues?.get(1)?.trim().orEmpty()
         val promptLines = trimmed.lines().filterNot { optionPattern.matches(it) || answerPattern.matches(it) }
         val prompt = promptLines.joinToString(" ")
-            .replace(Regex("""(?i)^\s*(?:(?:question|ques|q)\s*)?\d{1,3}\s*[\).:\-]\s*"""), "")
+            .replace(Regex("""(?i)^\s*(?:(?:question|ques|q)\s*)?\d{1,3}\s*[).:\-]\s*"""), "")
             .replace(Regex("""\s+"""), " ").trim()
         if (prompt.length !in 8..1000) continue
         if (prompt.count { it.isLetterOrDigit() } < 6) continue
@@ -1626,6 +1656,101 @@ private fun detectPdfQuestions(rawText: String, language: String): List<PdfQuest
             )
         }
         if (unique.size >= 80) break
+    }
+    return unique.values.toList()
+}
+
+private fun generateQuestionsFromSummary(rawText: String, language: String): List<PdfQuestionDraft> {
+    val normalized = rawText
+        .replace("\r\n", "\n")
+        .replace('\r', '\n')
+        .replace('\u0000', ' ')
+        .replace(Regex("""(?i)\b(?:question|ques)\s+(?:[A-Z]|\d{1,3})\b"""), "\n")
+    val paragraphs = normalized
+        .split(Regex("""\n\s*\n+|\u000c+"""))
+        .map { paragraph -> paragraph.replace(Regex("""[ \t]*\n[ \t]*"""), " ").trim() }
+        .filter { it.isNotBlank() }
+    val sentences = paragraphs.flatMap { paragraph ->
+        paragraph.split(Regex("""(?<=[.!?؟۔])\s+|(?<=;)\s+"""))
+    }.map { it.trim().trim('•', '-', '–', '—', ' ', '\t', '\n') }
+        .filter { sentence ->
+            val letters = sentence.count { it.isLetterOrDigit() }
+            sentence.length in 22..320 &&
+                letters >= 12 &&
+                !sentence.contains('?') &&
+                !sentence.contains('؟') &&
+                !Regex("""(?i)^\s*(?:page\s*\d+|chapter\s+\d+|exercise\s+\d+|answer\s+key|contents|www\.|https?://)""").containsMatchIn(sentence) &&
+                !Regex("""(?i)\b\d+(?:st|nd|rd|th)?\s+image\s*=""").containsMatchIn(sentence) &&
+                sentence.count { it == '=' } <= 1
+        }.distinctBy { it.lowercase(Locale.ROOT).replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim() }
+
+    val definitionPattern = Regex("""(?i)^(.{2,80}?)\s+(means|refers to|is called|are called)\s+(.{3,220})$""")
+    val copulaPattern = Regex("""(?i)^(.{2,80}?)\s+(is|are|was|were)\s+(.{3,220})$""")
+    val containsPattern = Regex("""(?i)^(.{2,80}?)\s+(has|have|contains|include|includes|consists of|comprises)\s+(.{3,220})$""")
+    val unique = linkedMapOf<String, PdfQuestionDraft>()
+
+    for (rawSentence in sentences) {
+        val fact = rawSentence.trim().trimEnd('.', '!', '?', '؟', '۔', ';', ':').trim()
+        if (fact.length !in 20..320) continue
+        val definition = definitionPattern.matchEntire(fact)
+        val copula = copulaPattern.matchEntire(fact)
+        val contains = containsPattern.matchEntire(fact)
+        val prompt: String
+        val answer: String
+
+        when {
+            language.equals("en", true) && definition != null -> {
+                prompt = "What does " + definition.groupValues[1].trim() + " mean?"
+                answer = definition.groupValues[3].trim()
+            }
+            language.equals("en", true) && copula != null -> {
+                val subject = copula.groupValues[1].trim()
+                val verb = copula.groupValues[2].lowercase(Locale.ROOT)
+                prompt = "What " + (if (verb == "are" || verb == "were") "are" else "is") + " " + subject + "?"
+                answer = copula.groupValues[3].trim()
+            }
+            language.equals("en", true) && contains != null -> {
+                val subject = contains.groupValues[1].trim()
+                val verb = contains.groupValues[2].lowercase(Locale.ROOT)
+                prompt = when (verb) {
+                    "has", "have" -> "What does " + subject + " have?"
+                    "contains", "include", "includes", "consists of", "comprises" -> "What does " + subject + " contain?"
+                    else -> "What is stated about " + subject + "?"
+                }
+                answer = contains.groupValues[3].trim()
+            }
+            else -> {
+                val words = fact.split(Regex("""\s+""")).filter { it.length > 2 }
+                val stopWords = setOf("the", "and", "for", "with", "from", "that", "this", "are", "was", "were", "have", "has", "can", "will", "should", "would", "their", "there", "into", "your", "you", "our", "they", "about", "which", "when", "where", "what", "who")
+                val topicWords = words.filterNot { it.lowercase(Locale.ROOT) in stopWords }.take(4)
+                val topic = topicWords.joinToString(" ").ifBlank { words.take(4).joinToString(" ") }
+                prompt = when (language.lowercase(Locale.ROOT)) {
+                    "ur" -> "متن کے مطابق، \"" + topic + "\" کے بارے میں ایک اہم حقیقت کیا ہے؟"
+                    "sd" -> "متن موجب، \"" + topic + "\" بابت هڪ اهم حقيقت ڪهڙي آهي؟"
+                    "ar" -> "وفقًا للنص، ما حقيقة مهمة عن \"" + topic + "\"؟"
+                    "hi" -> "पाठ के अनुसार, \"" + topic + "\" के बारे में एक महत्वपूर्ण तथ्य क्या है?"
+                    "es" -> "Según el texto, ¿qué dato importante se indica sobre \"" + topic + "\"?"
+                    "fr" -> "Selon le texte, quel fait important est indiqué sur « " + topic + " » ?"
+                    "bn" -> "পাঠ্য অনুযায়ী, \"" + topic + "\" সম্পর্কে একটি গুরুত্বপূর্ণ তথ্য কী?"
+                    else -> "According to the text, what important fact is stated about \"" + topic + "\"?"
+                }
+                answer = fact
+            }
+        }
+
+        if (prompt.length !in 8..350 || answer.length !in 2..320) continue
+        val key = prompt.lowercase(Locale.ROOT).replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim()
+        if (key.length >= 8 && !unique.containsKey(key)) {
+            unique[key] = PdfQuestionDraft(
+                prompt = prompt,
+                answer = answer,
+                solution = "Source text: " + fact + ". Review the source and answer before saving.",
+                questionType = "short_answer",
+                languageCode = language,
+                include = true
+            )
+        }
+        if (unique.size >= 40) break
     }
     return unique.values.toList()
 }
