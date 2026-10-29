@@ -59,7 +59,7 @@ internal fun ParentSecuritySettingsDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(12.dp))
-                if (pinSet) {
+                if (pinSet && (!biometricEnabled || changePinMode)) {
                     OutlinedTextField(
                         value = existingPin,
                         onValueChange = { existingPin = it.filter(Char::isDigit).take(12); error = null },
