@@ -850,8 +850,12 @@ internal fun PdfBookImportScreen(
                                     .distinctBy { it.prompt.lowercase(Locale.ROOT).replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim() }
                                     .take(80)
                                 candidates = merged
-                                status = "Generated " + generated.size + " source-based question-and-answer draft(s); " +
-                                    (merged.size - before) + " new draft(s) added. Review them all before saving."
+                                status = if (merged.size == before) {
+                                    "No new unique questions were added. The generated drafts duplicate questions already on screen; review the selected language and OCR text, or choose a clearer source."
+                                } else {
+                                    "Generated " + generated.size + " source-based question-and-answer draft(s); " +
+                                        (merged.size - before) + " new draft(s) added in " + selectedLanguageName + ". Review them before saving."
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
@@ -1658,8 +1662,8 @@ private fun detectPdfQuestions(rawText: String, language: String): List<PdfQuest
             .replace(Regex("""\s+"""), " ").trim()
         if (prompt.length !in 8..1000) continue
         if (prompt.count { it.isLetterOrDigit() } < 6) continue
-        // Never label mixed-script OCR output as the selected question language.
-        if (!isTextInSelectedLanguage(prompt, language)) continue
+        // Never label mixed-script or highly repetitive OCR output as a real question.
+        if (!isTextInSelectedLanguage(prompt, language) || hasLikelyOcrRepetition(prompt, language)) continue
         val type = if (options.size >= 2) "multiple_choice" else "short_answer"
         var answer = ""
         if (answerLine.isNotBlank() && isTextInSelectedLanguage(answerLine, language)) {
@@ -1785,21 +1789,23 @@ private fun generateQuestionsFromSummary(rawText: String, language: String): Lis
 }
 
 private fun isReadableSourceText(text: String, language: String): Boolean {
-    if (!isTextInSelectedLanguage(text, language)) return false
+    return isTextInSelectedLanguage(text, language) && !hasLikelyOcrRepetition(text, language)
+}
+
+private fun hasLikelyOcrRepetition(text: String, language: String): Boolean {
     val tokens = Regex("""[\p{L}\p{N}]+""").findAll(text.lowercase(Locale.ROOT)).map { it.value }.toList()
-    if (tokens.size < 4) return false
+    if (tokens.size < 6) return false
     val distinctRatio = tokens.distinct().size.toDouble() / tokens.size.toDouble()
-    if (tokens.size >= 6 && distinctRatio < 0.48) return false
+    if (distinctRatio < 0.48) return true
     val repeated = tokens.groupingBy { it }.eachCount()
     val code = language.lowercase(Locale.ROOT)
     val common = when (code) {
-        "sd" -> setOf("۽", "۾", "جي", "جو", "آهي", "آھن", "هڪ", "ته")
-        "ur" -> setOf("کے", "کی", "کا", "اور", "ہے", "ہیں", "میں", "سے", "ایک")
-        "ar" -> setOf("في", "من", "على", "إلى", "عن", "هو", "هي", "و")
-        else -> setOf("the", "and", "of", "to", "in", "is", "are", "a", "an")
+        "sd" -> setOf("۽", "۾", "جي", "جو", "آهي", "آھن", "هڪ", "ته", "کي", "سان")
+        "ur" -> setOf("کے", "کی", "کا", "اور", "ہے", "ہیں", "میں", "سے", "ایک", "کو")
+        "ar" -> setOf("في", "من", "على", "إلى", "عن", "هو", "هي", "و", "ال")
+        else -> setOf("the", "and", "of", "to", "in", "is", "are", "a", "an", "with", "for")
     }
-    if (repeated.any { (token, count) -> count >= 4 && token !in common }) return false
-    return true
+    return repeated.any { (token, count) -> token.length > 3 && count >= 3 && token !in common }
 }
 
 private fun isTextInSelectedLanguage(text: String, language: String): Boolean {
