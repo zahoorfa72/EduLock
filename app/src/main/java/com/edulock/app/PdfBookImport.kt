@@ -40,13 +40,11 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -131,11 +129,6 @@ internal fun PdfBookImportScreen(
     var temporaryPdf by remember { mutableStateOf<File?>(null) }
     var pickedFileName by remember { mutableStateOf("") }
 
-    val cleanupPdf by rememberUpdatedState(temporaryPdf)
-    DisposableEffect(Unit) {
-        onDispose { cleanupPdf?.delete() }
-    }
-
     val selectedSubject = subjects.firstOrNull { it.id == selectedSubjectId }
     val portalOptions = remember(countryCode, board, bookSubject, bookTitle, grade, languageCode) {
         portalsFor(countryCode, board, bookSubject, bookTitle, grade, languageCode)
@@ -153,10 +146,7 @@ internal fun PdfBookImportScreen(
             temporaryPdf = file
             candidates = parsed
             if (parsed.isNotEmpty()) {
-                // Delete the app-owned temporary PDF as soon as questions are safely in memory.
-                file.delete()
-                temporaryPdf = null
-                status = "Extracted " + parsed.size + " candidate questions. Review every prompt and answer before saving."
+                status = "Extracted " + parsed.size + " candidate questions. The PDF is kept on this device until you delete it manually. Review every prompt and answer before saving."
             } else {
                 status = "Text was extracted, but no clear question boundaries were found. Review the text and try parsing again."
             }
@@ -174,7 +164,7 @@ internal fun PdfBookImportScreen(
             scope.launch {
                 working = true
                 error = null
-                status = "Copying the selected PDF to temporary app storage…"
+                status = "Copying the selected PDF into EduLock book storage…"
                 try {
                     val copied = copyUriToCache(context, uri)
                     startExtraction(copied, "Selected PDF")
@@ -190,7 +180,7 @@ internal fun PdfBookImportScreen(
     suspend fun downloadForImport(url: String) {
         working = true
         error = null
-        status = "Downloading the PDF into temporary app storage…"
+        status = "Downloading the PDF into EduLock book storage…"
         try {
             val file = downloadPdfToCache(context, url)
             startExtraction(file, url.substringAfterLast('/').substringBefore('?').ifBlank { "Textbook.pdf" })
@@ -361,6 +351,19 @@ internal fun PdfBookImportScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        val savedPdfFiles = remember { File(context.filesDir, "pdf-books").listFiles()?.filter { it.isFile && it.extension.equals("pdf", true) } ?: emptyList() }
+        if (savedPdfFiles.isNotEmpty()) {
+            Text("Saved PDFs on this device", style = MaterialTheme.typography.titleMedium)
+            savedPdfFiles.forEach { savedPdf ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(savedPdf.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = {
+                        if (savedPdf.delete()) status = "Deleted " + savedPdf.name + " from this device."
+                        else error = "Could not delete this PDF."
+                    }, enabled = !working) { Text("Delete") }
+                }
+            }
+        }
         portalOptions.forEach { portal ->
             OutlinedButton(
                 onClick = { activePortal = portal },
@@ -474,10 +477,6 @@ internal fun PdfBookImportScreen(
                 onClick = {
                     candidates = detectPdfQuestions(extractedText, languageCode)
                     status = if (candidates.isEmpty()) "No clear questions detected. This may be a scanned/non-question chapter or the document’s layout is not supported. You can select another PDF." else "Review the candidate questions below."
-                    if (candidates.isNotEmpty()) {
-                        temporaryPdf?.delete()
-                        temporaryPdf = null
-                    }
                 },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Try detecting questions again") }
@@ -574,9 +573,7 @@ internal fun PdfBookImportScreen(
                                 onSaveQuestions(subject, finalDrafts)
                                 candidates = emptyList()
                                 extractedText = ""
-                                temporaryPdf?.delete()
-                                temporaryPdf = null
-                                status = "Reviewed questions saved. Any temporary import PDF has been deleted from EduLock storage."
+                                status = "Reviewed questions saved. Your PDF remains on this device; delete it manually when no longer needed."
                             } catch (e: Exception) {
                                 error = e.message ?: "Import failed. Your extracted questions remain on this screen; check duplicates before retrying."
                             } finally {
@@ -593,11 +590,9 @@ internal fun PdfBookImportScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onBack, enabled = !working, modifier = Modifier.weight(1f)) { Text("Back") }
             OutlinedButton(onClick = {
-                temporaryPdf?.delete()
-                temporaryPdf = null
                 extractedText = ""
                 candidates = emptyList()
-                status = "Temporary import content cleared."
+                status = "Question review cleared. Saved PDFs remain on this device until manually deleted."
                 error = null
             }, enabled = !working, modifier = Modifier.weight(1f)) { Text("Clear import") }
         }
@@ -681,7 +676,7 @@ private fun looksLikePdfUrl(url: String): Boolean {
 }
 
 private suspend fun copyUriToCache(context: Context, uri: Uri): File = withContext(Dispatchers.IO) {
-    val folder = File(context.cacheDir, "pdf-book-import").apply { mkdirs() }
+    val folder = File(context.filesDir, "pdf-books").apply { mkdirs() }
     val out = File(folder, "picked-" + System.currentTimeMillis() + ".pdf")
     try {
         val input = context.contentResolver.openInputStream(uri)
@@ -703,7 +698,7 @@ private suspend fun downloadPdfToCache(context: Context, url: String): File = wi
         val body = response.body ?: throw IllegalStateException("The book website returned an empty file.")
         val length = body.contentLength()
         require(length <= 120L * 1024L * 1024L || length < 0L) { "PDF exceeds the 120 MB import limit." }
-        val folder = File(context.cacheDir, "pdf-book-import").apply { mkdirs() }
+        val folder = File(context.filesDir, "pdf-books").apply { mkdirs() }
         val out = File(folder, "download-" + System.currentTimeMillis() + ".pdf")
         try {
             body.byteStream().use { input -> out.outputStream().use { output ->
