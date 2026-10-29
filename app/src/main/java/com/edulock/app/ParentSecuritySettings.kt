@@ -48,12 +48,12 @@ internal fun ParentSecuritySettingsDialog(
         text = {
             Column {
                 Text(
-                    "Set a parent-only PIN (4–12 digits). The PIN is stored as a salted PBKDF2 verifier, not as plain text.",
+                    "Protect parent settings with a private 4–12 digit PIN and optional fingerprint. Your PIN is stored as a salted verifier, not readable text.",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "When EduLock is in the background, parent protection waits 30 seconds before locking again by default. If fingerprint is enabled, fingerprint is requested first; the parent PIN remains available as a fallback.",
+                    "Security timing: the first time EduLock opens, it asks you to unlock. After leaving EduLock, it locks again after 30 seconds. If you remove EduLock from Recents, it locks immediately. Fingerprint unlocks first when enabled; PIN remains the backup method.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
