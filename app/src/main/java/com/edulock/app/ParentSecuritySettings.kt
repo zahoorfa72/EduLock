@@ -92,16 +92,48 @@ internal fun ParentSecuritySettingsDialog(
                     onClick = {
                         if (!pinSet) {
                             error = "Create a parent PIN before enabling fingerprint protection."
+                        } else if (biometricEnabled) {
+                            // Ask Android to verify the enrolled biometric. No PIN field is
+                            // required or shown for the fingerprint-disable action.
+                            val activity = context as? FragmentActivity
+                            val availability = BiometricManager.from(context)
+                                .canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                            if (activity == null || availability != BiometricManager.BIOMETRIC_SUCCESS) {
+                                error = when (availability) {
+                                    BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> "No fingerprint is enrolled. Fingerprint protection cannot be disabled without authenticating the parent."
+                                    BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> "This device has no supported fingerprint sensor. Keep fingerprint protection enabled or use the parent PIN fallback."
+                                    BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> "Fingerprint sensor is temporarily unavailable. Try again shortly."
+                                    else -> "Fingerprint authentication is unavailable here. Try again."
+                                }
+                            } else {
+                                val prompt = BiometricPrompt(activity, ContextCompat.getMainExecutor(context),
+                                    object : BiometricPrompt.AuthenticationCallback() {
+                                        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                                            ParentSecurity.setBiometricEnabled(context, false)
+                                            onSaved("Fingerprint protection disabled after biometric confirmation.")
+                                            onDismiss()
+                                        }
+                                        override fun onAuthenticationFailed() {
+                                            error = "Fingerprint not recognized. Try again."
+                                        }
+                                        override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                            error = "Fingerprint confirmation cancelled or unavailable: " + errString
+                                        }
+                                    })
+                                prompt.authenticate(
+                                    BiometricPrompt.PromptInfo.Builder()
+                                        .setTitle("Disable fingerprint protection")
+                                        .setSubtitle("Confirm your fingerprint to change parent security")
+                                        .setNegativeButtonText("Cancel")
+                                        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                                        .build()
+                                )
+                            }
                         } else if (existingPin.isBlank()) {
-                            error = "Enter your current parent PIN to change fingerprint protection."
+                            error = "Enter your current parent PIN to enable fingerprint protection."
                         } else if (!ParentSecurity.verifyPin(context, existingPin.toCharArray())) {
                             existingPin = ""
                             error = "Incorrect parent PIN. Enter it again."
-                        } else if (biometricEnabled) {
-                            // Disabling must remain possible even if the sensor is unavailable.
-                            ParentSecurity.setBiometricEnabled(context, false)
-                            onSaved("Fingerprint protection disabled.")
-                            onDismiss()
                         } else {
                             val availability = BiometricManager.from(context)
                                 .canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
@@ -125,7 +157,8 @@ internal fun ParentSecuritySettingsDialog(
                     Text(if (biometricEnabled) "Disable fingerprint" else "Enable fingerprint")
                 }
                 Text(
-                    if (biometricEnabled) "Fingerprint protection is enabled on this device." else "Fingerprint protection is currently off.",
+                    if (biometricEnabled) "Fingerprint is ON. Tap Disable fingerprint and confirm in Android's fingerprint prompt; no PIN field is shown for that action."
+                    else "Fingerprint is OFF. Your parent PIN remains available to unlock EduLock.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 error?.let {
