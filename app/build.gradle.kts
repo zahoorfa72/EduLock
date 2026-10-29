@@ -24,6 +24,16 @@ android {
         buildConfigField("String", "SUPABASE_URL", quotedBuildConfig(supabaseUrl))
         buildConfigField("String", "SUPABASE_ANON_KEY", quotedBuildConfig(supabaseAnonKey))
     }
+    // Produce device-specific APKs so each download contains only one CPU architecture.
+    // Most modern phones use arm64-v8a; older supported phones can use armeabi-v7a.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = false
+        }
+    }
     // Force the debug build to use the keystore preserved by android.yml instead
     // of allowing the Android Gradle Plugin to pick another runner-local debug key.
     signingConfigs {
@@ -37,6 +47,13 @@ android {
     buildTypes {
         getByName("debug") {
             signingConfig = signingConfigs.getByName("debug")
+            // Shrink unused code and resources even in the downloadable CI APKs.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
     buildFeatures { compose = true; buildConfig = true }
