@@ -7999,13 +7999,4 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         }
     }
 
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        // Swiping EduLock out of Recents locks it immediately on the next launch.
-        if (ParentSecurity.isPinSet(applicationContext)) {
-            getSharedPreferences("edulock_parent_security_ui", Context.MODE_PRIVATE).edit()
-                .putLong("backgrounded_at", System.currentTimeMillis() - PARENT_APP_RELOCK_DELAY_MS)
-                .apply()
-        }
-        super.onTaskRemoved(rootIntent)
-    }
 }
