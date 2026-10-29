@@ -67,6 +67,10 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase functions deploy submit-task-attempt --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+      - name: Deploy offline task package function
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy offline-task-package --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
       - name: Deploy automatic daily task function
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
