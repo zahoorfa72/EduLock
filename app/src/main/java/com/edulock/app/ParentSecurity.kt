@@ -14,6 +14,7 @@ import javax.crypto.spec.PBEKeySpec
  */
 internal object ParentSecurity {
     private const val PREFS = "edulock_parent_security"
+    private const val UI_PREFS = "edulock_parent_security_ui"
     private const val SALT = "pin_salt"
     private const val HASH = "pin_hash"
     private const val ITERATIONS = 120_000
@@ -28,6 +29,15 @@ internal object ParentSecurity {
     fun setBiometricEnabled(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean("biometric_enabled", enabled).apply()
+    }
+
+    fun shouldShowSetupSuggestion(context: Context): Boolean =
+        context.getSharedPreferences(UI_PREFS, Context.MODE_PRIVATE)
+            .getBoolean("show_setup_suggestion", true)
+
+    fun setShowSetupSuggestion(context: Context, show: Boolean) {
+        context.getSharedPreferences(UI_PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean("show_setup_suggestion", show).apply()
     }
 
     fun setPin(context: Context, pin: CharArray) {
