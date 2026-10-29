@@ -4905,12 +4905,12 @@ private fun EduLockApp(repository: EduLockRepository) {
                             require(drafts.isNotEmpty()) { "Select at least one reviewed question." }
                             val existingRows = repository.loadQuestions(destinationSubject.id)
                             val existingPromptKeys = existingRows.map {
-                                it.prompt.lowercase(Locale.ROOT).replace(Regex("\\W+"), " ").trim()
+                                it.prompt.lowercase(Locale.ROOT).replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim()
                             }.toMutableSet()
                             var imported = 0
                             var duplicates = 0
                             for (draft in drafts) {
-                                val promptKey = draft.prompt.lowercase(Locale.ROOT).replace(Regex("\\W+"), " ").trim()
+                                val promptKey = draft.prompt.lowercase(Locale.ROOT).replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim()
                                 if (!existingPromptKeys.add(promptKey)) {
                                     duplicates += 1
                                     continue
@@ -4933,7 +4933,6 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     concept,
                                     draft.solution.trim()
                                 )
-                                if (draft.solution.isNotBlank()) repository.saveQuestionSolution(id, draft.solution)
                                 imported += 1
                             }
                             val refreshedSubjects = repository.loadSubjects(familyId)
