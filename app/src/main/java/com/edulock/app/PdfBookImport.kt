@@ -105,10 +105,12 @@ internal fun PdfBookImportScreen(
     defaultCountryCode: String,
     defaultLanguageCode: String,
     onBack: () -> Unit,
+    onCreateSubject: suspend (String, String, String, Int) -> SubjectRow,
     onSaveQuestions: suspend (SubjectRow, List<PdfQuestionDraft>) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var destinationSubjects by remember(subjects) { mutableStateOf(subjects) }
     var countryCode by remember { mutableStateOf(defaultCountryCode.uppercase(Locale.ROOT).ifBlank { "PK" }) }
     var board by remember { mutableStateOf(defaultBoard(defaultCountryCode)) }
     var languageCode by remember { mutableStateOf(initialSubject?.languageCode ?: defaultLanguageCode.ifBlank { "en" }) }
@@ -137,7 +139,7 @@ internal fun PdfBookImportScreen(
     var stbbBooks by remember { mutableStateOf<List<StbbBook>>(emptyList()) }
     var stbbBooksLoading by remember { mutableStateOf(false) }
 
-    val selectedSubject = subjects.firstOrNull { it.id == selectedSubjectId }
+    val selectedSubject = destinationSubjects.firstOrNull { it.id == selectedSubjectId }
     val portalOptions = remember(countryCode, board, bookSubject, bookTitle, grade, languageCode) {
         portalsFor(countryCode, board, bookSubject, bookTitle, grade, languageCode)
     }
@@ -350,7 +352,7 @@ internal fun PdfBookImportScreen(
             Text(selectedSubject?.title ?: "Choose destination subject")
         }
         DropdownMenu(expanded = subjectMenu, onDismissRequest = { subjectMenu = false }) {
-            subjects.forEach { subject ->
+            destinationSubjects.forEach { subject ->
                 DropdownMenuItem(text = {
                     Text(subject.title + " • " + subject.languageCode + " • Grade " + subject.gradeLevel)
                 }, onClick = {
@@ -363,8 +365,38 @@ internal fun PdfBookImportScreen(
                 })
             }
         }
-        if (subjects.isEmpty()) {
+        if (destinationSubjects.isEmpty()) {
             Text("Create a subject first, then return here to import its PDF questions.", color = MaterialTheme.colorScheme.error)
+        }
+        Button(
+            onClick = {
+                scope.launch {
+                    working = true
+                    error = null
+                    try {
+                        val title = bookSubject.trim()
+                        require(title.isNotBlank()) { "Enter or select a subject name first." }
+                        val created = onCreateSubject(
+                            title,
+                            languageCode.ifBlank { "en" },
+                            countryCode,
+                            grade.toIntOrNull() ?: 1
+                        )
+                        destinationSubjects = (destinationSubjects.filterNot { it.id == created.id } + created)
+                        selectedSubjectId = created.id
+                        bookSubject = created.title
+                        status = "Subject ready: " + created.title + " • " + created.languageCode + " • Grade " + created.gradeLevel + ". Select a PDF or choose a direct textbook download below."
+                    } catch (e: Exception) {
+                        error = e.message ?: "Could not create or select this subject."
+                    } finally {
+                        working = false
+                    }
+                }
+            },
+            enabled = !working && bookSubject.isNotBlank(),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Create / select this subject")
         }
 
         Button(
