@@ -494,7 +494,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var settingsSearchQuery by remember { mutableStateOf("") }
     var parentSecurityDialogOpen by remember { mutableStateOf(false) }
     var parentSecuritySuggestionVisible by remember { mutableStateOf(ParentSecurity.shouldShowSetupSuggestion(context)) }
-    var parentAppLocked by remember { mutableStateOf(ParentSecurity.isPinSet(context)) }
+    var parentAppLocked by remember { mutableStateOf(shouldLockParentApp(context)) }
     var childSecurityAppSearchQuery by remember { mutableStateOf("") }
     var templateSearchQuery by remember { mutableStateOf("") }
     var curriculumQuestionSearchQuery by remember { mutableStateOf("") }
@@ -806,7 +806,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     val securityPrefs = context.getSharedPreferences("edulock_parent_security_ui", Context.MODE_PRIVATE)
                     val backgroundedAt = securityPrefs.getLong("backgrounded_at", 0L)
                     val elapsed = if (backgroundedAt > 0L) System.currentTimeMillis() - backgroundedAt else 0L
-                    if (backgroundedAt > 0L && elapsed >= 30_000L) parentAppLocked = true
+                    if (backgroundedAt > 0L && elapsed >= PARENT_APP_RELOCK_DELAY_MS) parentAppLocked = true
                     securityPrefs.edit().remove("backgrounded_at").apply()
                 }
                 refreshProtectionStatus()
@@ -7924,6 +7924,15 @@ private fun applyManagedDeviceProtection(context: Context): Boolean {
         prefs.getBoolean("kids_mode_enabled", false),
         prefs.getStringSet("allowed_packages", emptySet()).orEmpty()
     )
+}
+
+private const val PARENT_APP_RELOCK_DELAY_MS = 30_000L
+
+private fun shouldLockParentApp(context: Context): Boolean {
+    if (!ParentSecurity.isPinSet(context)) return false
+    val backgroundedAt = context.getSharedPreferences("edulock_parent_security_ui", Context.MODE_PRIVATE)
+        .getLong("backgrounded_at", 0L)
+    return backgroundedAt > 0L && System.currentTimeMillis() - backgroundedAt >= PARENT_APP_RELOCK_DELAY_MS
 }
 
 private fun isManagedDeviceProtectionActive(context: Context): Boolean {
