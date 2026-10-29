@@ -64,13 +64,15 @@ fun DrawingStudioScreen(onBack: () -> Unit) {
             }
         }
         AppUiText("Choose a drawing challenge", fontWeight = FontWeight.Bold)
+        val challenges = listOf("Free draw", "Sun & sky", "House", "Flower", "Rainbow", "Tree", "Butterfly", "Boat", "Star")
         androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
             columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
             modifier = Modifier.fillMaxWidth().height(144.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(listOf("Free draw", "Sun & sky", "House", "Flower", "Rainbow", "Tree", "Butterfly", "Boat", "Star")) { item ->
+            items(challenges.size) { index ->
+                val item = challenges[index]
                 OutlinedButton(
                     onClick = { guide = item },
                     modifier = Modifier.fillMaxWidth().height(42.dp),
