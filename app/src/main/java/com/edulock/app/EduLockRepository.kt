@@ -1776,11 +1776,17 @@ class EduLockRepository(context: Context) {
         var correct = 0
         answers.forEach { (questionId, actual) ->
             val row = questions[questionId] ?: return@forEach
-            val expected = row.optJSONObject("answer_key")?.optString("answer").orEmpty()
             val language = answerLanguages[questionId]?.takeIf { it.isNotBlank() }
                 ?: row.optString("language_code", "en")
-            if (language.equals(row.optString("language_code", "en"), ignoreCase = true) &&
-                normalizeOfflineAnswer(actual) == normalizeOfflineAnswer(expected)) correct++
+            val acceptedByLanguage = row.optJSONObject("accepted_answers_by_language")
+            val accepted = acceptedByLanguage?.optJSONArray(language)
+            val expectedAnswers = mutableListOf<String>()
+            if (accepted != null) {
+                for (i in 0 until accepted.length()) accepted.optString(i).takeIf { it.isNotBlank() }?.let(expectedAnswers::add)
+            } else if (language.equals(row.optString("language_code", "en"), ignoreCase = true)) {
+                row.optJSONObject("answer_key")?.optString("answer")?.takeIf { it.isNotBlank() }?.let(expectedAnswers::add)
+            }
+            if (expectedAnswers.any { normalizeOfflineAnswer(it) == normalizeOfflineAnswer(actual) }) correct++
         }
         val score = (correct * 100) / ids.size
         val passed = score >= task.optInt("pass_percent", 70)
