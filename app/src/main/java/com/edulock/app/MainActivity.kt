@@ -1328,7 +1328,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
                     AppUiText(
-                        "Each automatic task uses 4 questions by default and adds correct-answer rewards to the child's Reward Bank. If there are not enough matching questions, EduLock skips that task and tries again on the next day.",
+                        "Each task uses the question count selected above and adds correct-answer rewards to the child's Reward Bank. If there are not enough matching questions, EduLock skips that task and tries again on the next day.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1355,7 +1355,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                     },
                     enabled = !busy
-                ) { AppUiText("Save daily task settings") }
+                ) { AppUiText("Save") }
             },
             dismissButton = {
                 TextButton(onClick = { dailyTaskSettingsChild = null }) { AppUiText("Cancel") }
