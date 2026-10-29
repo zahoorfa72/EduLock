@@ -50,22 +50,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          test -f "$APK"
           test -f "$HOME/.android/debug.keystore"
+          shopt -s nullglob
+          APKS=(app/build/outputs/apk/debug/*.apk)
+          test "${#APKS[@]}" -gt 0
           KEY_SHA="$(keytool -exportcert -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey | openssl dgst -sha256 | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')"
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -x "$APKSIGNER"
-          CERT_REPORT="$("$APKSIGNER" verify --verbose --print-certs "$APK" 2>&1)"
-          echo "$CERT_REPORT"
-          APK_SHA="$(printf '%s\n' "$CERT_REPORT" | awk 'tolower($0) ~ /certificate sha-256 digest/ {print $NF; exit}' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
-          echo "Persisted keystore SHA-256: $KEY_SHA"
-          echo "APK certificate SHA-256:    $APK_SHA"
-          test -n "$KEY_SHA" && test -n "$APK_SHA"
-          test "$KEY_SHA" = "$APK_SHA"
+          for APK in "${APKS[@]}"; do
+            echo "Checking $(basename "$APK") ($(du -h "$APK" | cut -f1))"
+            CERT_REPORT="$("$APKSIGNER" verify --verbose --print-certs "$APK" 2>&1)"
+            echo "$CERT_REPORT"
+            APK_SHA="$(printf '%s\n' "$CERT_REPORT" | awk 'tolower($0) ~ /certificate sha-256 digest/ {print $NF; exit}' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+            test -n "$KEY_SHA" && test -n "$APK_SHA"
+            test "$KEY_SHA" = "$APK_SHA"
+          done
       - uses: actions/upload-artifact@v4
         with:
-          name: EduLock-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: EduLock-optimized-apks
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
