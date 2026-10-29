@@ -83,6 +83,11 @@ private data class BookPortal(
     val url: String
 )
 
+private data class StbbBook(
+    val id: String,
+    val title: String
+)
+
 private val bookHttpClient: OkHttpClient by lazy {
     OkHttpClient.Builder()
         .connectTimeout(25, TimeUnit.SECONDS)
@@ -129,6 +134,8 @@ internal fun PdfBookImportScreen(
     var temporaryPdf by remember { mutableStateOf<File?>(null) }
     var pickedFileName by remember { mutableStateOf("") }
     var savedPdfRefresh by remember { mutableStateOf(0) }
+    var stbbBooks by remember { mutableStateOf<List<StbbBook>>(emptyList()) }
+    var stbbBooksLoading by remember { mutableStateOf(false) }
 
     val selectedSubject = subjects.firstOrNull { it.id == selectedSubjectId }
     val portalOptions = remember(countryCode, board, bookSubject, bookTitle, grade, languageCode) {
@@ -365,6 +372,69 @@ internal fun PdfBookImportScreen(
             enabled = !working,
             modifier = Modifier.fillMaxWidth()
         ) { Text("Choose PDF from device") }
+
+        if (countryCode.equals("PK", true) && board.contains("sindh", ignoreCase = true)) {
+            Button(
+                onClick = {
+                    scope.launch {
+                        stbbBooksLoading = true
+                        error = null
+                        status = "Finding Sindh Textbook Board books for class " + grade + "…"
+                        try {
+                            stbbBooks = fetchStbbBooks(grade.toIntOrNull() ?: 1, languageCode)
+                            status = if (stbbBooks.isEmpty()) {
+                                "No matching books were listed for this class and medium. Try All mediums or use the official catalogue below."
+                            } else {
+                                "Found " + stbbBooks.size + " book(s) listed by the official Sindh Textbook Board. Use Download PDF beside a book to save it directly without browsing the website."
+                            }
+                        } catch (e: Exception) {
+                            error = e.message ?: "Could not load the official STBB book list. You can still use the catalogue below."
+                            stbbBooks = emptyList()
+                        } finally {
+                            stbbBooksLoading = false
+                        }
+                    }
+                },
+                enabled = !working && !stbbBooksLoading,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (stbbBooksLoading) "Finding textbook PDFs…" else "Find direct Sindh textbook PDF downloads")
+            }
+            if (stbbBooks.isNotEmpty()) {
+                Text("Books available for class " + grade + " • " + (pdfBookLanguages.firstOrNull { it.first == languageCode }?.second ?: languageCode), style = MaterialTheme.typography.titleMedium)
+                stbbBooks.forEach { book ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(book.title, style = MaterialTheme.typography.titleSmall)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = {
+                                        val url = stbbPdfDownloadUrl(book.id)
+                                        scope.launch { downloadForDevice(url) }
+                                    },
+                                    enabled = !working,
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("Download PDF") }
+                                OutlinedButton(
+                                    onClick = {
+                                        val url = stbbPdfDownloadUrl(book.id)
+                                        scope.launch { downloadForImport(url) }
+                                    },
+                                    enabled = !working,
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("Extract questions") }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         Text("Suggested textbook websites", style = MaterialTheme.typography.titleMedium)
         Text(
@@ -739,6 +809,49 @@ private fun portalsFor(country: String, board: String, subject: String, title: S
     )
     return (curated + exactSearch).take(4)
 }
+
+private fun stbbPdfDownloadUrl(bookId: String): String =
+    "https://portal.stbb.edu.pk/ebooks/pdf_proxy.php?download=1&id=" + Uri.encode(bookId)
+
+private suspend fun fetchStbbBooks(grade: Int, languageCode: String): List<StbbBook> =
+    withContext(Dispatchers.IO) {
+        // STBB uses class id 1 for Class I, 2 for Katchi, and 3 onward for Class II–XII.
+        val classId = if (grade <= 1) 1 else grade + 1
+        val url = "https://portal.stbb.edu.pk/ebooks/class.php?id=" + classId
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "EduLock textbook catalogue")
+            .build()
+        val html = bookHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IllegalStateException("STBB returned HTTP " + response.code + " while listing textbooks.")
+            }
+            response.body?.string() ?: throw IllegalStateException("STBB returned an empty textbook list.")
+        }
+        val anchorPattern = Regex("""(?is)<a\\b[^>]*href=["'](?:\\./)?book\\.php\\?id=(\\d+)["'][^>]*>(.*?)</a>""")
+        val allBooks = anchorPattern.findAll(html).mapNotNull { match ->
+            val id = match.groupValues[1]
+            val title = match.groupValues[2]
+                .replace(Regex("""(?is)<[^>]+>"""), " ")
+                .replace("&amp;", "&")
+                .replace("&nbsp;", " ")
+                .replace("&#39;", "'")
+                .replace("&quot;", "\"")
+                .replace(Regex("""\\s+"""), " ")
+                .trim()
+            if (title.isBlank()) null else StbbBook(id, title)
+        }.distinctBy { it.id }
+        val medium = when (languageCode.lowercase(Locale.ROOT)) {
+            "sd" -> "sindhi"
+            "ur" -> "urdu"
+            "en" -> "english"
+            else -> ""
+        }
+        val mediumBooks = if (medium.isBlank()) allBooks else allBooks.filter {
+            it.title.contains(medium, ignoreCase = true)
+        }
+        if (mediumBooks.isNotEmpty()) mediumBooks else allBooks
+    }
 
 private fun looksLikePdfUrl(url: String): Boolean {
     val lower = url.lowercase(Locale.ROOT)
