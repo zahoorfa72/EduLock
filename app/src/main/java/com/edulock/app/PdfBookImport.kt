@@ -148,6 +148,9 @@ internal fun PdfBookImportScreen(
     var savedPdfRefresh by remember { mutableStateOf(0) }
     var stbbBooks by remember { mutableStateOf<List<StbbBook>>(emptyList()) }
     var stbbBooksLoading by remember { mutableStateOf(false) }
+    var pdfSearchResults by remember { mutableStateOf<List<PdfSearchResult>>(emptyList()) }
+    var pdfSearchLoading by remember { mutableStateOf(false) }
+    var showManualBrowser by remember { mutableStateOf(false) }
 
     val selectedSubject = destinationSubjects.firstOrNull { it.id == selectedSubjectId }
     val effectiveBoard = if (board.equals("Custom board", true)) customBoardName.trim().ifBlank { "Custom board" } else board
