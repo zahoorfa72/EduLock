@@ -114,7 +114,6 @@ internal fun PdfBookImportScreen(
     var countryMenu by remember { mutableStateOf(false) }
     var boardMenu by remember { mutableStateOf(false) }
     var subjectMenu by remember { mutableStateOf(false) }
-    var portalMenu by remember { mutableStateOf(false) }
     var activePortal by remember { mutableStateOf<BookPortal?>(null) }
     var pendingPdfUrl by remember { mutableStateOf<String?>(null) }
     var showPdfActions by remember { mutableStateOf(false) }
@@ -316,6 +315,11 @@ internal fun PdfBookImportScreen(
         Text(
             "Official sources vary by board. The websites below open inside EduLock. Tap a PDF link, then choose whether to import its questions or keep the PDF in device storage.",
             style = MaterialTheme.typography.bodySmall
+        )
+        Text(
+            "Accuracy note: text-based PDFs usually extract best. Scanned PDFs use on-device Latin-script OCR, which may not correctly read scanned Urdu/Sindhi or other non-Latin text. Check every question and answer before saving.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         portalOptions.forEach { portal ->
             OutlinedButton(
@@ -605,10 +609,13 @@ private fun portalsFor(country: String, board: String, subject: String, grade: S
         )
         else -> emptyList()
     }
-    val query = Uri.encode("official " + country + " " + board + " " + subject + " class " + grade + " textbook PDF " + language + " government")
-    return if (curated.isNotEmpty()) curated else listOf(
-        BookPortal("Find official textbook portals", "Search matching country, board, class, subject and language inside EduLock", "https://www.google.com/search?q=" + query)
+    val query = Uri.encode("\"" + subject + "\" class " + grade + " " + language + " textbook PDF official " + country + " " + board + " government book download")
+    val exactSearch = BookPortal(
+        "Search for this exact book selection",
+        "Matches country, board, class, subject and language; results stay inside EduLock",
+        "https://www.google.com/search?q=" + query
     )
+    return (curated + exactSearch).take(4)
 }
 
 private fun looksLikePdfUrl(url: String): Boolean {
