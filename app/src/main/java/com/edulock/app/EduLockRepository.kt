@@ -684,15 +684,23 @@ class EduLockRepository(context: Context) {
     suspend fun loadChildRewardBankMinutes(childId: String): Int {
         requireSession("child")
         require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
-        val rows = restArray(
-            "child_reward_bank?select=minutes_remaining&child_id=eq.$childId&minutes_remaining=gt.0"
-        )
-        var balance = 0
-        for (index in 0 until rows.length()) {
-            balance = (balance + rows.optJSONObject(index)?.optInt("minutes_remaining", 0)?.coerceAtLeast(0).orZero())
+        return try {
+            val rows = restArray(
+                "child_reward_bank?select=minutes_remaining&child_id=eq.$childId&minutes_remaining=gt.0"
+            )
+            var balance = 0
+            for (index in 0 until rows.length()) {
+                balance = (balance + rows.optJSONObject(index)?.optInt("minutes_remaining", 0)?.coerceAtLeast(0).orZero())
+                    .coerceAtMost(Int.MAX_VALUE)
+            }
+            offlineReadCache.edit().putInt(offlineRewardBankKey(childId), balance).commit()
+            balance + offlineAttemptQueue.getInt(offlinePendingBankCreditKey(childId), 0).coerceAtLeast(0)
+        } catch (error: IOException) {
+            val cached = offlineReadCache.getInt(offlineRewardBankKey(childId), -1)
+            if (cached < 0) throw error
+            (cached + offlineAttemptQueue.getInt(offlinePendingBankCreditKey(childId), 0).coerceAtLeast(0))
                 .coerceAtMost(Int.MAX_VALUE)
         }
-        return balance
     }
 
     suspend fun redeemChildRewardBank(packageName: String, minutes: Int): RewardBankRedemption {
@@ -1731,14 +1739,10 @@ class EduLockRepository(context: Context) {
         val response = try {
             requestFunction("submit-task-attempt", requestBody)
         } catch (error: IOException) {
-            // Keep the completed attempt on-device. The server will grade it and
-            // calculate rewards after connectivity returns; never fabricate rewards offline.
+            // Offline completion is provisional until the server re-grades it on sync.
+            val provisional = gradeCachedTaskOffline(taskId, answers, answerLanguages)
             enqueueOfflineAttempt(requestBody)
-            return TaskResult(
-                scorePercent = 0, passed = false, awardedMinutes = 0,
-                dailyUsedMinutes = 0, dailyCapMinutes = 0,
-                rewardToBank = false, pendingSync = true
-            )
+            return provisional.copy(pendingSync = true)
         }
         return TaskResult(
             scorePercent = response.optInt("score_percent", 0).coerceIn(0, 100),
@@ -1749,6 +1753,73 @@ class EduLockRepository(context: Context) {
             rewardToBank = response.optBoolean("reward_to_bank", false)
         )
     }
+
+
+    /**
+     * Grade from the task package previously cached on this device. The server re-grades
+     * every queued attempt on reconnect and remains authoritative for final reward ledgers.
+     */
+    private suspend fun gradeCachedTaskOffline(
+        taskId: String,
+        answers: Map<String, String>,
+        answerLanguages: Map<String, String>
+    ): TaskResult {
+        val packageJson = try {
+            JSONObject(offlineReadCache.getString(offlineTaskPackageKey(taskId), null)
+                ?: throw IOException("Offline task package is missing. Open this task online first."))
+        } catch (e: Exception) {
+            throw IOException("Offline grading data is not available. Open this task online first.", e)
+        }
+        val task = packageJson.optJSONObject("task") ?: throw IOException("Offline task settings are missing.")
+        val questionsArray = packageJson.optJSONArray("questions") ?: JSONArray()
+        val questions = linkedMapOf<String, JSONObject>()
+        for (i in 0 until questionsArray.length()) {
+            val row = questionsArray.optJSONObject(i) ?: continue
+            questions[row.optString("id")] = row
+        }
+        val ids = questions.keys.toList()
+        if (ids.isEmpty()) throw IOException("No saved questions are available for offline use.")
+        val expectedIds = ids.toSet()
+        if (answers.keys != expectedIds) throw IOException("Offline task data is incomplete. Reconnect before submitting.")
+        var correct = 0
+        answers.forEach { (questionId, actual) ->
+            val row = questions[questionId] ?: return@forEach
+            val language = answerLanguages[questionId]?.takeIf { it.isNotBlank() }
+                ?: row.optString("language_code", "en")
+            val acceptedByLanguage = row.optJSONObject("accepted_answers_by_language")
+            val accepted = acceptedByLanguage?.optJSONArray(language)
+            val expectedAnswers = mutableListOf<String>()
+            if (accepted != null) {
+                for (i in 0 until accepted.length()) accepted.optString(i).takeIf { it.isNotBlank() }?.let(expectedAnswers::add)
+            } else if (language.equals(row.optString("language_code", "en"), ignoreCase = true)) {
+                row.optJSONObject("answer_key")?.optString("answer")?.takeIf { it.isNotBlank() }?.let(expectedAnswers::add)
+            }
+            if (expectedAnswers.any { normalizeOfflineAnswer(it) == normalizeOfflineAnswer(actual) }) correct++
+        }
+        val score = (correct * 100) / ids.size
+        val passed = score >= task.optInt("pass_percent", 70)
+        val dayKey = LocalDate.now().toString()
+        val usageKey = "offline_reward_used_${taskId}_$dayKey"
+        val usedForTask = offlineAttemptQueue.getInt(usageKey, 0).coerceAtLeast(0)
+        val cap = task.optInt("daily_cap_minutes", 0).coerceAtLeast(0)
+        val perCorrect = task.optInt("reward_minutes", 0).coerceAtLeast(0)
+        val award = minOf(correct * perCorrect, (cap - usedForTask).coerceAtLeast(0))
+        offlineAttemptQueue.edit().putInt(usageKey, usedForTask + award).commit()
+        val rewardToBank = task.optBoolean("reward_to_bank", false)
+        if (rewardToBank && award > 0) {
+            val childId = task.optString("child_id")
+            if (childId.isNotBlank()) {
+                val pendingKey = offlinePendingBankCreditKey(childId)
+                val pending = offlineAttemptQueue.getInt(pendingKey, 0).coerceAtLeast(0)
+                offlineAttemptQueue.edit().putInt(pendingKey, (pending + award).coerceAtMost(Int.MAX_VALUE)).commit()
+            }
+        }
+        return TaskResult(score, passed, award, usedForTask + award, cap,
+            rewardToBank, pendingSync = true)
+    }
+
+    private fun normalizeOfflineAnswer(value: String): String =
+        value.trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")
 
     private fun enqueueOfflineAttempt(body: JSONObject) {
         synchronized(offlineAttemptQueue) {
@@ -1782,7 +1853,18 @@ class EduLockRepository(context: Context) {
         for (i in 0 until current.length()) {
             val item = current.optJSONObject(i) ?: continue
             try {
-                requestFunction("submit-task-attempt", item)
+                val result = requestFunction("submit-task-attempt", item)
+                // The server has now applied the authoritative award; remove the
+                // provisional local credit so the next online balance refresh is exact.
+                val taskId = item.optString("task_id")
+                val packageJson = try {
+                    JSONObject(offlineReadCache.getString(offlineTaskPackageKey(taskId), null))
+                } catch (_: Exception) { JSONObject() }
+                val childId = packageJson.optJSONObject("task")?.optString("child_id").orEmpty()
+                if (childId.isNotBlank()) {
+                    val key = offlinePendingBankCreditKey(childId)
+                    offlineAttemptQueue.edit().putInt(key, 0).commit()
+                }
                 synced++
             } catch (error: IOException) {
                 remaining.put(item)
@@ -2207,7 +2289,7 @@ class EduLockRepository(context: Context) {
         }
         val byId = linkedMapOf<String, QuestionRow>()
         ids.chunked(50).forEach { chunk ->
-            val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,picture_path,grade_level,age_min,age_max,reward_minutes,created_at&id=in.(" +
+            val rows = restArray("questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,picture_path,grade_level,age_min,age_max,reward_minutes,answer_key,created_at&id=in.(" +
                 chunk.joinToString(",") + ")&limit=50")
             for (i in 0 until rows.length()) {
                 val row = rows.optJSONObject(i) ?: continue
@@ -2215,8 +2297,22 @@ class EduLockRepository(context: Context) {
                 if (matchesChildScope(question)) byId[question.id] = question
             }
         }
-        return ids.mapNotNull { byId[it] }.take(safeLimit)
+        val result = ids.mapNotNull { byId[it] }.take(safeLimit)
+        try {
+            val packageJson = requestFunction("offline-task-package", JSONObject().put("task_id", taskId))
+            offlineReadCache.edit().putString(offlineTaskPackageKey(taskId), packageJson.toString()).commit()
+        } catch (_: Exception) { /* task view still works if prefetch is temporarily unavailable */ }
+        return result
     }
+
+    private fun offlineTaskPackageKey(taskId: String): String {
+        val userId = sessionStore.read()?.userId ?: "signed-out"
+        return "offline_task_package_${userId}_${taskId}"
+    }
+
+    private fun offlineRewardBankKey(childId: String) = "offline_reward_bank_${childId}"
+    private fun offlinePendingBankCreditKey(childId: String) = "offline_reward_pending_credit_${childId}"
+
 
     suspend fun loadChildLocationSnapshot(childId: String): ChildLocationSnapshot {
         requireSession("parent")
