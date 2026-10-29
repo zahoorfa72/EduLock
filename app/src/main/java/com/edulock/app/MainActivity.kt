@@ -487,6 +487,10 @@ private fun EduLockApp(repository: EduLockRepository) {
     var dailyTaskPassPercentText by remember { mutableStateOf("70") }
     var dailyTaskRewardMinutesText by remember { mutableStateOf("1") }
     var dailyTaskCapMinutesText by remember { mutableStateOf("30") }
+    var kindergartenModeEnabled by remember { mutableStateOf(false) }
+    var gentleLearningRemindersEnabled by remember { mutableStateOf(true) }
+    var practicalTasksEnabled by remember { mutableStateOf(true) }
+    var dailyWrittenLimitText by remember { mutableStateOf("8") }
     var subjects by remember { mutableStateOf(emptyList<SubjectRow>()) }
     var subjectSearchQuery by remember { mutableStateOf("") }
     var questionSearchQuery by remember { mutableStateOf("") }
@@ -698,6 +702,8 @@ private fun EduLockApp(repository: EduLockRepository) {
     var taskRewardGroupId by remember { mutableStateOf("") }
     var physicalChallenges by remember { mutableStateOf(emptyList<PhysicalChallenge>()) }
     var practicalTasks by remember { mutableStateOf(emptyList<PracticalTaskRow>()) }
+    var practicalSubmissions by remember { mutableStateOf(emptyList<PracticalTaskSubmissionReview>()) }
+    var practicalReviewNotes by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var practicalCompletionNotes by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var practicalTaskTitle by remember { mutableStateOf("") }
     var practicalTaskInstructions by remember { mutableStateOf("") }
@@ -890,6 +896,15 @@ private fun EduLockApp(repository: EduLockRepository) {
     ) { granted ->
         notice = if (granted) "EduLock notifications are enabled." else
             "Notifications are disabled. EduLock can show status in the app, but Android may suppress notifications."
+    }
+
+    fun requestLearningReminderPermission(childName: String) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        LearningReminderScheduler.setEnabled(context, true, childName)
     }
 
     fun changeWeeklyWindow(appId: String, dayKey: String, update: (AppDayWindow) -> AppDayWindow) {
@@ -1279,6 +1294,35 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         Switch(checked = dailyTasksEnabled, onCheckedChange = { dailyTasksEnabled = it })
                     }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            AppUiText("Kindergarten / easy learning", fontWeight = FontWeight.SemiBold)
+                            AppUiText("Shorter sessions and simpler daily practice.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Switch(checked = kindergartenModeEnabled, onCheckedChange = { kindergartenModeEnabled = it })
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            AppUiText("Gentle focus reminders", fontWeight = FontWeight.SemiBold)
+                            AppUiText("Encouraging reminders to revisit weak concepts.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Switch(checked = gentleLearningRemindersEnabled, onCheckedChange = { gentleLearningRemindersEnabled = it })
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            AppUiText("Practical tasks", fontWeight = FontWeight.SemiBold)
+                            AppUiText("Allow a separate hands-on task portal for this child.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Switch(checked = practicalTasksEnabled, onCheckedChange = { practicalTasksEnabled = it })
+                    }
+                    OutlinedTextField(
+                        value = dailyWrittenLimitText,
+                        onValueChange = { dailyWrittenLimitText = it.filter(Char::isDigit).take(3) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { AppUiText("Maximum written questions per day (1–100)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
                     OutlinedTextField(
                         value = dailyTaskCountText,
                         onValueChange = { dailyTaskCountText = it.filter(Char::isDigit).take(1) },
@@ -1340,6 +1384,15 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 dailyCapMinutes = dailyTaskCapMinutesText.toIntOrNull() ?: 30
                             )
                             repository.saveChildDailyTaskSettings(cfg)
+                            repository.saveChildLearningPreferences(
+                                ChildLearningPreferences(
+                                    childId = taskChild.id,
+                                    kindergartenMode = kindergartenModeEnabled,
+                                    gentleReminders = gentleLearningRemindersEnabled,
+                                    dailyWrittenQuestionLimit = dailyWrittenLimitText.toIntOrNull()?.coerceIn(1,100) ?: 8,
+                                    practicalTasksEnabled = practicalTasksEnabled
+                                )
+                            )
                             dailyTaskSettingsChild = null
                             notice = if (cfg.enabled) {
                                 "Automatic daily tasks saved for ${taskChild.displayName}. New tasks are generated when the child opens EduLock each day."
@@ -1404,6 +1457,16 @@ private fun EduLockApp(repository: EduLockRepository) {
             return
         }
         childProfile = linked
+        runCatching {
+            val learningPrefs = repository.loadCurrentChildLearningPreferences(linked.id)
+            if (learningPrefs.gentleReminders) {
+                requestLearningReminderPermission(linked.displayName)
+            } else {
+                LearningReminderScheduler.setEnabled(context, false, linked.displayName)
+            }
+        }.onFailure { error ->
+            android.util.Log.w("EduLockLearningReminder", "Could not sync learning reminder preference", error)
+        }
         if (childLogoutLocked || lockStatePreferences.getBoolean("child_logout_locked", false)) {
             childLogoutLocked = true
             screen = AppScreen.PAIR_CHILD
@@ -2887,6 +2950,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         screen = AppScreen.PRACTICAL_TASKS
                                         execute {
                                             practicalTasks = repository.loadPracticalTasksForParent(familyId, child.id)
+                                            practicalSubmissions = repository.loadPracticalSubmissionsForParent(familyId, child.id)
                                         }
                                     }
                                 }
@@ -2991,6 +3055,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             dailyTaskPassPercentText = cfg.passPercent.toString()
                                             dailyTaskRewardMinutesText = cfg.rewardMinutes.toString()
                                             dailyTaskCapMinutesText = cfg.dailyCapMinutes.toString()
+                                            val learningPrefs = repository.loadChildLearningPreferences(child.id)
+                                            kindergartenModeEnabled = learningPrefs.kindergartenMode
+                                            gentleLearningRemindersEnabled = learningPrefs.gentleReminders
+                                            dailyWrittenLimitText = learningPrefs.dailyWrittenQuestionLimit.toString()
+                                            practicalTasksEnabled = learningPrefs.practicalTasksEnabled
                                             dailyTaskSettingsChild = child
                                         }
                                     },
@@ -5350,15 +5419,90 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 execute {
                                     val child = targetChild ?: throw IllegalStateException("Select a child first.")
                                     practicalTasks = repository.loadPracticalTasksForParent(familyId, child.id)
+                                    practicalSubmissions = repository.loadPracticalSubmissionsForParent(familyId, child.id)
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { AppUiText("Refresh saved practical tasks") }
+                        ) { AppUiText("Refresh saved practical tasks & submissions") }
+                        AppUiText("Completed practical tasks • parent review", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        if (practicalSubmissions.isEmpty()) {
+                            AppUiText("No completed practical tasks to review yet.")
+                        } else {
+                            practicalSubmissions.forEach { submission ->
+                                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        AppUiText(submission.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        AppUiText("Status: " + submission.status.replace('_',' '))
+                                        if (submission.completionNote.isNotBlank()) AppUiText("Child's note: " + submission.completionNote)
+                                        if (submission.parentFeedback.isNotBlank()) AppUiText("Parent feedback: " + submission.parentFeedback)
+                                        if (submission.status == "submitted") {
+                                            OutlinedTextField(
+                                                value = practicalReviewNotes[submission.id].orEmpty(),
+                                                onValueChange = { practicalReviewNotes = practicalReviewNotes + (submission.id to it.take(1000)) },
+                                                label = { AppUiText("Encouraging feedback for the child") },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                minLines = 2
+                                            )
+                                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        execute {
+                                                            repository.reviewPracticalTaskSubmission(
+                                                                submission.id, false, practicalReviewNotes[submission.id].orEmpty()
+                                                            )
+                                                            practicalSubmissions = repository.loadPracticalSubmissionsForParent(familyId, targetChild?.id)
+                                                            notice = "Sent back for more practice with feedback."
+                                                        }
+                                                    },
+                                                    enabled = !busy,
+                                                    modifier = Modifier.weight(1f)
+                                                ) { AppUiText("Needs practice") }
+                                                Button(
+                                                    onClick = {
+                                                        execute {
+                                                            repository.reviewPracticalTaskSubmission(
+                                                                submission.id, true, practicalReviewNotes[submission.id].orEmpty()
+                                                            )
+                                                            practicalSubmissions = repository.loadPracticalSubmissionsForParent(familyId, targetChild?.id)
+                                                            notice = "Practical task approved."
+                                                        }
+                                                    },
+                                                    enabled = !busy,
+                                                    modifier = Modifier.weight(1f)
+                                                ) { AppUiText("Approve") }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     } else {
                         AppUiText(
                             "Try a hands-on activity. Follow the safety notes and ask a parent for help when needed.",
                             style = MaterialTheme.typography.bodyMedium
                         )
+                        OutlinedButton(
+                            onClick = {
+                                execute {
+                                    val child = childProfile ?: throw IllegalStateException("Your linked child profile was not found.")
+                                    practicalTasks = repository.loadPracticalTasks(child.id)
+                                    practicalSubmissions = repository.loadMyPracticalSubmissions(child.id)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { AppUiText("Refresh my practical tasks and reviews") }
+                        if (practicalSubmissions.isNotEmpty()) {
+                            AppUiText("Parent review", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            practicalSubmissions.forEach { submission ->
+                                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                        AppUiText(submission.title, fontWeight = FontWeight.Bold)
+                                        AppUiText("Status: " + submission.status.replace('_',' '))
+                                        if (submission.parentFeedback.isNotBlank()) AppUiText("Parent tip: " + submission.parentFeedback)
+                                    }
+                                }
+                            }
+                        }
                     }
                     if (practicalTasks.isEmpty()) {
                         SummaryCard(

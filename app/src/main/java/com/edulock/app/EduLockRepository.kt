@@ -29,6 +29,14 @@ data class ParentLearningSettings(
     val displayLanguageCode: String = "en"
 )
 
+data class ChildLearningPreferences(
+    val childId: String,
+    val kindergartenMode: Boolean = false,
+    val gentleReminders: Boolean = true,
+    val dailyWrittenQuestionLimit: Int = 8,
+    val practicalTasksEnabled: Boolean = true
+)
+
 data class PracticalTaskRow(
     val id: String,
     val childId: String,
@@ -40,6 +48,19 @@ data class PracticalTaskRow(
     val ageMax: Int = 19,
     val activityKind: String = "practical",
     val expectedMinutes: Int = 10
+)
+
+data class PracticalTaskSubmissionReview(
+    val id: String,
+    val practicalTaskId: String,
+    val childId: String,
+    val title: String,
+    val instructions: String,
+    val completionNote: String,
+    val status: String,
+    val parentFeedback: String,
+    val submittedAt: String,
+    val reviewedAt: String
 )
 
 data class PracticalTaskSubmission(
@@ -1821,6 +1842,85 @@ class EduLockRepository(context: Context) {
 
 
     /** Separate practical-task portal backed by the adaptive learning schema. */
+    suspend fun loadPracticalSubmissionsForParent(familyId: String, childId: String? = null): List<PracticalTaskSubmissionReview> {
+        requireSession("parent")
+        require(familyId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Select a family first." }
+        val childFilter = childId?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) }?.let { "&child_id=eq.$it" } ?: ""
+        val rows = restArray(
+            "practical_task_submissions?select=id,practical_task_id,child_id,completion_note,status,parent_feedback,submitted_at,reviewed_at,practical_tasks!inner(title,instructions,family_id)&practical_tasks.family_id=eq.$familyId$childFilter&order=submitted_at.desc&limit=100"
+        )
+        return (0 until rows.length()).mapNotNull { index ->
+            rows.optJSONObject(index)?.let { row ->
+                val task = row.optJSONObject("practical_tasks") ?: JSONObject()
+                PracticalTaskSubmissionReview(
+                    id = row.optString("id"),
+                    practicalTaskId = row.optString("practical_task_id"),
+                    childId = row.optString("child_id"),
+                    title = task.optString("title", "Practical task"),
+                    instructions = task.optString("instructions"),
+                    completionNote = row.optString("completion_note"),
+                    status = row.optString("status", "submitted"),
+                    parentFeedback = row.optString("parent_feedback"),
+                    submittedAt = row.optString("submitted_at"),
+                    reviewedAt = row.optString("reviewed_at")
+                )
+            }
+        }
+    }
+
+    suspend fun loadMyPracticalSubmissions(childId: String): List<PracticalTaskSubmissionReview> {
+        requireSession("child")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        val rows = restArray(
+            "practical_task_submissions?select=id,practical_task_id,child_id,completion_note,status,parent_feedback,submitted_at,reviewed_at,practical_tasks!inner(title,instructions)&child_id=eq.$childId&order=submitted_at.desc&limit=100"
+        )
+        return (0 until rows.length()).mapNotNull { index ->
+            rows.optJSONObject(index)?.let { row ->
+                val task = row.optJSONObject("practical_tasks") ?: JSONObject()
+                PracticalTaskSubmissionReview(
+                    id = row.optString("id"),
+                    practicalTaskId = row.optString("practical_task_id"),
+                    childId = row.optString("child_id"),
+                    title = task.optString("title", "Practical task"),
+                    instructions = task.optString("instructions"),
+                    completionNote = row.optString("completion_note"),
+                    status = row.optString("status", "submitted"),
+                    parentFeedback = row.optString("parent_feedback"),
+                    submittedAt = row.optString("submitted_at"),
+                    reviewedAt = row.optString("reviewed_at")
+                )
+            }
+        }
+    }
+
+    suspend fun reviewPracticalTaskSubmission(
+        submissionId: String, approved: Boolean, parentFeedback: String = ""
+    ): PracticalTaskSubmissionReview {
+        requireSession("parent")
+        require(submissionId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid practical-task submission." }
+        require(parentFeedback.length <= 1000) { "Parent feedback must be 1,000 characters or fewer." }
+        val result = requestFunction(
+            "review-practical-task",
+            JSONObject()
+                .put("submission_id", submissionId)
+                .put("status", if (approved) "approved" else "needs_practice")
+                .put("parent_feedback", parentFeedback.trim())
+        )
+        val row = result.optJSONObject("submission") ?: throw IOException("Practical-task review was not confirmed.")
+        return PracticalTaskSubmissionReview(
+            id = row.optString("id"),
+            practicalTaskId = "",
+            childId = "",
+            title = "",
+            instructions = "",
+            completionNote = "",
+            status = row.optString("status"),
+            parentFeedback = row.optString("parent_feedback"),
+            submittedAt = "",
+            reviewedAt = row.optString("reviewed_at")
+        )
+    }
+
     suspend fun loadPracticalTasksForParent(familyId: String, childId: String? = null): List<PracticalTaskRow> {
         requireSession("parent")
         require(familyId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Select a family first." }
@@ -1941,6 +2041,61 @@ class EduLockRepository(context: Context) {
     }
 
     /** Per-answer written feedback visible to the linked child and its parent. */
+    suspend fun loadChildLearningPreferences(childId: String): ChildLearningPreferences {
+        requireSession("parent")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        val row = restArray(
+            "child_learning_preferences?select=child_id,kindergarten_mode,gentle_reminders,daily_written_question_limit,practical_tasks_enabled&child_id=eq.$childId&limit=1"
+        ).optJSONObject(0)
+        return ChildLearningPreferences(
+            childId = childId,
+            kindergartenMode = row?.optBoolean("kindergarten_mode", false) ?: false,
+            gentleReminders = row?.optBoolean("gentle_reminders", true) ?: true,
+            dailyWrittenQuestionLimit = (row?.optInt("daily_written_question_limit", 8) ?: 8).coerceIn(1,100),
+            practicalTasksEnabled = row?.optBoolean("practical_tasks_enabled", true) ?: true
+        )
+    }
+
+    suspend fun loadCurrentChildLearningPreferences(childId: String): ChildLearningPreferences {
+        requireSession("child")
+        require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        val currentSession = sessionStore.read() ?: throw IOException("Sign in again to load learning preferences.")
+        val linkedChild = restArray(
+            "children?select=id&child_user_id=eq.${currentSession.userId}&limit=1"
+        ).optJSONObject(0)?.optString("id")
+        require(linkedChild == childId) { "A child can only load their own learning preferences." }
+        val row = restArray(
+            "child_learning_preferences?select=child_id,kindergarten_mode,gentle_reminders,daily_written_question_limit,practical_tasks_enabled&child_id=eq.$childId&limit=1"
+        ).optJSONObject(0)
+        return ChildLearningPreferences(
+            childId = childId,
+            kindergartenMode = row?.optBoolean("kindergarten_mode", false) ?: false,
+            gentleReminders = row?.optBoolean("gentle_reminders", true) ?: true,
+            dailyWrittenQuestionLimit = (row?.optInt("daily_written_question_limit", 8) ?: 8).coerceIn(1,100),
+            practicalTasksEnabled = row?.optBoolean("practical_tasks_enabled", true) ?: true
+        )
+    }
+
+    suspend fun saveChildLearningPreferences(preferences: ChildLearningPreferences) {
+        requireSession("parent")
+        require(preferences.childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
+        require(preferences.dailyWrittenQuestionLimit in 1..100) { "Daily written question limit must be 1–100." }
+        val payload = JSONObject()
+            .put("child_id", preferences.childId)
+            .put("kindergarten_mode", preferences.kindergartenMode)
+            .put("gentle_reminders", preferences.gentleReminders)
+            .put("daily_written_question_limit", preferences.dailyWrittenQuestionLimit)
+            .put("practical_tasks_enabled", preferences.practicalTasksEnabled)
+            .put("updated_at", java.time.Instant.now().toString())
+        val saved = restArray(
+            "child_learning_preferences?on_conflict=child_id", "POST", payload,
+            prefer = "resolution=merge-duplicates,return=representation"
+        ).optJSONObject(0) ?: throw IOException("EduLock did not confirm the learning preferences were saved.")
+        require(saved.optString("child_id") == preferences.childId) {
+            "EduLock did not confirm the selected child's learning preferences."
+        }
+    }
+
     suspend fun loadWrittenAnswerFeedback(childId: String? = null): List<WrittenAnswerFeedback> {
         requireSession()
         val currentSession = sessionStore.read() ?: throw IOException("Sign in to view learning feedback.")
