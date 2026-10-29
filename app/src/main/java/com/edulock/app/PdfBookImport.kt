@@ -836,7 +836,8 @@ private fun portalsFor(country: String, board: String, subject: String, title: S
         "Matches country, board, class, subject and language; results stay inside EduLock",
         "https://www.google.com/search?q=" + query
     )
-    return (curated + exactSearch).take(4)
+    // The dedicated STBB in-app downloader is available above, so avoid sending Sindh-board users to a generic Google results page.
+    return if (cc == "PK" && b.contains("sindh")) curated else (curated + exactSearch).take(4)
 }
 
 private fun stbbPdfDownloadUrl(bookId: String): String =
