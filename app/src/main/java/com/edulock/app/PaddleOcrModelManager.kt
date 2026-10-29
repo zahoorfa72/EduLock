@@ -25,9 +25,8 @@ internal object PaddleOcrModelManager {
         val languageModel: String,
     )
 
-    private const val BASE_URL = "https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/"
-    private const val DETECTOR_ARCHIVE = "PP-OCRv5_mobile_det_onnx_infer.tar"
-    private const val MAX_ARCHIVE_BYTES = 160L * 1024L * 1024L
+    private const val HF_BASE = "https://huggingface.co/PaddlePaddle/"
+    private const val MAX_MODEL_BYTES = 180L * 1024L * 1024L
     private val mainHandler = Handler(Looper.getMainLooper())
     private val client by lazy {
         OkHttpClient.Builder()
@@ -75,19 +74,33 @@ internal object PaddleOcrModelManager {
         val dictionary = File(recDir, "inference.yml")
 
         if (!isReady(detModel, null)) {
-            postProgress(onProgress, "Downloading multilingual text detector (required once)…")
-            val archive = File(root, DETECTOR_ARCHIVE)
-            downloadArchiveIfNeeded(archive.name, archive, onProgress)
-            extractTarModel(archive, detDir, requireDictionary = false)
-            archive.delete()
+            postProgress(onProgress, "Downloading multilingual OCR detector (one time)…")
+            downloadFile(
+                HF_BASE + "PP-OCRv5_mobile_det_onnx/resolve/main/inference.onnx?download=true",
+                detModel,
+                minBytes = 100_000L,
+                onProgress = onProgress,
+                label = "text detector"
+            )
         }
         if (!isReady(recModel, dictionary)) {
-            val archiveName = modelName + "_infer.tar"
-            postProgress(onProgress, "Downloading " + modelName.replace('_', ' ') + " OCR model (required once)…")
-            val archive = File(root, archiveName)
-            downloadArchiveIfNeeded(archiveName, archive, onProgress)
-            extractTarModel(archive, recDir, requireDictionary = true)
-            archive.delete()
+            val repoName = if (modelName == "PP-OCRv5_mobile_rec_onnx") modelName else modelName + "_onnx"
+            val repoUrl = HF_BASE + repoName + "/resolve/main/"
+            postProgress(onProgress, "Downloading " + modelName.replace('_', ' ') + " OCR model and dictionary (one time)…")
+            downloadFile(
+                repoUrl + "inference.onnx?download=true",
+                recModel,
+                minBytes = 100_000L,
+                onProgress = onProgress,
+                label = "language recognition model"
+            )
+            downloadFile(
+                repoUrl + "inference.yml?download=true",
+                dictionary,
+                minBytes = 512L,
+                onProgress = onProgress,
+                label = "language character dictionary"
+            )
         }
         if (!isReady(detModel, null) || !isReady(recModel, dictionary)) {
             throw IOException("The selected OCR model failed its integrity check. Retry with a reliable internet connection.")
@@ -103,38 +116,51 @@ internal object PaddleOcrModelManager {
         mainHandler.post { callback(message) }
     }
 
-    private fun downloadArchiveIfNeeded(archiveName: String, target: File, onProgress: (String) -> Unit) {
-        if (target.isFile && target.length() > 100_000L) return
+    private fun downloadFile(
+        url: String,
+        target: File,
+        minBytes: Long,
+        onProgress: (String) -> Unit,
+        label: String,
+    ) {
+        if (target.isFile && target.length() >= minBytes) return
         target.parentFile?.mkdirs()
         val temporary = File(target.parentFile, target.name + ".part")
         temporary.delete()
         val request = Request.Builder()
-            .url(BASE_URL + archiveName)
+            .url(url)
             .header("User-Agent", "EduLock Android OCR/1.0")
-            .header("Accept", "application/octet-stream")
+            .header("Accept", "application/octet-stream,text/plain;q=0.9,*/*;q=0.8")
             .build()
         try {
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw IOException("OCR model download failed with HTTP " + response.code + ". Check internet and retry.")
-                val body = response.body ?: throw IOException("OCR model server returned an empty response.")
+                if (!response.isSuccessful) {
+                    throw IOException("Could not download the " + label + " (HTTP " + response.code + "). Check internet and retry.")
+                }
+                val body = response.body ?: throw IOException("Model server returned an empty " + label + ".")
                 val length = body.contentLength()
-                if (length > MAX_ARCHIVE_BYTES) throw IOException("OCR model archive is unexpectedly large.")
+                if (length > MAX_MODEL_BYTES) throw IOException("Model response is unexpectedly large.")
                 body.byteStream().use { input ->
                     temporary.outputStream().buffered().use { output ->
                         val buffer = ByteArray(64 * 1024)
                         var total = 0L
+                        var lastReported = -1
                         while (true) {
                             val count = input.read(buffer)
                             if (count < 0) break
                             total += count
-                            if (total > MAX_ARCHIVE_BYTES) throw IOException("OCR model archive exceeds the safe download limit.")
+                            if (total > MAX_MODEL_BYTES) throw IOException("Model download exceeds the safe size limit.")
                             output.write(buffer, 0, count)
-                            if (length > 0L && total % (2L * 1024L * 1024L) < buffer.size) {
-                                postProgress(onProgress, "Downloading OCR model… " + ((total * 100L) / length).coerceIn(0L, 100L) + "%")
+                            if (length > 0L) {
+                                val percent = ((total * 100L) / length).toInt().coerceIn(0, 100)
+                                if (percent / 10 != lastReported / 10) {
+                                    lastReported = percent
+                                    postProgress(onProgress, "Downloading " + label + "… " + percent + "%")
+                                }
                             }
                         }
                         output.flush()
-                        if (total < 100_000L) throw IOException("Downloaded OCR model is too small to be valid.")
+                        if (total < minBytes) throw IOException("Downloaded " + label + " is too small to be a valid model file.")
                     }
                 }
             }
@@ -144,78 +170,10 @@ internal object PaddleOcrModelManager {
             }
         } catch (e: SocketTimeoutException) {
             temporary.delete()
-            throw IOException("OCR model download timed out. Reconnect to the internet and retry.", e)
+            throw IOException("Downloading the " + label + " timed out. Reconnect to the internet and retry.", e)
         } catch (e: Exception) {
             temporary.delete()
             throw e
         }
-    }
-
-    /** Extract only ONNX weights and the character dictionary from standard tar entries. */
-    private fun extractTarModel(archive: File, outputDir: File, requireDictionary: Boolean) {
-        outputDir.mkdirs()
-        var foundModel = false
-        var foundDictionary = false
-        RandomAccessFile(archive, "r").use { input ->
-            val header = ByteArray(512)
-            while (input.filePointer + 512L <= input.length()) {
-                input.readFully(header)
-                if (header.all { it == 0.toByte() }) break
-                val name = readTarString(header, 0, 100)
-                val prefix = readTarString(header, 345, 155)
-                val path = if (prefix.isBlank()) name else prefix + "/" + name
-                val sizeText = readTarString(header, 124, 12).trim()
-                val size = try { sizeText.toLong(8) } catch (_: Exception) {
-                    throw IOException("Invalid OCR model archive entry size.")
-                }
-                if (size < 0L || size > MAX_ARCHIVE_BYTES) throw IOException("Invalid OCR model archive entry.")
-                val type = header[156].toInt().toChar()
-                val dataStart = input.filePointer
-                val base = path.substringAfterLast('/').lowercase(Locale.ROOT)
-                val outputName = when {
-                    type != '\u0000' && type != '0' -> null
-                    base == "inference.onnx" -> "inference.onnx"
-                    requireDictionary && (base == "inference.yml" || base == "inference.yaml") -> "inference.yml"
-                    else -> null
-                }
-                if (outputName != null) {
-                    val destination = File(outputDir, outputName)
-                    val part = File(outputDir, outputName + ".part")
-                    input.seek(dataStart)
-                    part.outputStream().buffered().use { output ->
-                        val buffer = ByteArray(64 * 1024)
-                        var remaining = size
-                        while (remaining > 0L) {
-                            val count = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
-                            if (count <= 0) throw IOException("Truncated OCR model archive.")
-                            output.write(buffer, 0, count)
-                            remaining -= count
-                        }
-                    }
-                    if (part.length() != size) {
-                        part.delete()
-                        throw IOException("OCR model file size verification failed.")
-                    }
-                    if (!part.renameTo(destination)) {
-                        part.copyTo(destination, overwrite = true)
-                        part.delete()
-                    }
-                    if (outputName == "inference.onnx") foundModel = true
-                    if (outputName == "inference.yml") foundDictionary = true
-                }
-                val nextHeader = dataStart + ((size + 511L) / 512L) * 512L
-                if (nextHeader > input.length()) throw IOException("Truncated OCR model archive.")
-                input.seek(nextHeader)
-            }
-        }
-        if (!foundModel || (requireDictionary && !foundDictionary)) {
-            throw IOException(if (requireDictionary) "OCR archive lacks inference.onnx or inference.yml." else "OCR detector archive lacks inference.onnx.")
-        }
-    }
-
-    private fun readTarString(header: ByteArray, offset: Int, length: Int): String {
-        var end = offset
-        while (end < offset + length && header[end] != 0.toByte()) end++
-        return String(header, offset, end - offset, Charsets.US_ASCII)
     }
 }
