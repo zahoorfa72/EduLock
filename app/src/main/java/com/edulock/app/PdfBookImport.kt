@@ -593,6 +593,22 @@ internal fun PdfBookImportScreen(
             ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(portal.title, style = MaterialTheme.typography.titleMedium)
+                    if (!portal.title.startsWith("Search downloadable PDF copies")) {
+                        OutlinedButton(
+                            onClick = {
+                                val query = Uri.encode(
+                                    "\"$bookTitle\" \"$subjectName\" class $grade $languageCode textbook filetype:pdf \"$effectiveBoard\" \"$countryCode\""
+                                )
+                                activePortal = BookPortal(
+                                    "Search downloadable PDF copies",
+                                    "Open a PDF result below, then choose Download PDF to device or Extract questions.",
+                                    "https://www.google.com/search?q=" + query
+                                )
+                            },
+                            enabled = !working,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Can't download here? Find PDF downloads") }
+                    }
                     AndroidView(
                         modifier = Modifier.fillMaxWidth().height(420.dp),
                         factory = { ctx ->
@@ -604,8 +620,9 @@ internal fun PdfBookImportScreen(
                                 webViewClient = object : WebViewClient() {
                                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                                         val target = request?.url?.toString() ?: return false
-                                        if (looksLikePdfUrl(target)) {
-                                            pendingPdfUrl = target
+                                        val pdfTarget = unwrapPdfRedirect(target)
+                                        if (pdfTarget != null) {
+                                            pendingPdfUrl = pdfTarget
                                             showPdfActions = true
                                             return true
                                         }
@@ -615,8 +632,9 @@ internal fun PdfBookImportScreen(
                                     @Suppress("DEPRECATION")
                                     override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
                                         val target = url ?: return false
-                                        if (looksLikePdfUrl(target)) {
-                                            pendingPdfUrl = target
+                                        val pdfTarget = unwrapPdfRedirect(target)
+                                        if (pdfTarget != null) {
+                                            pendingPdfUrl = pdfTarget
                                             showPdfActions = true
                                             return true
                                         }
@@ -1166,6 +1184,18 @@ private suspend fun fetchStbbBooks(grade: Int, languageCode: String): List<StbbB
         }
         if (mediumBooks.isNotEmpty()) mediumBooks else collectedBooks
     }
+
+private fun unwrapPdfRedirect(url: String): String? {
+    if (looksLikePdfUrl(url)) return url
+    return try {
+        val uri = Uri.parse(url)
+        val candidates = listOf("url", "q", "adurl", "target", "file")
+            .mapNotNull { key -> uri.getQueryParameter(key) }
+        candidates.firstOrNull { looksLikePdfUrl(it) }
+    } catch (_: Exception) {
+        null
+    }
+}
 
 private fun looksLikePdfUrl(url: String): Boolean {
     val lower = url.lowercase(Locale.ROOT)
