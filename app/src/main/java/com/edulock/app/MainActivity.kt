@@ -2896,7 +2896,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                             parentSecuritySuggestionVisible = false
                                         },
                                         modifier = Modifier.weight(1f)
-                                    ) { AppUiText("Hide suggestion") }
+                                    ) { AppUiText("Don’t show again") }
                                 }
                             }
                         }
