@@ -1616,7 +1616,9 @@ private suspend fun extractPdfText(
                     }
                     val result = StringBuilder()
                     for (index in 0 until renderer.pageCount) {
-                        onProgress("Recognizing scanned page " + (index + 1) + " of " + renderer.pageCount + "…")
+                        withContext(Dispatchers.Main) {
+                            onProgress("Recognizing scanned page " + (index + 1) + " of " + renderer.pageCount + "…")
+                        }
                         val page = renderer.openPage(index)
                         try {
                             // Render a larger scan while bounding peak bitmap memory on phones.
