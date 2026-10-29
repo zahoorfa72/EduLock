@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
+import android.text.Html
 import android.webkit.DownloadListener
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -87,6 +88,12 @@ private data class StbbBook(
     val id: String,
     val title: String
 )
+
+private data class PdfSearchResult(
+    val title: String,
+    val url: String
+)
+
 
 private val bookHttpClient: OkHttpClient by lazy {
     OkHttpClient.Builder()
