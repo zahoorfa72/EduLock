@@ -2060,8 +2060,14 @@ private fun isTextInSelectedLanguage(text: String, language: String): Boolean {
         code == "he" -> countIn { it in '\u0590'..'\u05FF' }
         code in setOf("ru", "uk", "bg", "sr", "mk", "mn", "kk", "ky", "tg") ->
             countIn { it in '\u0400'..'\u052F' }
-        code == "ka" -> countIn { it in '\u10A0'..'\u10FF' }
+        code == "ka" -> countIn { it in '\u10A0'..'\u10FF' || it in '\u1C90'..'\u1CBF' }
         code == "hy" -> countIn { it in '\u0530'..'\u058F' }
+        code in setOf("am", "ti", "gez") -> countIn { it in '\u1200'..'\u137F' }
+        code in setOf("bo", "dz") -> countIn { it in '\u0F00'..'\u0FFF' }
+        code == "dv" -> countIn { it in '\u0780'..'\u07BF' }
+        code == "chr" -> countIn { it in '\u13A0'..'\u13FF' || it in '\uAB70'..'\uABBF' }
+        code == "iu" -> countIn { it in '\u1400'..'\u167F' }
+        code == "syr" -> countIn { it in '\u0700'..'\u074F' }
         code == "ko" -> countIn { it in '\uAC00'..'\uD7AF' || it in '\u1100'..'\u11FF' }
         code == "ja" -> countIn { it in '\u3040'..'\u30FF' || it in '\u4E00'..'\u9FFF' }
         code == "zh" -> countIn { it in '\u4E00'..'\u9FFF' }
