@@ -62,6 +62,10 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.mlkit:translate:17.0.3")
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // PaddleOCR PP-OCRv5 mobile models run on-device through ONNX Runtime + OpenCV.
+    // Model binaries are downloaded once on demand and cached privately for offline use.
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.21.1")
+    implementation("com.quickbirdstudios:opencv:4.5.3")
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     implementation("androidx.media3:media3-transformer:1.5.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
