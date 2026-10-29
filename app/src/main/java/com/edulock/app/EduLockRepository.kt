@@ -684,15 +684,23 @@ class EduLockRepository(context: Context) {
     suspend fun loadChildRewardBankMinutes(childId: String): Int {
         requireSession("child")
         require(childId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid child profile." }
-        val rows = restArray(
-            "child_reward_bank?select=minutes_remaining&child_id=eq.$childId&minutes_remaining=gt.0"
-        )
-        var balance = 0
-        for (index in 0 until rows.length()) {
-            balance = (balance + rows.optJSONObject(index)?.optInt("minutes_remaining", 0)?.coerceAtLeast(0).orZero())
+        return try {
+            val rows = restArray(
+                "child_reward_bank?select=minutes_remaining&child_id=eq.$childId&minutes_remaining=gt.0"
+            )
+            var balance = 0
+            for (index in 0 until rows.length()) {
+                balance = (balance + rows.optJSONObject(index)?.optInt("minutes_remaining", 0)?.coerceAtLeast(0).orZero())
+                    .coerceAtMost(Int.MAX_VALUE)
+            }
+            offlineReadCache.edit().putInt(offlineRewardBankKey(childId), balance).commit()
+            balance + offlineAttemptQueue.getInt(offlinePendingBankCreditKey(childId), 0).coerceAtLeast(0)
+        } catch (error: IOException) {
+            val cached = offlineReadCache.getInt(offlineRewardBankKey(childId), -1)
+            if (cached < 0) throw error
+            (cached + offlineAttemptQueue.getInt(offlinePendingBankCreditKey(childId), 0).coerceAtLeast(0))
                 .coerceAtMost(Int.MAX_VALUE)
         }
-        return balance
     }
 
     suspend fun redeemChildRewardBank(packageName: String, minutes: Int): RewardBankRedemption {
@@ -1797,8 +1805,17 @@ class EduLockRepository(context: Context) {
         val perCorrect = task.optInt("reward_minutes", 0).coerceAtLeast(0)
         val award = minOf(correct * perCorrect, (cap - usedForTask).coerceAtLeast(0))
         offlineAttemptQueue.edit().putInt(usageKey, usedForTask + award).commit()
+        val rewardToBank = task.optBoolean("reward_to_bank", false)
+        if (rewardToBank && award > 0) {
+            val childId = task.optString("child_id")
+            if (childId.isNotBlank()) {
+                val pendingKey = offlinePendingBankCreditKey(childId)
+                val pending = offlineAttemptQueue.getInt(pendingKey, 0).coerceAtLeast(0)
+                offlineAttemptQueue.edit().putInt(pendingKey, (pending + award).coerceAtMost(Int.MAX_VALUE)).commit()
+            }
+        }
         return TaskResult(score, passed, award, usedForTask + award, cap,
-            task.optBoolean("reward_to_bank", false), pendingSync = true)
+            rewardToBank, pendingSync = true)
     }
 
     private fun normalizeOfflineAnswer(value: String): String =
@@ -1836,7 +1853,14 @@ class EduLockRepository(context: Context) {
         for (i in 0 until current.length()) {
             val item = current.optJSONObject(i) ?: continue
             try {
-                requestFunction("submit-task-attempt", item)
+                val result = requestFunction("submit-task-attempt", item)
+                // The server has now applied the authoritative award; remove the
+                // provisional local credit so the next online balance refresh is exact.
+                val childId = result.optString("child_id")
+                if (childId.isNotBlank()) {
+                    val key = offlinePendingBankCreditKey(childId)
+                    offlineAttemptQueue.edit().putInt(key, 0).commit()
+                }
                 synced++
             } catch (error: IOException) {
                 remaining.put(item)
@@ -2281,6 +2305,10 @@ class EduLockRepository(context: Context) {
         val userId = sessionStore.read()?.userId ?: "signed-out"
         return "offline_task_package_${userId}_${taskId}"
     }
+
+    private fun offlineRewardBankKey(childId: String) = "offline_reward_bank_${childId}"
+    private fun offlinePendingBankCreditKey(childId: String) = "offline_reward_pending_credit_${childId}"
+
 
     suspend fun loadChildLocationSnapshot(childId: String): ChildLocationSnapshot {
         requireSession("parent")
