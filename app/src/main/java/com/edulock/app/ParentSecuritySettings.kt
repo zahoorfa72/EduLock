@@ -38,48 +38,7 @@ internal fun ParentSecuritySettingsDialog(
     val pinSet = ParentSecurity.isPinSet(context)
     val biometricEnabled = ParentSecurity.isBiometricEnabled(context)
 
-    fun authenticateBiometric() {
-        val activity = context as? FragmentActivity
-        if (activity == null) {
-            error = "Biometric authentication is unavailable in this activity."
-            return
-        }
-        val manager = BiometricManager.from(context)
-        val availability = manager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-        if (availability != BiometricManager.BIOMETRIC_SUCCESS) {
-            error = when (availability) {
-                BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> "Enroll a fingerprint in Android Settings first."
-                BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> "This phone has no supported biometric sensor."
-                BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> "The biometric sensor is temporarily unavailable."
-                else -> "Strong fingerprint authentication is not available on this phone."
-            }
-            return
-        }
-        val executor: Executor = ContextCompat.getMainExecutor(context)
-        val prompt = BiometricPrompt(activity, executor, object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                ParentSecurity.setBiometricEnabled(context, !biometricEnabled)
-                onSaved(if (biometricEnabled) "Fingerprint protection disabled." else "Fingerprint protection enabled.")
-                onDismiss()
-            }
-            override fun onAuthenticationFailed() {
-                error = "Fingerprint not recognized. Try again."
-                busy = false
-            }
-            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                error = errString.toString()
-                busy = false
-            }
-        })
-        prompt.authenticate(
-            BiometricPrompt.PromptInfo.Builder()
-                .setTitle(if (biometricEnabled) "Disable fingerprint protection" else "Enable fingerprint protection")
-                .setSubtitle("Confirm with your enrolled fingerprint")
-                .setNegativeButtonText("Cancel")
-                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                .build()
-        )
-    }
+
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -126,15 +85,34 @@ internal fun ParentSecuritySettingsDialog(
                         if (!pinSet) {
                             error = "Create a parent PIN before enabling fingerprint protection."
                         } else if (!ParentSecurity.verifyPin(context, existingPin.toCharArray())) {
-                            error = "Enter the correct current parent PIN before changing fingerprint protection."
+                            existingPin = ""
+                            error = "Incorrect parent PIN. Enter it again."
+                        } else if (biometricEnabled) {
+                            // Disabling must remain possible even if the sensor is unavailable.
+                            ParentSecurity.setBiometricEnabled(context, false)
+                            onSaved("Fingerprint protection disabled.")
+                            onDismiss()
                         } else {
-                            authenticateBiometric()
+                            val availability = BiometricManager.from(context)
+                                .canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                            if (availability == BiometricManager.BIOMETRIC_SUCCESS) {
+                                ParentSecurity.setBiometricEnabled(context, true)
+                                onSaved("Fingerprint protection enabled. You can now unlock EduLock with fingerprint.")
+                                onDismiss()
+                            } else {
+                                error = when (availability) {
+                                    BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> "Enroll a fingerprint in Android Settings first."
+                                    BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> "This phone has no supported biometric sensor."
+                                    BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> "The biometric sensor is temporarily unavailable."
+                                    else -> "Strong fingerprint authentication is not available on this phone."
+                                }
+                            }
                         }
                     },
                     enabled = pinSet && existingPin.isNotBlank(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (biometricEnabled) "Turn fingerprint protection OFF" else "Turn fingerprint protection ON")
+                    Text(if (biometricEnabled) "Disable fingerprint (PIN required)" else "Enable fingerprint (PIN required)")
                 }
                 Text(
                     if (biometricEnabled) "Fingerprint protection is enabled on this device." else "Fingerprint protection is currently off.",
