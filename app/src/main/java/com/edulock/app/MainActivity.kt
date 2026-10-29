@@ -1889,7 +1889,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.CHILD_HOME -> AppScreen.CHILD_HOME
                 AppScreen.CHILDREN, AppScreen.SUBJECTS, AppScreen.ASSIGN_TASK, AppScreen.REPORTS, AppScreen.PROTECTION_STATUS, AppScreen.CHILD_LOCATIONS -> AppScreen.PARENT_HOME
                 AppScreen.ADD_CHILD, AppScreen.APP_USAGE_REPORT, AppScreen.ALLOWED_APPS, AppScreen.CURRICULUM_LIBRARY -> AppScreen.CHILDREN
-                AppScreen.ADD_SUBJECT, AppScreen.QUESTIONS -> AppScreen.SUBJECTS
+                AppScreen.ADD_SUBJECT, AppScreen.QUESTIONS, AppScreen.PDF_BOOK_IMPORT -> AppScreen.SUBJECTS
                 AppScreen.LEARNING_TEMPLATES -> if (selectedSubject != null) AppScreen.QUESTIONS else AppScreen.PARENT_HOME
                 AppScreen.ADD_QUESTION, AppScreen.ADD_TRANSLATION -> AppScreen.QUESTIONS
                 AppScreen.PHYSICAL_CHALLENGES, AppScreen.PRACTICAL_TASKS, AppScreen.LEARNING_FEEDBACK -> if (session?.accountRole == "child") AppScreen.CHILD_HOME else AppScreen.PARENT_HOME
