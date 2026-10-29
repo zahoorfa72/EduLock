@@ -596,9 +596,22 @@ internal fun PdfBookImportScreen(
                                         }
                                         return false
                                     }
+
+                                    @Suppress("DEPRECATION")
+                                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                                        val target = url ?: return false
+                                        if (looksLikePdfUrl(target)) {
+                                            pendingPdfUrl = target
+                                            showPdfActions = true
+                                            return true
+                                        }
+                                        return false
+                                    }
                                 }
-                                setDownloadListener(DownloadListener { url, _, _, mimeType, _ ->
-                                    if (url.startsWith("https://") || url.startsWith("http://")) {
+                                setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+                                    if (url.startsWith("https://", true) || url.startsWith("http://", true)) {
+                                        // WebView's download callback also fires for endpoints without
+                                        // a .pdf suffix. The downloader validates the response body.
                                         pendingPdfUrl = url
                                         showPdfActions = true
                                     } else {
