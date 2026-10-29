@@ -66,6 +66,8 @@ dependencies {
     // Model binaries are downloaded once on demand and cached privately for offline use.
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.21.1")
     implementation("com.quickbirdstudios:opencv:4.5.3")
+    // Tesseract is a local fallback for scripts that do not have a dedicated PaddleOCR model.
+    implementation("com.rmtheis:tess-two:9.1.0")
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     implementation("androidx.media3:media3-transformer:1.5.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
