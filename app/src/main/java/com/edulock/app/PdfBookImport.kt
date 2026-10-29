@@ -210,17 +210,19 @@ internal fun PdfBookImportScreen(
         working = true
         error = null
         status = "Downloading the book to your device’s Downloads folder…"
+        var downloadedFile: File? = null
         try {
             val file = downloadPdfToCache(context, url)
+            downloadedFile = file
             val suggestedName = bookTitle.ifBlank { bookSubject + " - " + board + " class " + grade }
             val savedLocation = savePdfToDownloads(context, file, suggestedName)
             savedPdfRefresh++
-            status = "PDF downloaded to Downloads/EduLock Books. The retained in-app copy is also available for manual deletion. Nothing was uploaded to Supabase."
+            status = "PDF downloaded successfully to " + savedLocation + ". The in-app copy is also available until you delete it manually. Nothing was uploaded to Supabase."
             error = null
             pickedFileName = savedLocation
         } catch (e: Exception) {
             error = (e.message ?: "Could not download the PDF.") +
-                " Any valid PDF already saved inside EduLock is retained for manual deletion."
+                if (downloadedFile == null) "" else " A valid in-app PDF copy remains available for manual deletion."
         } finally {
             working = false
         }
