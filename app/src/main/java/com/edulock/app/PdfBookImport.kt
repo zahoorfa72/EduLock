@@ -1603,12 +1603,7 @@ private suspend fun extractPdfText(
             recConfigAssetPath = models.recognitionDictionary.absolutePath,
         )
     } catch (e: Exception) {
-        val fallback = PaddleOcrModelManager.emergencyTesseractLanguage(languageCode) ?: throw IOException(
-            "Could not load the " + models.languageModel + " OCR model and no compatible local fallback exists.",
-            e
-        )
-        onProgress("Could not load the PaddleOCR model. Switching to the " + fallback + " offline OCR fallback…")
-        return extractScannedPdfWithTesseract(context, file, fallback, onProgress)
+        throw IOException("Could not load the " + models.languageModel + " OCR model. Please retry or reinstall the OCR model.", e)
     }
 
     try {
