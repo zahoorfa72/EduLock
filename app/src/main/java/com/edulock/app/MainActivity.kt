@@ -2700,6 +2700,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                                     }
                                 }
                             )
+                        }
                         DashboardIconTile(
                             icon = "🆘", title = "Emergency access", subtitle = "Parent-approved app access, once per day",
                             accent = Color(0xFFDA6195),
