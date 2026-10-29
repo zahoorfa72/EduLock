@@ -1856,7 +1856,11 @@ class EduLockRepository(context: Context) {
                 val result = requestFunction("submit-task-attempt", item)
                 // The server has now applied the authoritative award; remove the
                 // provisional local credit so the next online balance refresh is exact.
-                val childId = result.optString("child_id")
+                val taskId = item.optString("task_id")
+                val packageJson = try {
+                    JSONObject(offlineReadCache.getString(offlineTaskPackageKey(taskId), null))
+                } catch (_: Exception) { JSONObject() }
+                val childId = packageJson.optJSONObject("task")?.optString("child_id").orEmpty()
                 if (childId.isNotBlank()) {
                     val key = offlinePendingBankCreditKey(childId)
                     offlineAttemptQueue.edit().putInt(key, 0).commit()
