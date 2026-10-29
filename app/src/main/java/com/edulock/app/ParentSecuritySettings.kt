@@ -3,8 +3,6 @@ package com.edulock.app
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,7 +13,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Switch
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -38,7 +35,6 @@ internal fun ParentSecuritySettingsDialog(
     var existingPin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    var showSetupSuggestion by remember { mutableStateOf(ParentSecurity.shouldShowSetupSuggestion(context)) }
     val pinSet = ParentSecurity.isPinSet(context)
     val biometricEnabled = ParentSecurity.isBiometricEnabled(context)
 
@@ -53,27 +49,6 @@ internal fun ParentSecuritySettingsDialog(
                     "Set a parent-only PIN (4–12 digits). The PIN is stored as a salted PBKDF2 verifier, not as plain text.",
                     style = MaterialTheme.typography.bodyMedium
                 )
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Show setup suggestion", style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            "Remind me to enable parent PIN and fingerprint protection.",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                    Switch(
-                        checked = showSetupSuggestion,
-                        onCheckedChange = {
-                            showSetupSuggestion = it
-                            ParentSecurity.setShowSetupSuggestion(context, it)
-                            onSaved(if (it) "Parent security setup suggestion enabled." else "Parent security setup suggestion hidden.")
-                        }
-                    )
-                }
                 Spacer(Modifier.height(12.dp))
                 if (pinSet) {
                     OutlinedTextField(
@@ -109,7 +84,9 @@ internal fun ParentSecuritySettingsDialog(
                     onClick = {
                         if (!pinSet) {
                             error = "Create a parent PIN before enabling fingerprint protection."
-                        } else if (!ParentSecurity.verifyPin(context, existingPin.toCharArray())) {
+                        } else if (existingPin.isBlank()) {
+                            error = "Enter your current parent PIN to change fingerprint protection."
+                        } else if (!ParentSecurity.verifyPin(context, existingPin.toCharArray()))
                             existingPin = ""
                             error = "Incorrect parent PIN. Enter it again."
                         } else if (biometricEnabled) {
@@ -134,10 +111,10 @@ internal fun ParentSecuritySettingsDialog(
                             }
                         }
                     },
-                    enabled = pinSet && existingPin.isNotBlank(),
+                    enabled = pinSet,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (biometricEnabled) "Disable fingerprint (PIN required)" else "Enable fingerprint (PIN required)")
+                    Text(if (biometricEnabled) "Disable fingerprint" else "Enable fingerprint")
                 }
                 Text(
                     if (biometricEnabled) "Fingerprint protection is enabled on this device." else "Fingerprint protection is currently off.",
