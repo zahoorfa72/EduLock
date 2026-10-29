@@ -128,6 +128,7 @@ internal fun PdfBookImportScreen(
     var candidates by remember { mutableStateOf<List<PdfQuestionDraft>>(emptyList()) }
     var temporaryPdf by remember { mutableStateOf<File?>(null) }
     var pickedFileName by remember { mutableStateOf("") }
+    var savedPdfRefresh by remember { mutableStateOf(0) }
 
     val selectedSubject = subjects.firstOrNull { it.id == selectedSubjectId }
     val portalOptions = remember(countryCode, board, bookSubject, bookTitle, grade, languageCode) {
@@ -375,7 +376,6 @@ internal fun PdfBookImportScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        var savedPdfRefresh by remember { mutableStateOf(0) }
         val savedPdfFiles = remember(savedPdfRefresh) { File(context.filesDir, "pdf-books").listFiles()?.filter { it.isFile && it.extension.equals("pdf", true) }?.sortedByDescending { it.lastModified() } ?: emptyList() }
         if (savedPdfFiles.isNotEmpty()) {
             Text("Saved PDFs on this device", style = MaterialTheme.typography.titleMedium)
