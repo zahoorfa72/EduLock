@@ -1712,7 +1712,7 @@ private fun generateQuestionsFromSummary(rawText: String, language: String): Lis
             !Regex("""(?i)^\s*(?:page\s*\d+|chapter\s+\d+|exercise\s+\d+|answer\s+key|contents|www\.|https?://|so\s*\(?b)""").containsMatchIn(fact) &&
             !Regex("""(?i)\b\d+(?:st|nd|rd|th)?\s+image\s*=""").containsMatchIn(fact) &&
             fact.count { it == '=' } == 0 &&
-            isTextInSelectedLanguage(fact, lang)
+            isReadableSourceText(fact, lang)
     }.distinctBy { it.lowercase(Locale.ROOT).replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim() }
 
     // If we cannot phrase a question in the selected language, do not fall back to
@@ -1720,7 +1720,15 @@ private fun generateQuestionsFromSummary(rawText: String, language: String): Lis
     val unique = linkedMapOf<String, PdfQuestionDraft>()
     for (fact in facts) {
         val words = fact.split(Regex("""\s+""")).filter { it.length > 2 }
-        val topic = words.take(4).joinToString(" ")
+        val stopWords = when (lang) {
+            "sd" -> setOf("متن", "موجب", "هن", "هي", "هڪ", "جو", "جي", "۽", "۾", "سان", "آهي", "آھن", "بابت", "ڪهڙي", "اهم", "ڳالهه", "ٻڌائي", "وئي")
+            "ur" -> setOf("متن", "کے", "مطابق", "یہ", "اس", "ایک", "اور", "میں", "سے", "ہے", "ہیں", "بابت", "کیا", "اہم", "بات")
+            "ar" -> setOf("وفقًا", "للنص", "هذا", "هذه", "عن", "من", "في", "على", "ما", "هو", "هي")
+            "hi" -> setOf("पाठ", "के", "अनुसार", "यह", "एक", "और", "में", "है", "का", "की", "को")
+            else -> setOf("the", "and", "for", "with", "from", "that", "this", "are", "was", "were", "have", "has", "can", "will", "should", "would", "their", "there", "into", "your", "you", "our", "they", "about", "which", "when", "where", "what", "who", "according", "text")
+        }
+        val topicWords = words.filterNot { it.lowercase(Locale.ROOT) in stopWords }.distinct().take(4)
+        val topic = topicWords.joinToString(" ").ifBlank { words.distinct().take(4).joinToString(" ") }
         val prompt = when (lang) {
             "en" -> {
                 val definition = Regex("""(?i)^(.{2,80}?)\s+(means|refers to|is called|are called)\s+(.{3,220})$""").matchEntire(fact)
@@ -1774,6 +1782,24 @@ private fun generateQuestionsFromSummary(rawText: String, language: String): Lis
         if (unique.size >= 40) break
     }
     return unique.values.toList()
+}
+
+private fun isReadableSourceText(text: String, language: String): Boolean {
+    if (!isTextInSelectedLanguage(text, language)) return false
+    val tokens = Regex("""[\p{L}\p{N}]+""").findAll(text.lowercase(Locale.ROOT)).map { it.value }.toList()
+    if (tokens.size < 4) return false
+    val distinctRatio = tokens.distinct().size.toDouble() / tokens.size.toDouble()
+    if (tokens.size >= 6 && distinctRatio < 0.48) return false
+    val repeated = tokens.groupingBy { it }.eachCount()
+    val code = language.lowercase(Locale.ROOT)
+    val common = when (code) {
+        "sd" -> setOf("۽", "۾", "جي", "جو", "آهي", "آھن", "هڪ", "ته")
+        "ur" -> setOf("کے", "کی", "کا", "اور", "ہے", "ہیں", "میں", "سے", "ایک")
+        "ar" -> setOf("في", "من", "على", "إلى", "عن", "هو", "هي", "و")
+        else -> setOf("the", "and", "of", "to", "in", "is", "are", "a", "an")
+    }
+    if (repeated.any { (token, count) -> count >= 4 && token !in common }) return false
+    return true
 }
 
 private fun isTextInSelectedLanguage(text: String, language: String): Boolean {
