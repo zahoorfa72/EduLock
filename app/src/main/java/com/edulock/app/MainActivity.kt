@@ -493,6 +493,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var groupRewardSearchQuery by remember { mutableStateOf("") }
     var settingsSearchQuery by remember { mutableStateOf("") }
     var parentSecurityDialogOpen by remember { mutableStateOf(false) }
+    var parentAppLocked by remember { mutableStateOf(ParentSecurity.isPinSet(context)) }
     var childSecurityAppSearchQuery by remember { mutableStateOf("") }
     var templateSearchQuery by remember { mutableStateOf("") }
     var curriculumQuestionSearchQuery by remember { mutableStateOf("") }
@@ -793,6 +794,9 @@ private fun EduLockApp(repository: EduLockRepository) {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                if (ParentSecurity.isPinSet(context)) parentAppLocked = true
+            }
             if (event == Lifecycle.Event.ON_RESUME) {
                 refreshProtectionStatus()
                 val modePrefs = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
@@ -1265,6 +1269,10 @@ private fun EduLockApp(repository: EduLockRepository) {
             onDismiss = { parentSecurityDialogOpen = false },
             onSaved = { notice = it }
         )
+    }
+
+    if (parentAppLocked && ParentSecurity.isPinSet(context)) {
+        ParentSecurityLockDialog(onUnlocked = { parentAppLocked = false })
     }
 
     dailyTaskSettingsChild?.let { taskChild ->
