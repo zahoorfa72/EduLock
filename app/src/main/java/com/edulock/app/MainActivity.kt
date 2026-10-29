@@ -796,9 +796,19 @@ private fun EduLockApp(repository: EduLockRepository) {
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) {
-                if (ParentSecurity.isPinSet(context)) parentAppLocked = true
+                if (ParentSecurity.isPinSet(context)) {
+                    context.getSharedPreferences("edulock_parent_security_ui", Context.MODE_PRIVATE)
+                        .edit().putLong("backgrounded_at", System.currentTimeMillis()).apply()
+                }
             }
             if (event == Lifecycle.Event.ON_RESUME) {
+                if (ParentSecurity.isPinSet(context)) {
+                    val securityPrefs = context.getSharedPreferences("edulock_parent_security_ui", Context.MODE_PRIVATE)
+                    val backgroundedAt = securityPrefs.getLong("backgrounded_at", 0L)
+                    val elapsed = if (backgroundedAt > 0L) System.currentTimeMillis() - backgroundedAt else 0L
+                    if (backgroundedAt > 0L && elapsed >= 30_000L) parentAppLocked = true
+                    securityPrefs.edit().remove("backgrounded_at").apply()
+                }
                 refreshProtectionStatus()
                 val modePrefs = context.getSharedPreferences("edulock_lock_state", Context.MODE_PRIVATE)
                 ChildDeviceKioskPolicy.enterOrExitLockTask(context, modePrefs.getBoolean("kids_mode_enabled", false))
