@@ -61,7 +61,6 @@ import com.paddle.ocr.PaddleOCR
 import com.paddle.ocr.PaddleOCRConfig
 import com.paddle.ocr.model.OCRResult
 import com.paddle.ocr.util.OpenCVUtils
-import com.googlecode.tesseract.android.TessBaseAPI
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
@@ -1582,26 +1581,12 @@ private suspend fun extractPdfText(
     // A PDF with a usable text layer is more faithful than OCR. Keep its original script.
     if (digitalText.replace(Regex("""\s+"""), "").length >= 80) return digitalText
 
-    val tesseractLanguage = PaddleOcrModelManager.tesseractFallbackLanguage(languageCode)
-    if (tesseractLanguage != null) {
-        return extractScannedPdfWithTesseract(context, file, tesseractLanguage, onProgress)
-    }
-
     onProgress("Preparing multilingual PaddleOCR for " + languageCode + "…")
     if (!OpenCVUtils.init(context.applicationContext)) {
-        val fallback = PaddleOcrModelManager.emergencyTesseractLanguage(languageCode)
-            ?: throw IOException("Could not initialize the on-device OCR image engine and no compatible local fallback exists.")
-        onProgress("PaddleOCR image engine is unavailable. Switching to the " + fallback + " offline OCR fallback…")
-        return extractScannedPdfWithTesseract(context, file, fallback, onProgress)
+        throw IOException("Could not initialize the on-device OCR image engine. Restart EduLock and retry.")
     }
 
-    val models = try {
-        PaddleOcrModelManager.ensureModels(context, languageCode, onProgress)
-    } catch (e: Exception) {
-        val fallback = PaddleOcrModelManager.emergencyTesseractLanguage(languageCode) ?: throw e
-        onProgress("The selected PaddleOCR model is unavailable. Switching to the " + fallback + " offline OCR fallback…")
-        return extractScannedPdfWithTesseract(context, file, fallback, onProgress)
-    }
+    val models = PaddleOcrModelManager.ensureModels(context, languageCode, onProgress)
 
     val ocr = try {
         PaddleOCR.create(
@@ -1683,74 +1668,6 @@ private suspend fun extractPdfText(
     }
 }
 
-
-private suspend fun extractScannedPdfWithTesseract(
-    context: Context,
-    file: File,
-    tessLanguage: String,
-    onProgress: (String) -> Unit,
-): String {
-    onProgress("Preparing the " + tessLanguage + " OCR fallback model…")
-    val trainedData = PaddleOcrModelManager.ensureTesseractData(context, tessLanguage, onProgress)
-    val tessRoot = trainedData.parentFile?.parentFile
-        ?: throw IOException("OCR language model storage path is invalid.")
-
-    return withContext(Dispatchers.IO) {
-        val api = TessBaseAPI()
-        if (!api.init(tessRoot.absolutePath + File.separator, tessLanguage)) {
-            api.end()
-            throw IOException("The " + tessLanguage + " OCR model could not be initialized.")
-        }
-        try {
-            api.setPageSegMode(TessBaseAPI.PageSegMode.PSM_AUTO)
-            val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-            descriptor.use { fd ->
-                PdfRenderer(fd).use { renderer ->
-                    require(renderer.pageCount in 1..120) {
-                        "Scanned PDFs must contain 1–120 pages for on-device OCR. Select a smaller PDF."
-                    }
-                    val result = StringBuilder()
-                    for (index in 0 until renderer.pageCount) {
-                        withContext(Dispatchers.Main) {
-                            onProgress("Recognizing scanned page " + (index + 1) + " of " + renderer.pageCount + " with " + tessLanguage + " OCR…")
-                        }
-                        val page = renderer.openPage(index)
-                        try {
-                            val scale = min(2.4, 2200.0 / max(page.width, page.height).toDouble())
-                            val width = max(1, (page.width * scale).toInt())
-                            val height = max(1, (page.height * scale).toInt())
-                            val source = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                            try {
-                                page.render(source, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                                val enhanced = enhanceForOcr(source)
-                                try {
-                                    api.setImage(enhanced)
-                                    val recognized = api.utF8Text.orEmpty().trim()
-                                    api.clear()
-                                    if (recognized.isNotBlank()) result.append("\n\n").append(recognized)
-                                } finally {
-                                    if (enhanced !== source) enhanced.recycle()
-                                }
-                            } finally {
-                                source.recycle()
-                            }
-                        } finally {
-                            page.close()
-                        }
-                    }
-                    result.toString().trim()
-                }
-            }
-        } finally {
-            api.end()
-        }
-    }.also { text ->
-        if (text.replace(Regex("""\s+"""), "").length < 12) {
-            throw IOException("The " + tessLanguage + " OCR model found too little readable text. Try a clearer, higher-resolution PDF; unreliable questions were not generated.")
-        }
-        onProgress("Script-specific OCR complete. Review the recognized text before creating questions.")
-    }
-}
 
 private fun enhanceForOcr(source: Bitmap): Bitmap {
     val enhanced = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
