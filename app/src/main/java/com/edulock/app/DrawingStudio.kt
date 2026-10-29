@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -64,10 +68,20 @@ fun DrawingStudioScreen(onBack: () -> Unit) {
             }
         }
         AppUiText("Choose a drawing challenge", fontWeight = FontWeight.Bold)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("Free draw", "Sun & sky", "House", "Flower", "Rainbow", "Tree", "Butterfly", "Boat", "Star").forEach { item ->
-                OutlinedButton(onClick = { guide = item }, modifier = Modifier.weight(1f)) {
-                    AppUiText(if (guide == item) "✓ $item" else item)
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            modifier = Modifier.fillMaxWidth().height(144.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            userScrollEnabled = true
+        ) {
+            items(listOf("Free draw", "Sun & sky", "House", "Flower", "Rainbow", "Tree", "Butterfly", "Boat", "Star")) { item ->
+                OutlinedButton(
+                    onClick = { guide = item },
+                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    AppUiText(if (guide == item) "✓ $item" else item, fontSize = 12.sp)
                 }
             }
         }
