@@ -872,7 +872,7 @@ private suspend fun fetchStbbBooks(grade: Int, languageCode: String): List<StbbB
                 .replace(Regex("""\s+"""), " ")
                 .trim()
             if (title.isBlank()) null else StbbBook(id, title)
-        }.distinctBy { it.id }
+        }.distinctBy { it.id }.toList()
         val medium = when (languageCode.lowercase(Locale.ROOT)) {
             "sd" -> "sindhi"
             "ur" -> "urdu"
