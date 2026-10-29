@@ -828,7 +828,7 @@ private suspend fun fetchStbbBooks(grade: Int, languageCode: String): List<StbbB
             }
             response.body?.string() ?: throw IllegalStateException("STBB returned an empty textbook list.")
         }
-        val anchorPattern = Regex("""(?is)<a\\b[^>]*href=["'](?:\\./)?book\\.php\\?id=(\\d+)["'][^>]*>(.*?)</a>""")
+        val anchorPattern = Regex("""(?is)<a\b[^>]*href=["'](?:\./)?book\.php\?id=(\d+)["'][^>]*>(.*?)</a>""")
         val allBooks = anchorPattern.findAll(html).mapNotNull { match ->
             val id = match.groupValues[1]
             val title = match.groupValues[2]
@@ -837,7 +837,7 @@ private suspend fun fetchStbbBooks(grade: Int, languageCode: String): List<StbbB
                 .replace("&nbsp;", " ")
                 .replace("&#39;", "'")
                 .replace("&quot;", "\"")
-                .replace(Regex("""\\s+"""), " ")
+                .replace(Regex("""\s+"""), " ")
                 .trim()
             if (title.isBlank()) null else StbbBook(id, title)
         }.distinctBy { it.id }
