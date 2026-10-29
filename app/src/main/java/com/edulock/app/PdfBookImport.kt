@@ -201,9 +201,9 @@ internal fun PdfBookImportScreen(
             temporaryFile = file
             val suggestedName = bookTitle.ifBlank { bookSubject + " - " + board + " class " + grade }
             val savedLocation = savePdfToDownloads(context, file, suggestedName)
-            file.delete()
             temporaryFile = null
-            status = "PDF downloaded to device storage. It was not uploaded to Supabase."
+            savedPdfRefresh++
+            status = "PDF downloaded to Downloads/EduLock Books. The retained in-app copy is also available for manual deletion. Nothing was uploaded to Supabase."
             error = null
             pickedFileName = savedLocation
         } catch (e: Exception) {
@@ -305,6 +305,16 @@ internal fun PdfBookImportScreen(
             label = { Text("Subject / book topic") },
             singleLine = true
         )
+        val curriculumSubjects = remember(countryCode, board, grade, languageCode) {
+            suggestedBookSubjects(countryCode, board, grade.toIntOrNull() ?: 1, languageCode)
+        }
+        Text("Suggested subjects for this curriculum", style = MaterialTheme.typography.titleSmall)
+        androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(curriculumSubjects.size) { index ->
+                val suggestion = curriculumSubjects[index]
+                OutlinedButton(onClick = { bookSubject = suggestion }) { Text(suggestion) }
+            }
+        }
         OutlinedTextField(
             value = bookTitle,
             onValueChange = { bookTitle = it.take(180) },
@@ -351,15 +361,19 @@ internal fun PdfBookImportScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        val savedPdfFiles = remember { File(context.filesDir, "pdf-books").listFiles()?.filter { it.isFile && it.extension.equals("pdf", true) } ?: emptyList() }
+        var savedPdfRefresh by remember { mutableStateOf(0) }
+        val savedPdfFiles = remember(savedPdfRefresh) { File(context.filesDir, "pdf-books").listFiles()?.filter { it.isFile && it.extension.equals("pdf", true) }?.sortedByDescending { it.lastModified() } ?: emptyList() }
         if (savedPdfFiles.isNotEmpty()) {
             Text("Saved PDFs on this device", style = MaterialTheme.typography.titleMedium)
             savedPdfFiles.forEach { savedPdf ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(savedPdf.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
                     TextButton(onClick = {
-                        if (savedPdf.delete()) status = "Deleted " + savedPdf.name + " from this device."
-                        else error = "Could not delete this PDF."
+                        if (savedPdf.delete()) {
+                            savedPdfRefresh++
+                            if (temporaryPdf == savedPdf) temporaryPdf = null
+                            status = "Deleted " + savedPdf.name + " from this device."
+                        } else error = "Could not delete this PDF."
                     }, enabled = !working) { Text("Delete") }
                 }
             }
@@ -434,7 +448,7 @@ internal fun PdfBookImportScreen(
             AlertDialog(
                 onDismissRequest = { showPdfActions = false; pendingPdfUrl = null },
                 title = { Text("PDF detected") },
-                text = { Text("Choose what to do with this book. Importing extracts questions locally and removes EduLock’s temporary PDF after extraction; downloading keeps a copy in device storage.") },
+                text = { Text("Choose what to do with this book. Importing extracts questions locally and keeps the PDF in EduLock book storage until you delete it manually. Downloading saves a copy to Downloads/EduLock Books.") },
                 confirmButton = {
                     Column {
                         Button(
@@ -618,6 +632,27 @@ private val pdfBookLanguages = listOf(
     "fr" to "French",
     "es" to "Spanish"
 )
+
+private fun suggestedBookSubjects(country: String, board: String, grade: Int, language: String): List<String> {
+    val cc = country.uppercase(Locale.ROOT)
+    val b = board.lowercase(Locale.ROOT)
+    return when {
+        cc == "PK" && b.contains("sindh") -> {
+            val core = listOf("Sindhi", "Urdu", "English", "Mathematics", "General Knowledge", "General Science")
+            val middle = listOf("Social Studies", "Computer Studies", "Islamiat", "Ethics", "Drawing", "Physical Education")
+            when {
+                grade <= 2 -> listOf("Sindhi", "Urdu", "English", "Mathematics", "General Knowledge", "Drawing", "Islamiat", "Ethics")
+                grade <= 5 -> core + listOf("Islamiat", "Ethics", "Social Studies", "Computer Studies", "Drawing")
+                grade <= 8 -> core + middle
+                else -> listOf("Sindhi", "Urdu", "English", "Mathematics", "General Mathematics", "Physics", "Chemistry", "Biology", "Computer Science", "Pakistan Studies", "Islamiat", "Ethics", "Economics", "Geography", "History")
+            }
+        }
+        cc == "PK" -> listOf("English", "Urdu", "Mathematics", "General Science", "Islamiat", "Pakistan Studies", "Social Studies", "Computer Science", "Physics", "Chemistry", "Biology", "Sindhi", "Pashto", "Arabic", "Economics", "Geography", "History", "Drawing")
+        cc == "IN" -> listOf("English", "Hindi", "Mathematics", "Environmental Studies", "Science", "Social Science", "Computer Science", "Physics", "Chemistry", "Biology", "History", "Geography", "Civics", "Sanskrit")
+        cc == "BD" -> listOf("Bangla", "English", "Mathematics", "Science", "Bangladesh and Global Studies", "Religion", "Information and Communication Technology", "Physics", "Chemistry", "Biology", "History")
+        else -> listOf("English", "Mathematics", "Science", "Social Studies", "Computer Studies", "Languages", "History", "Geography", "Art", "Physical Education")
+    }.distinct()
+}
 
 private fun defaultBoard(country: String): String = when (country.uppercase(Locale.ROOT)) {
     "PK" -> "Punjab (PECTAA)"
