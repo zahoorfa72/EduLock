@@ -154,6 +154,7 @@ internal fun PdfBookImportScreen(
     var showManualBrowser by remember { mutableStateOf(false) }
 
     val selectedSubject = destinationSubjects.firstOrNull { it.id == selectedSubjectId }
+    val selectedLanguageName = pdfBookLanguages.firstOrNull { it.first.equals(languageCode, true) }?.second ?: languageCode
     val effectiveBoard = if (board.equals("Custom board", true)) customBoardName.trim().ifBlank { "Custom board" } else board
     val portalOptions = remember(countryCode, board, customBoardName, bookSubject, bookTitle, grade, languageCode) {
         portalsFor(countryCode, effectiveBoard, bookSubject, bookTitle, grade, languageCode)
@@ -815,7 +816,11 @@ internal fun PdfBookImportScreen(
                 ) {
                     Text("Improve question extraction", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "For chapter summaries or scanned pages, generate answer-backed drafts from the readable text. Answers are taken from the extracted source, not invented. Review OCR and every answer before saving.",
+                        "Selected question language: " + selectedLanguageName + " (" + languageCode + "). Only text that matches this language's writing system is used for generated prompts and answers. Mixed/garbled OCR is skipped instead of turned into a false answer.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "For chapter summaries or scanned pages, generate answer-backed drafts from readable source text. Review the extracted text and every answer before saving.",
                         style = MaterialTheme.typography.bodySmall
                     )
                     Button(
@@ -882,7 +887,7 @@ internal fun PdfBookImportScreen(
                                     candidates = candidates.mapIndexed { idx, q -> if (idx == index) q.copy(include = included) else q }
                                 }
                             )
-                            Text("Question " + (index + 1), style = MaterialTheme.typography.titleSmall)
+                            Text("Question " + (index + 1) + " • " + (pdfBookLanguages.firstOrNull { it.first.equals(draft.languageCode, true) }?.second ?: draft.languageCode), style = MaterialTheme.typography.titleSmall)
                             Spacer(Modifier.width(8.dp))
                             TextButton(onClick = {
                                 candidates = candidates.filterIndexed { idx, _ -> idx != index }
@@ -1641,7 +1646,11 @@ private fun detectPdfQuestions(rawText: String, language: String): List<PdfQuest
             .replace(Regex("""(?i)^\s*(?:question|ques)\s+(?:[A-Z]|\d{1,3})\s*[:.)\-]?\s*"""), "")
             .trim()
         if (trimmed.contains("=") && Regex("""(?i)\b\d+(?:st|nd|rd|th)?\s+image\s*=""").containsMatchIn(trimmed)) continue
-        val options = optionPattern.findAll(trimmed).map { it.groupValues[1].trim() }.filter { it.isNotBlank() }.distinct().toList()
+        val options = optionPattern.findAll(trimmed)
+            .map { it.groupValues[1].trim() }
+            .filter { it.isNotBlank() && isTextInSelectedLanguage(it, language) }
+            .distinct()
+            .toList()
         val answerLine = answerPattern.find(trimmed)?.groupValues?.get(1)?.trim().orEmpty()
         val promptLines = trimmed.lines().filterNot { optionPattern.matches(it) || answerPattern.matches(it) }
         val prompt = promptLines.joinToString(" ")
@@ -1683,9 +1692,6 @@ private fun generateQuestionsFromSummary(rawText: String, language: String): Lis
         .replace("\r\n", "\n")
         .replace('\r', '\n')
         .replace('\u0000', ' ')
-        .replace('\uFFFD', ' ')
-        .replace('\u25A1', ' ')
-        .replace('\u25AF', ' ')
         .replace(Regex("""(?i)\b(?:question|ques)\s+(?:[A-Z]|\d{1,3})\b"""), "\n")
 
     // Work with individual source lines first. Collapsing the whole OCR page into one
@@ -1772,7 +1778,7 @@ private fun generateQuestionsFromSummary(rawText: String, language: String): Lis
 
 private fun isTextInSelectedLanguage(text: String, language: String): Boolean {
     val letters = text.filter { it.isLetter() }
-    if (letters.length < 5) return false
+    if (letters.isEmpty()) return false
     if (text.any { it == '\uFFFD' || it == '\u25A1' || it == '\u25AF' || it in '\uE000'..'\uF8FF' }) return false
 
     fun countIn(range: (Char) -> Boolean): Int = letters.count(range)
