@@ -1588,9 +1588,19 @@ private suspend fun extractPdfText(
     }
 
     onProgress("Preparing multilingual PaddleOCR for " + languageCode + "…")
-    val models = PaddleOcrModelManager.ensureModels(context, languageCode, onProgress)
     if (!OpenCVUtils.init(context.applicationContext)) {
-        throw IOException("Could not initialize the on-device OCR image engine. Restart EduLock and retry.")
+        val fallback = PaddleOcrModelManager.emergencyTesseractLanguage(languageCode)
+            ?: throw IOException("Could not initialize the on-device OCR image engine and no compatible local fallback exists.")
+        onProgress("PaddleOCR image engine is unavailable. Switching to the " + fallback + " offline OCR fallback…")
+        return extractScannedPdfWithTesseract(context, file, fallback, onProgress)
+    }
+
+    val models = try {
+        PaddleOcrModelManager.ensureModels(context, languageCode, onProgress)
+    } catch (e: Exception) {
+        val fallback = PaddleOcrModelManager.emergencyTesseractLanguage(languageCode) ?: throw e
+        onProgress("The selected PaddleOCR model is unavailable. Switching to the " + fallback + " offline OCR fallback…")
+        return extractScannedPdfWithTesseract(context, file, fallback, onProgress)
     }
 
     val ocr = try {
@@ -1608,7 +1618,12 @@ private suspend fun extractPdfText(
             recConfigAssetPath = models.recognitionDictionary.absolutePath,
         )
     } catch (e: Exception) {
-        throw IOException("Could not load the " + models.languageModel + " OCR model. Remove the cached model in app storage only if the error persists, then retry.", e)
+        val fallback = PaddleOcrModelManager.emergencyTesseractLanguage(languageCode) ?: throw IOException(
+            "Could not load the " + models.languageModel + " OCR model and no compatible local fallback exists.",
+            e
+        )
+        onProgress("Could not load the PaddleOCR model. Switching to the " + fallback + " offline OCR fallback…")
+        return extractScannedPdfWithTesseract(context, file, fallback, onProgress)
     }
 
     try {
