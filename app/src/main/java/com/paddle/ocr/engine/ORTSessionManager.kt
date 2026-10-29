@@ -20,6 +20,7 @@ import ai.onnxruntime.OrtSession
 import android.content.Context
 import com.paddle.ocr.EngineConfig
 import com.paddle.ocr.model.OCRError
+import java.io.File
 import java.nio.FloatBuffer
 
 class ORTSessionManager(
@@ -106,7 +107,14 @@ class ORTSessionManager(
 
     private fun readModelAsset(assetPath: String): ByteArray {
         return try {
-            context.assets.open(assetPath).use { it.readBytes() }
+            // EduLock downloads only the selected language model and keeps it in private app
+            // storage. Support both local file paths and the bundled assets used by the demo.
+            val local = File(assetPath)
+            if (local.isAbsolute && local.isFile && local.length() > 0L) {
+                local.inputStream().use { it.readBytes() }
+            } else {
+                context.assets.open(assetPath).use { it.readBytes() }
+            }
         } catch (t: Throwable) {
             throw OCRError.ModelNotFound(assetPath, t)
         }
