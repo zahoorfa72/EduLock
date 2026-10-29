@@ -1294,9 +1294,9 @@ private suspend fun searchDirectPdfResults(query: String): List<PdfSearchResult>
             }
             response.body?.string().orEmpty()
         }
-        val anchorPattern = Regex("""(?is)<a\\b([^>]*)>(.*?)</a>""")
-        val classPattern = Regex("""(?is)\\bclass\\s*=\\s*["'][^"']*result__a[^"']*["']""")
-        val hrefPattern = Regex("""(?is)\\bhref\\s*=\\s*["']([^"']+)["']""")
+        val anchorPattern = Regex("""(?is)<a\b([^>]*)>(.*?)</a>""")
+        val classPattern = Regex("""(?is)\bclass\s*=\s*["'][^"']*result__a[^"']*["']""")
+        val hrefPattern = Regex("""(?is)\bhref\s*=\s*["']([^"']+)["']""")
         val results = mutableListOf<PdfSearchResult>()
         for (match in anchorPattern.findAll(html)) {
             val attributes = match.groupValues[1]
@@ -1318,7 +1318,7 @@ private suspend fun searchDirectPdfResults(query: String): List<PdfSearchResult>
             if (Uri.parse(cleanTarget).host.orEmpty().contains("duckduckgo.com", true)) continue
             val title = Html.fromHtml(match.groupValues[2], Html.FROM_HTML_MODE_LEGACY)
                 .toString()
-                .replace(Regex("""\\s+"""), " ")
+                .replace(Regex("""\s+"""), " ")
                 .trim()
             if (title.isBlank()) continue
             if (results.none { it.url == cleanTarget }) results.add(PdfSearchResult(title, cleanTarget))
