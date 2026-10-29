@@ -796,10 +796,12 @@ private fun detectPdfQuestions(rawText: String, language: String): List<PdfQuest
     val unique = linkedMapOf<String, PdfQuestionDraft>()
     for (block in blocks) {
         val trimmed = block.replace(Regex("""(?m)^\s*(?:Page\s*)?\d+\s*$"""), "").trim()
-        val options = optionPattern.findAll(trimmed).map { it.groupValues[1].trim() }.filter { it.isNotBlank() }.distinct()
+        val options = optionPattern.findAll(trimmed).map { it.groupValues[1].trim() }.filter { it.isNotBlank() }.distinct().toList()
         val answerLine = answerPattern.find(trimmed)?.groupValues?.get(1)?.trim().orEmpty()
         val promptLines = trimmed.lines().filterNot { optionPattern.matches(it) || answerPattern.matches(it) }
-        val prompt = promptLines.joinToString(" ").replace(numberedPattern, "").replace(Regex("""\s+"""), " ").trim()
+        val prompt = promptLines.joinToString(" ")
+            .replace(Regex("""(?i)^\s*(?:(?:question|ques|q)\s*)?\d{1,3}\s*[\).:\-]\s*"""), "")
+            .replace(Regex("""\s+"""), " ").trim()
         if (prompt.length !in 8..1000) continue
         if (prompt.count { it.isLetterOrDigit() } < 6) continue
         val type = if (options.size >= 2) "multiple_choice" else "short_answer"
