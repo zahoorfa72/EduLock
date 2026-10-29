@@ -805,7 +805,7 @@ private fun detectPdfQuestions(rawText: String, language: String): List<PdfQuest
         }
     }
 
-    val optionPattern = Regex("""(?im)^\s*(?:\(?[A-Da-d]\)?[).:]|\([1-4]\)|[1-4][).])\s*(.+?)\s*$""")
+    val optionPattern = Regex("""(?im)^\s*(?:\(?[A-Da-d]\)?[).:]|\([1-4]\)|[1-4][).]|(?:الف|ا|ب|پ|ت|ث|ج|چ|ح|خ|د|ڈ|ر|ز|س|ش|ف|ق|ک|گ|ل|م|ن|و|ہ|ھ|ی)[).:])\s*(.+?)\s*$""")
     val answerPattern = Regex("""(?im)^\s*(?:correct\s+answer|answer|ans)\s*[:\-]\s*(.+?)\s*$""")
     val unique = linkedMapOf<String, PdfQuestionDraft>()
     for (block in blocks) {
@@ -829,7 +829,7 @@ private fun detectPdfQuestions(rawText: String, language: String): List<PdfQuest
                 }
             } else answerLine
         }
-        val key = prompt.lowercase(Locale.ROOT).replace(Regex("""\W+"""), " ").trim()
+        val key = prompt.lowercase(Locale.ROOT).replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim()
         if (key.length >= 8 && !unique.containsKey(key)) {
             unique[key] = PdfQuestionDraft(
                 prompt = prompt,
