@@ -4899,6 +4899,18 @@ private fun EduLockApp(repository: EduLockRepository) {
                         defaultCountryCode = parentCountryCode,
                         defaultLanguageCode = parentLearningLanguageCode,
                         onBack = { screen = AppScreen.SUBJECTS },
+                        onCreateSubject = { title, language, country, grade ->
+                            val normalizedCountry = if (country.equals("OTHER", ignoreCase = true)) "ZZ" else country.trim().uppercase(Locale.ROOT)
+                            require(normalizedCountry.matches(Regex("[A-Z]{2}"))) { "Choose a valid country for the subject." }
+                            val allSubjects = repository.loadSubjects(familyId)
+                            val existing = allSubjects.firstOrNull { subject ->
+                                subject.title.trim().substringBefore(" — Grade ").equals(title.trim().substringBefore(" — Grade "), ignoreCase = true) &&
+                                    subject.languageCode.equals(language, ignoreCase = true) &&
+                                    subject.gradeLevel == grade &&
+                                    (subject.countryCode.equals(normalizedCountry, ignoreCase = true) || subject.countryCode.equals("ZZ", ignoreCase = true))
+                            }
+                            existing ?: repository.addSubject(familyId, title.trim(), language, normalizedCountry, grade)
+                        },
                         onSaveQuestions = { destinationSubject, drafts ->
                             require(drafts.isNotEmpty()) { "Select at least one reviewed question." }
                             val existingRows = repository.loadQuestions(destinationSubject.id)
