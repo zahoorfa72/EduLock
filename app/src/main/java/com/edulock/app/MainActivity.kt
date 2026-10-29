@@ -2937,28 +2937,16 @@ private fun EduLockApp(repository: EduLockRepository) {
                                 onClick = { selectedSubject = null; templateCategory = "Mathematics"; screen = AppScreen.LEARNING_TEMPLATES }
                             )
                         }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            DashboardIconTile(
-                                icon = "📄", title = "PDF book import", subtitle = "Extract and review questions from textbooks",
-                                modifier = Modifier.weight(1f), accent = Color(0xFF178A83),
-                                onClick = {
-                                    execute {
-                                        subjects = repository.loadSubjects(familyId)
-                                        screen = AppScreen.PDF_BOOK_IMPORT
-                                    }
+                        DashboardIconTile(
+                            icon = "📄", title = "PDF book import", subtitle = "Extract and review questions from textbooks",
+                            accent = Color(0xFF178A83),
+                            onClick = {
+                                execute {
+                                    subjects = repository.loadSubjects(familyId)
+                                    screen = AppScreen.PDF_BOOK_IMPORT
                                 }
-                            )
-                            DashboardIconTile(
-                                icon = "📖", title = "Book question bank", subtitle = "Build questions from your books",
-                                modifier = Modifier.weight(1f), accent = Color(0xFF3B82B2),
-                                onClick = {
-                                    execute {
-                                        subjects = repository.loadSubjects(familyId)
-                                        screen = AppScreen.PDF_BOOK_IMPORT
-                                    }
-                                }
-                            )
-                        }
+                            }
+                        )
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             DashboardIconTile(
                                 icon = "🌌", title = "4D Learning Lab", subtitle = "Explore interactive models in every subject",
