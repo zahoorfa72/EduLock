@@ -1756,11 +1756,14 @@ class EduLockRepository(context: Context) {
         answers: Map<String, String>,
         answerLanguages: Map<String, String>
     ): TaskResult {
-        val taskRows = restArray(
-            "tasks?select=id,child_id,subject_id,title,question_count,pass_percent,reward_minutes,daily_cap_minutes,active,reward_package_name,reward_group_id,time_limit_seconds,question_time_limit_seconds,reward_to_bank,target_grade_level,target_age_years&id=eq.$taskId&limit=1"
-        )
-        val task = taskRows.optJSONObject(0)
-            ?: throw IOException("This task was not cached. Open it while online before going offline.")
+        // Find this task in the cached task-list responses. This avoids relying on a
+        // different URL/query than the one the child screen loaded before going offline.
+        val task = offlineReadCache.all.values.asSequence()
+            .filterIsInstance<String>()
+            .mapNotNull { raw -> try { JSONArray(raw) } catch (_: Exception) { null } }
+            .flatMap { array -> (0 until array.length()).asSequence().mapNotNull { array.optJSONObject(it) } }
+            .firstOrNull { it.optString("id") == taskId }
+            ?: throw IOException("This task was not cached. Open the task list while online before going offline.")
         val links = restArray("task_questions?select=question_id,sort_order&task_id=eq.$taskId&order=sort_order.asc")
         val ids = (0 until links.length()).mapNotNull { i ->
             links.optJSONObject(i)?.optString("question_id")?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) }
@@ -1771,7 +1774,7 @@ class EduLockRepository(context: Context) {
         val questions = linkedMapOf<String, JSONObject>()
         ids.chunked(50).forEach { chunk ->
             val rows = restArray(
-                "questions?select=id,answer_key,concept_key,language_code&id=in.(" + chunk.joinToString(",") + ")&limit=50"
+                "questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,picture_path,grade_level,age_min,age_max,reward_minutes,answer_key,created_at&id=in.(" + chunk.joinToString(",") + ")&limit=50"
             )
             for (i in 0 until rows.length()) {
                 val row = rows.optJSONObject(i) ?: continue
