@@ -493,6 +493,7 @@ private fun EduLockApp(repository: EduLockRepository) {
     var groupRewardSearchQuery by remember { mutableStateOf("") }
     var settingsSearchQuery by remember { mutableStateOf("") }
     var parentSecurityDialogOpen by remember { mutableStateOf(false) }
+    var parentSecuritySuggestionVisible by remember { mutableStateOf(ParentSecurity.shouldShowSetupSuggestion(context)) }
     var parentAppLocked by remember { mutableStateOf(ParentSecurity.isPinSet(context)) }
     var childSecurityAppSearchQuery by remember { mutableStateOf("") }
     var templateSearchQuery by remember { mutableStateOf("") }
@@ -1267,7 +1268,10 @@ private fun EduLockApp(repository: EduLockRepository) {
     if (parentSecurityDialogOpen) {
         ParentSecuritySettingsDialog(
             onDismiss = { parentSecurityDialogOpen = false },
-            onSaved = { notice = it }
+            onSaved = {
+                notice = it
+                parentSecuritySuggestionVisible = ParentSecurity.shouldShowSetupSuggestion(context)
+            }
         )
     }
 
@@ -2854,6 +2858,49 @@ private fun EduLockApp(repository: EduLockRepository) {
                 AppScreen.PARENT_HOME -> ScreenFrame("Parent dashboard", notice = notice, busy = busy) {
                     val dashboardSubjects = subjectsForChildContext(subjects, selectedChild, childSubjectSelections, parentCountryCode)
                     AppUiText("Your family is protected by your signed-in parent account.")
+                    if (
+                        parentSecuritySuggestionVisible &&
+                        (!ParentSecurity.isPinSet(context) || !ParentSecurity.isBiometricEnabled(context))
+                    ) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF5FF))
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                AppUiText(
+                                    if (!ParentSecurity.isPinSet(context)) "Set up parent protection" else "Fingerprint unlock is turned off",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                AppUiText(
+                                    if (!ParentSecurity.isPinSet(context))
+                                        "Create a parent PIN and optionally enable fingerprint unlock to protect parent settings."
+                                    else
+                                        "Your parent PIN is active. Enable fingerprint unlock for quicker parent authentication."
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Button(
+                                        onClick = { parentSecurityDialogOpen = true },
+                                        modifier = Modifier.weight(1f)
+                                    ) { AppUiText("Set up protection") }
+                                    TextButton(
+                                        onClick = {
+                                            ParentSecurity.setShowSetupSuggestion(context, false)
+                                            parentSecuritySuggestionVisible = false
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) { AppUiText("Hide suggestion") }
+                                }
+                            }
+                        }
+                    }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         DashboardIconTile(
                             icon = "👨‍👩‍👧",
