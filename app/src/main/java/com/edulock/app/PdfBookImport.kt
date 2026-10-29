@@ -309,10 +309,24 @@ internal fun PdfBookImportScreen(
             suggestedBookSubjects(countryCode, board, grade.toIntOrNull() ?: 1, languageCode)
         }
         Text("Suggested subjects for this curriculum", style = MaterialTheme.typography.titleSmall)
-        androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(curriculumSubjects.size) { index ->
-                val suggestion = curriculumSubjects[index]
-                OutlinedButton(onClick = { bookSubject = suggestion }) { Text(suggestion) }
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            curriculumSubjects.chunked(3).forEach { subjectRow ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    subjectRow.forEach { suggestion ->
+                        OutlinedButton(
+                            onClick = { bookSubject = suggestion },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(suggestion, maxLines = 2)
+                        }
+                    }
+                    repeat((3 - subjectRow.size).coerceAtLeast(0)) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
             }
         }
         OutlinedTextField(
@@ -436,7 +450,7 @@ internal fun PdfBookImportScreen(
                         }
                     )
                     Text(
-                        "If a website shows a web page instead of a PDF file, use its own book search/download control. EduLock intercepts PDF downloads without opening another browser app.",
+                        "Open the official class catalogue, choose the matching book, then tap its Download PDF control. EduLock catches direct PDF links (including STBB download links) and offers Download PDF to device or Extract questions from PDF without opening another browser app.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -638,13 +652,36 @@ private fun suggestedBookSubjects(country: String, board: String, grade: Int, la
     val b = board.lowercase(Locale.ROOT)
     return when {
         cc == "PK" && b.contains("sindh") -> {
-            val core = listOf("Sindhi", "Urdu", "English", "Mathematics", "General Knowledge", "General Science")
-            val middle = listOf("Social Studies", "Computer Studies", "Islamiat", "Ethics", "Drawing", "Physical Education")
+            val languages = listOf("Sindhi", "Urdu", "English", "Arabic")
+            val primary = listOf(
+                "Mathematics", "General Knowledge", "General Science", "Social Studies",
+                "Islamiat / Islamic Studies", "Ethics", "Drawing / Art", "Physical Education",
+                "Computer Studies", "Environmental Studies", "Quran / Religious Education"
+            )
+            val middle = listOf(
+                "Science", "Computer Education", "Pakistan Studies", "Mazhabi Taleemat",
+                "Asan Sindhi", "Geography", "History", "Civics", "Agriculture",
+                "Health Education", "Home Economics"
+            )
+            val secondary = listOf(
+                "General Mathematics", "Physics", "Chemistry", "Biology", "Computer Science",
+                "Information Technology", "Economics", "Statistics", "Education",
+                "Principles of Accounting", "Principles of Commerce", "Business Studies",
+                "Sindhi Compulsory", "Urdu Compulsory", "English Compulsory",
+                "Pakistan Studies", "Islamiat", "Ethics", "Civics", "Geography", "History",
+                "Fine Arts", "Home Economics", "Agriculture"
+            )
             when {
-                grade <= 2 -> listOf("Sindhi", "Urdu", "English", "Mathematics", "General Knowledge", "Drawing", "Islamiat", "Ethics")
-                grade <= 5 -> core + listOf("Islamiat", "Ethics", "Social Studies", "Computer Studies", "Drawing")
-                grade <= 8 -> core + middle
-                else -> listOf("Sindhi", "Urdu", "English", "Mathematics", "General Mathematics", "Physics", "Chemistry", "Biology", "Computer Science", "Pakistan Studies", "Islamiat", "Ethics", "Economics", "Geography", "History")
+                grade <= 2 -> (languages + primary).distinct()
+                grade <= 5 -> (languages + primary + middle).distinct()
+                grade <= 8 -> (languages + primary + middle + listOf(
+                    "General Mathematics", "Islamic Studies", "Science and Technology",
+                    "Information Technology", "Environmental Studies"
+                )).distinct()
+                else -> (languages + secondary + listOf(
+                    "Mathematics", "General Science", "Social Studies", "Computer Studies",
+                    "Physical Education", "Drawing / Art"
+                )).distinct()
             }
         }
         cc == "PK" -> listOf("English", "Urdu", "Mathematics", "General Science", "Islamiat", "Pakistan Studies", "Social Studies", "Computer Science", "Physics", "Chemistry", "Biology", "Sindhi", "Pashto", "Arabic", "Economics", "Geography", "History", "Drawing")
@@ -677,7 +714,7 @@ private fun portalsFor(country: String, board: String, subject: String, title: S
     val b = board.lowercase(Locale.ROOT)
     val curated = when {
         cc == "PK" && b.contains("sindh") -> listOf(
-            BookPortal("Sindh Textbook Board eBooks", "Official board portal • Sindhi, Urdu and English • Classes Katchi–XII", "https://ebooks.stbb.edu.pk/")
+            BookPortal("Sindh Textbook Board eBooks", "Official STBB catalogue • Classes Katchi–XII • choose your medium, then tap Download PDF", "https://portal.stbb.edu.pk/ebooks/?medium=" + Uri.encode(when (language) { "sd" -> "Sindhi"; "ur" -> "Urdu"; "en" -> "English"; else -> "All" }))
         )
         cc == "PK" && b.contains("elearn") -> listOf(
             BookPortal("eLearn Punjab", "Punjab government digital textbooks • science and maths", "https://www.elearn.gov.pk/")
@@ -705,9 +742,15 @@ private fun portalsFor(country: String, board: String, subject: String, title: S
 
 private fun looksLikePdfUrl(url: String): Boolean {
     val lower = url.lowercase(Locale.ROOT)
-    return lower.substringBefore('?').substringBefore('#').endsWith(".pdf") ||
-        lower.contains("download=pdf") || lower.contains("format=pdf") ||
-        lower.contains("/download/")
+    val path = lower.substringBefore('?').substringBefore('#')
+    return path.endsWith(".pdf") ||
+        lower.contains("download=pdf") ||
+        lower.contains("download=1") ||
+        lower.contains("download=true") ||
+        lower.contains("format=pdf") ||
+        lower.contains("/download/") ||
+        lower.contains("pdf_proxy.php") ||
+        lower.contains("attachment=1")
 }
 
 private suspend fun copyUriToCache(context: Context, uri: Uri): File = withContext(Dispatchers.IO) {
