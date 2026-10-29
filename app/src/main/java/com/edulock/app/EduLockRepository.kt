@@ -2302,7 +2302,7 @@ class EduLockRepository(context: Context) {
             val packageJson = requestFunction("offline-task-package", JSONObject().put("task_id", taskId))
             offlineReadCache.edit().putString(offlineTaskPackageKey(taskId), packageJson.toString()).commit()
         } catch (_: Exception) { /* task view still works if prefetch is temporarily unavailable */ }
-        result
+        return result
     }
 
     private fun offlineTaskPackageKey(taskId: String): String {
