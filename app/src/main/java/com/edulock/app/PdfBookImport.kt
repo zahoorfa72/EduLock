@@ -1199,7 +1199,12 @@ private suspend fun copyUriToCache(context: Context, uri: Uri): File = withConte
 
 private suspend fun downloadPdfToCache(context: Context, url: String): File = withContext(Dispatchers.IO) {
     require(url.startsWith("https://", true)) { "Only secure HTTPS book downloads are allowed." }
-    val request = Request.Builder().url(url).header("User-Agent", "EduLock textbook importer").build()
+    val request = Request.Builder()
+        .url(url)
+        .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/126.0 Mobile Safari/537.36")
+        .header("Accept", "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8")
+        .header("Referer", if (url.startsWith("https://portal.stbb.edu.pk/ebooks/", true)) "https://portal.stbb.edu.pk/ebooks/" else url)
+        .build()
     bookHttpClient.newCall(request).execute().use { response ->
         if (!response.isSuccessful) throw IllegalStateException("The book website returned HTTP " + response.code + ".")
         val body = response.body ?: throw IllegalStateException("The book website returned an empty file.")
