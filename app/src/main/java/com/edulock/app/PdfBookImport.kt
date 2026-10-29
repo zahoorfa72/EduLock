@@ -588,13 +588,60 @@ internal fun PdfBookImportScreen(
             }
         }
 
-        Text("Suggested textbook websites", style = MaterialTheme.typography.titleMedium)
+        Text("Find and download textbook PDFs", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Official sources vary by board. The websites below open inside EduLock. Tap a PDF link, then choose whether to import its questions or keep the PDF in device storage.",
-            style = MaterialTheme.typography.bodySmall
+            "No website page is opened. EduLock searches for downloadable PDF files and lists the results here. Tap Download next to the book you need.",
+            style = MaterialTheme.typography.bodyMedium
         )
+        Button(
+            onClick = { scope.launch { findPdfDownloads() } },
+            enabled = !working && !pdfSearchLoading,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (pdfSearchLoading) "Searching for PDFs…" else "Find PDFs for this book")
+        }
+        if (pdfSearchLoading) {
+            androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+        if (pdfSearchResults.isNotEmpty()) {
+            Text("Direct PDF results", style = MaterialTheme.typography.titleMedium)
+            pdfSearchResults.forEach { result ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(result.title, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            Uri.parse(result.url).host.orEmpty(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Button(
+                            onClick = { scope.launch { downloadForDevice(result.url) } },
+                            enabled = !working,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Download PDF") }
+                        OutlinedButton(
+                            onClick = { scope.launch { downloadForImport(result.url) } },
+                            enabled = !working,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Extract questions") }
+                    }
+                }
+            }
+        }
+        OutlinedButton(
+            onClick = { showManualBrowser = !showManualBrowser; if (!showManualBrowser) activePortal = null },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (showManualBrowser) "Close optional website browser" else "Need a website? Open optional browser")
+        }
         Text(
-            "Accuracy note: text-based PDFs usually extract best. Scanned PDFs use on-device Latin-script OCR, which may not correctly read scanned Urdu/Sindhi or other non-Latin text. Check every question and answer before saving.",
+            "Accuracy note: EduLock checks that a downloaded file really begins as a PDF before saving it. Search results and external sites are not guaranteed to work or contain the exact edition. Text-based PDFs extract best; scanned Urdu/Sindhi PDFs may need manual checking.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -614,19 +661,22 @@ internal fun PdfBookImportScreen(
                 }
             }
         }
-        portalOptions.forEach { portal ->
-            OutlinedButton(
-                onClick = { activePortal = portal },
-                enabled = !working,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(portal.title, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-                    Text(portal.subtitle, style = MaterialTheme.typography.bodySmall)
+        if (showManualBrowser) {
+            Text("Optional website browser", style = MaterialTheme.typography.titleMedium)
+            portalOptions.forEach { portal ->
+                OutlinedButton(
+                    onClick = { activePortal = portal },
+                    enabled = !working,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(portal.title, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                        Text(portal.subtitle, style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }
-        activePortal?.let { portal ->
+        if (showManualBrowser) activePortal?.let { portal ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
