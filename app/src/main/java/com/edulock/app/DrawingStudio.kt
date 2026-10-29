@@ -64,10 +64,19 @@ fun DrawingStudioScreen(onBack: () -> Unit) {
             }
         }
         AppUiText("Choose a drawing challenge", fontWeight = FontWeight.Bold)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("Free draw", "Sun & sky", "House", "Flower", "Rainbow", "Tree", "Butterfly", "Boat", "Star").forEach { item ->
-                OutlinedButton(onClick = { guide = item }, modifier = Modifier.weight(1f)) {
-                    AppUiText(if (guide == item) "✓ $item" else item)
+        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+            columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
+            modifier = Modifier.fillMaxWidth().height(144.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            items(listOf("Free draw", "Sun & sky", "House", "Flower", "Rainbow", "Tree", "Butterfly", "Boat", "Star")) { item ->
+                OutlinedButton(
+                    onClick = { guide = item },
+                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 3.dp, vertical = 2.dp)
+                ) {
+                    AppUiText(if (guide == item) "✓ $item" else item, fontSize = 11.sp)
                 }
             }
         }
