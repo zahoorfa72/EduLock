@@ -343,10 +343,16 @@ internal fun PdfBookImportScreen(
                 DropdownMenu(expanded = languageMenu, onDismissRequest = { languageMenu = false }) {
                     pdfBookLanguages.forEach { (code, label) ->
                         DropdownMenuItem(text = { Text(label + " (" + code + ")") }, onClick = {
+                            val languageChanged = !languageCode.equals(code, true)
                             languageCode = code
                             customLanguage = false
                             languageMenu = false
                             activePortal = null
+                            if (languageChanged) {
+                                candidates = emptyList()
+                                status = "Question language changed to " + label + ". Previous drafts were cleared so they cannot be saved under the wrong language. Run Detect separate questions again or Generate questions + answers from summary/text."
+                                error = null
+                            }
                         })
                     }
                     DropdownMenuItem(text = { Text("Other language code…") }, onClick = {
@@ -354,12 +360,23 @@ internal fun PdfBookImportScreen(
                         customLanguage = true
                         languageMenu = false
                         activePortal = null
+                        candidates = emptyList()
+                        status = "Enter the custom language code, then regenerate question drafts to prevent questions from the previous language being saved."
+                        error = null
                     })
                 }
                 if (customLanguage) {
                     OutlinedTextField(
                         value = languageCode,
-                        onValueChange = { languageCode = it.filter { c -> c.isLetter() || c == '-' }.take(16) },
+                        onValueChange = {
+                            val nextCode = it.filter { c -> c.isLetter() || c == '-' }.take(16)
+                            if (!nextCode.equals(languageCode, true)) {
+                                candidates = emptyList()
+                                status = "Language code changed. Generate question drafts again so questions match the selected language."
+                                error = null
+                            }
+                            languageCode = nextCode
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Language code") },
                         singleLine = true
