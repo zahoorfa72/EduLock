@@ -208,8 +208,9 @@ internal fun PdfBookImportScreen(
         error = null
         status = "Downloading the PDF into EduLock book storage…"
         try {
-            val file = downloadPdfToCache(context, url)
-            startExtraction(file, url.substringAfterLast('/').substringBefore('?').ifBlank { "Textbook.pdf" })
+            val displayName = bookTitle.ifBlank { bookSubject + " - " + board + " class " + grade }
+            val file = downloadPdfToCache(context, url, displayName)
+            startExtraction(file, displayName)
         } catch (e: Exception) {
             error = e.message ?: "The website did not provide a downloadable PDF. Try the portal’s download link or select a PDF from your device."
             working = false
@@ -223,10 +224,10 @@ internal fun PdfBookImportScreen(
         status = "Downloading the book to your device’s Downloads folder…"
         var downloadedFile: File? = null
         try {
-            val file = downloadPdfToCache(context, url)
-            downloadedFile = file
             val suggestedName = preferredName?.takeIf { it.isNotBlank() }
                 ?: bookTitle.ifBlank { bookSubject + " - " + board + " class " + grade }
+            val file = downloadPdfToCache(context, url, suggestedName)
+            downloadedFile = file
             val savedLocation = savePdfToDownloads(context, file, suggestedName)
             savedPdfRefresh++
             status = "PDF downloaded successfully to " + savedLocation + ". The in-app copy is also available until you delete it manually. Nothing was uploaded to Supabase."
@@ -1420,7 +1421,7 @@ private suspend fun copyUriToCache(context: Context, uri: Uri): File = withConte
     }
 }
 
-private suspend fun downloadPdfToCache(context: Context, url: String): File = withContext(Dispatchers.IO) {
+private suspend fun downloadPdfToCache(context: Context, url: String, displayName: String? = null): File = withContext(Dispatchers.IO) {
     require(url.startsWith("https://", true)) { "Only secure HTTPS book downloads are allowed." }
     val request = Request.Builder()
         .url(url)
@@ -1434,7 +1435,21 @@ private suspend fun downloadPdfToCache(context: Context, url: String): File = wi
         val length = body.contentLength()
         require(length <= 120L * 1024L * 1024L || length < 0L) { "PDF exceeds the 120 MB import limit." }
         val folder = File(context.filesDir, "pdf-books").apply { mkdirs() }
-        val out = File(folder, "download-" + System.currentTimeMillis() + ".pdf")
+        val requestedName = (displayName?.takeIf { it.isNotBlank() }
+            ?: url.substringAfterLast('/').substringBefore('?').ifBlank { "Textbook" })
+            .substringAfterLast('/')
+            .replace(Regex("""(?i)\.pdf$"""), "")
+            .replace(Regex("""[^A-Za-z0-9._ -]"""), "_")
+            .trim()
+            .take(120)
+            .ifBlank { "Textbook" }
+        val baseName = requestedName + ".pdf"
+        var out = File(folder, baseName)
+        var copyNumber = 2
+        while (out.exists()) {
+            out = File(folder, requestedName + " (" + copyNumber + ").pdf")
+            copyNumber++
+        }
         try {
             body.byteStream().use { input -> out.outputStream().use { output ->
                 val prefix = ByteArray(5)
