@@ -2680,16 +2680,26 @@ private fun EduLockApp(repository: EduLockRepository) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             DashboardIconTile(
-                                icon = "👨‍👩‍👧", title = "Child profiles", subtitle = "Profiles, pairing and daily limits",
-                                modifier = Modifier.weight(1f), accent = Color(0xFF6756E8),
-                                onClick = { screen = AppScreen.CHILDREN; execute { children = repository.loadChildren(familyId) } }
-                            )
-                            DashboardIconTile(
                                 icon = "📵", title = "App limits", subtitle = "Allowed apps and screen-time schedules",
                                 modifier = Modifier.weight(1f), accent = Color(0xFFE19B32),
-                                onClick = { screen = AppScreen.CHILDREN; execute { children = repository.loadChildren(familyId) } }
+                                onClick = {
+                                    execute {
+                                        val latestChildren = repository.loadChildren(familyId)
+                                        children = latestChildren
+                                        val targetChild = selectedChild?.let { current -> latestChildren.firstOrNull { it.id == current.id } } ?: latestChildren.firstOrNull()
+                                        selectedChild = targetChild
+                                        if (targetChild == null) {
+                                            notice = "Create a child profile first to configure app limits."
+                                            screen = AppScreen.APP_SETTINGS
+                                        } else {
+                                            childInstalledApps = repository.loadInstalledApps(targetChild.id)
+                                            allowedApps = repository.loadAllowedApps(targetChild.id)
+                                            appGroups = repository.loadAppGroups(targetChild.id)
+                                            screen = AppScreen.ALLOWED_APPS
+                                        }
+                                    }
+                                }
                             )
-                        }
                         DashboardIconTile(
                             icon = "🆘", title = "Emergency access", subtitle = "Parent-approved app access, once per day",
                             accent = Color(0xFFDA6195),
@@ -2747,7 +2757,6 @@ private fun EduLockApp(repository: EduLockRepository) {
                             "Country" to "Curriculum country and regional question suggestions",
                             "Learning language" to "Language used for learning content",
                             "App language" to "Language used by the app interface",
-                            "Child profiles" to "Child profiles, country, grade, language, daily reward cap, game limit, Kids Mode, pairing codes and delink",
                             "App limits" to "Allowed apps, blocked apps, daily screen-time limits and weekly schedules",
                             "Emergency & logout codes" to "Parent-generated one-time logout PIN, no time expiry, emergency access and strict daily limits",
                             "Question rewards" to "Question reward minutes, concept group bonuses and learning tasks",
@@ -2769,7 +2778,24 @@ private fun EduLockApp(repository: EduLockRepository) {
                                         "Country" -> { countryPickerTarget = "parent"; countrySearch = ""; countryPickerOpen = true }
                                         "Learning language" -> { languagePickerTarget = "parent-learning"; languageSearch = ""; languagePickerOpen = true }
                                         "App language" -> { languagePickerTarget = "display"; languageSearch = ""; languagePickerOpen = true }
-                                        "Child profiles", "App limits", "Emergency access", "Emergency & logout codes" -> {
+                                        "App limits" -> {
+                                            execute {
+                                                val latestChildren = repository.loadChildren(familyId)
+                                                children = latestChildren
+                                                val targetChild = selectedChild?.let { current -> latestChildren.firstOrNull { it.id == current.id } } ?: latestChildren.firstOrNull()
+                                                selectedChild = targetChild
+                                                if (targetChild == null) {
+                                                    notice = "Create a child profile first to configure app limits."
+                                                    screen = AppScreen.APP_SETTINGS
+                                                } else {
+                                                    childInstalledApps = repository.loadInstalledApps(targetChild.id)
+                                                    allowedApps = repository.loadAllowedApps(targetChild.id)
+                                                    appGroups = repository.loadAppGroups(targetChild.id)
+                                                    screen = AppScreen.ALLOWED_APPS
+                                                }
+                                            }
+                                        }
+                                        "Emergency access", "Emergency & logout codes" -> {
                                             screen = AppScreen.CHILDREN
                                             execute { children = repository.loadChildren(familyId) }
                                         }
