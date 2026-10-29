@@ -174,7 +174,7 @@ internal fun PdfBookImportScreen(
             if (parsed.isNotEmpty()) {
                 status = "Extracted " + parsed.size + " candidate questions. The PDF is kept on this device until you delete it manually. Review every prompt and answer before saving."
             } else {
-                status = "Text was extracted, but no clear question boundaries were found. Review the text and try parsing again."
+                status = "Text was extracted, but the page layout did not contain clear question boundaries. Use Generate questions + answers from summary/text below, then review the generated drafts before saving."
             }
         } catch (e: Exception) {
             error = e.message ?: "Could not read this PDF. Try a text-based PDF or a smaller file."
