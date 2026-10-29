@@ -7794,7 +7794,7 @@ private fun isAccessibilityServiceOperational(context: Context): Boolean {
     return lastTick > 0L && age in 0L..30_000L
 }
 
-class MainActivity : androidx.activity.ComponentActivity() {
+class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         applyManagedDeviceProtection(applicationContext)
