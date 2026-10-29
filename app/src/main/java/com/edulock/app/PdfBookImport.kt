@@ -335,6 +335,7 @@ internal fun PdfBookImportScreen(
                     selectedSubjectId = subject.id
                     bookSubject = subject.title
                     languageCode = subject.languageCode
+                    customLanguage = subject.languageCode !in pdfBookLanguages.map { it.first }
                     grade = subject.gradeLevel.toString()
                     subjectMenu = false
                 })
