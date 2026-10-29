@@ -142,6 +142,7 @@ internal fun PdfBookImportScreen(
     var status by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var extractedText by remember { mutableStateOf("") }
+    var showExtractedTextPreview by remember { mutableStateOf(false) }
     var candidates by remember { mutableStateOf<List<PdfQuestionDraft>>(emptyList()) }
     var temporaryPdf by remember { mutableStateOf<File?>(null) }
     var pickedFileName by remember { mutableStateOf("") }
@@ -802,16 +803,63 @@ internal fun PdfBookImportScreen(
             androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
 
-        if (extractedText.isNotBlank() && candidates.isEmpty() && !working) {
-            Text("Extracted text preview", style = MaterialTheme.typography.titleMedium)
-            Text(extractedText.take(12000), style = MaterialTheme.typography.bodySmall)
-            Button(
-                onClick = {
-                    candidates = detectPdfQuestions(extractedText, languageCode)
-                    status = if (candidates.isEmpty()) "No clear questions detected. This may be a scanned/non-question chapter or the document’s layout is not supported. You can select another PDF." else "Review the candidate questions below."
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("Try detecting questions again") }
+        if (extractedText.isNotBlank() && !working) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Improve question extraction", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "For chapter summaries or scanned pages, generate answer-backed drafts from the readable text. Answers are taken from the extracted source, not invented. Review OCR and every answer before saving.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Button(
+                        onClick = {
+                            val detected = detectPdfQuestions(extractedText, languageCode)
+                            val before = candidates.size
+                            val merged = (candidates + detected)
+                                .distinctBy { it.prompt.lowercase(Locale.ROOT).replace(Regex("""[^\\p{L}\\p{N}]+"""), " ").trim() }
+                                .take(80)
+                            candidates = merged
+                            status = if (merged.size > before) {
+                                "Added " + (merged.size - before) + " separately detected question(s). Review prompts, options and answers before saving."
+                            } else {
+                                "No additional clear questions were found. Try generating questions from the chapter text below or correct the extracted text first."
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Detect separate questions again") }
+                    Button(
+                        onClick = {
+                            val generated = generateQuestionsFromSummary(extractedText, languageCode)
+                            if (generated.isEmpty()) {
+                                status = "Not enough readable textbook text to generate grounded question-and-answer drafts. Review the OCR text or choose a text-based PDF."
+                            } else {
+                                val before = candidates.size
+                                val merged = (candidates + generated)
+                                    .distinctBy { it.prompt.lowercase(Locale.ROOT).replace(Regex("""[^\\p{L}\\p{N}]+"""), " ").trim() }
+                                    .take(80)
+                                candidates = merged
+                                status = "Generated " + generated.size + " source-based question-and-answer draft(s); " +
+                                    (merged.size - before) + " new draft(s) added. Review them all before saving."
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Generate questions + answers from summary/text") }
+                    OutlinedButton(
+                        onClick = { showExtractedTextPreview = !showExtractedTextPreview },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (showExtractedTextPreview) "Hide extracted text" else "Review extracted text / OCR") }
+                }
+            }
+            if (showExtractedTextPreview) {
+                Text("Extracted text preview", style = MaterialTheme.typography.titleMedium)
+                Text(extractedText.take(12000), style = MaterialTheme.typography.bodySmall)
+            }
         }
 
         if (candidates.isNotEmpty()) {
