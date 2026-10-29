@@ -201,15 +201,19 @@ internal fun PdfBookImportScreen(
         working = true
         error = null
         status = "Downloading the book to your device’s Downloads folder…"
+        var temporaryFile: File? = null
         try {
             val file = downloadPdfToCache(context, url)
+            temporaryFile = file
             val suggestedName = bookTitle.ifBlank { bookSubject + " - " + board + " class " + grade }
             val savedLocation = savePdfToDownloads(context, file, suggestedName)
             file.delete()
+            temporaryFile = null
             status = "PDF downloaded to device storage. It was not uploaded to Supabase."
             error = null
             pickedFileName = savedLocation
         } catch (e: Exception) {
+            temporaryFile?.delete()
             error = e.message ?: "Could not download the PDF. The source may require a sign-in or a direct PDF URL."
         } finally {
             working = false
