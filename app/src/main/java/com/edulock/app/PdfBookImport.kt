@@ -3,6 +3,10 @@ package com.edulock.app
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Build
@@ -52,19 +56,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.paddle.ocr.EngineConfig
+import com.paddle.ocr.PaddleOCR
+import com.paddle.ocr.PaddleOCRConfig
+import com.paddle.ocr.model.OCRResult
+import com.paddle.ocr.util.OpenCVUtils
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.io.IOException
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -166,7 +175,9 @@ internal fun PdfBookImportScreen(
         error = null
         status = "Reading PDF on this device. No PDF is uploaded to Supabase."
         try {
-            val extracted = extractPdfText(context, file)
+            val extracted = extractPdfText(context, file, languageCode) { message ->
+                status = message
+            }
             val parsed = detectPdfQuestions(extracted, languageCode)
             extractedText = extracted
             pickedFileName = displayName
@@ -1548,7 +1559,12 @@ private suspend fun savePdfToDownloads(context: Context, source: File, displayNa
         }
     }
 
-private suspend fun extractPdfText(context: Context, file: File): String {
+private suspend fun extractPdfText(
+    context: Context,
+    file: File,
+    languageCode: String,
+    onProgress: (String) -> Unit = {},
+): String {
     validatePdfFile(file)
     val digitalText = try {
         withContext(Dispatchers.IO) {
@@ -1562,43 +1578,158 @@ private suspend fun extractPdfText(context: Context, file: File): String {
         if (e.message?.contains("300 pages") == true) throw e
         ""
     }
-    if (digitalText.replace(Regex("\\s+"), "").length >= 80) return digitalText
+    // A PDF with a usable text layer is more faithful than OCR. Keep its original script.
+    if (digitalText.replace(Regex("""\s+"""), "").length >= 80) return digitalText
 
-    // OCR fallback for image-only/scanned PDFs. ML Kit Latin OCR may not recognize all
-    // Urdu/Sindhi scripts; parents should always review and correct OCR results.
-    return withContext(Dispatchers.IO) {
-        val fileDescriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-        fileDescriptor.use { descriptor ->
-            PdfRenderer(descriptor).use { renderer ->
-                require(renderer.pageCount in 1..120) { "Scanned PDFs must contain 1–120 pages for on-device OCR." }
-                val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-                try {
+    onProgress("Preparing multilingual OCR for " + languageCode + "…")
+    val models = PaddleOcrModelManager.ensureModels(context, languageCode, onProgress)
+    if (!OpenCVUtils.init(context.applicationContext)) {
+        throw IOException("Could not initialize the on-device OCR image engine. Restart EduLock and retry.")
+    }
+
+    val ocr = try {
+        PaddleOCR.create(
+            context = context.applicationContext,
+            config = PaddleOCRConfig(
+                recScoreThresh = 0.0f,
+                recBatchSize = 4,
+                detLimitSideLen = 736,
+                detMaxSideLimit = 3200,
+            ),
+            engineConfig = EngineConfig(numThreads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)),
+            detModelAssetPath = models.detectionModel.absolutePath,
+            recModelAssetPath = models.recognitionModel.absolutePath,
+            recConfigAssetPath = models.recognitionDictionary.absolutePath,
+        )
+    } catch (e: Exception) {
+        throw IOException("Could not load the " + models.languageModel + " OCR model. Remove the cached model in app storage only if the error persists, then retry.", e)
+    }
+
+    try {
+        onProgress("Reading scanned pages with " + models.languageModel.replace('_', ' ') + "…")
+        val text = withContext(Dispatchers.IO) {
+            val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+            descriptor.use { fd ->
+                PdfRenderer(fd).use { renderer ->
+                    require(renderer.pageCount in 1..120) {
+                        "Scanned PDFs must contain 1–120 pages for on-device OCR. Select a smaller PDF."
+                    }
                     val result = StringBuilder()
                     for (index in 0 until renderer.pageCount) {
+                        onProgress("Recognizing scanned page " + (index + 1) + " of " + renderer.pageCount + "…")
                         val page = renderer.openPage(index)
                         try {
-                            val scale = minOf(2.0, 1700.0 / maxOf(page.width, page.height).toDouble())
-                            val width = (page.width * scale).toInt().coerceAtLeast(1)
-                            val height = (page.height * scale).toInt().coerceAtLeast(1)
-                            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                            // Render a larger scan while bounding peak bitmap memory on phones.
+                            val scale = min(2.4, 2200.0 / max(page.width, page.height).toDouble())
+                            val width = max(1, (page.width * scale).toInt())
+                            val height = max(1, (page.height * scale).toInt())
+                            val source = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                             try {
-                                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                                val text = recognizer.process(InputImage.fromBitmap(bitmap, 0)).await()
-                                result.append("\n\n").append(text.text)
+                                page.render(source, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                                val enhanced = enhanceForOcr(source)
+                                try {
+                                    val recognized = ocr.recognize(enhanced)
+                                    val rtl = isRightToLeftOcrLanguage(languageCode)
+                                    val lines = arrangeOcrLines(recognized.results, rtl)
+                                    if (lines.isNotEmpty()) {
+                                        result.append("\n\n").append(lines.joinToString("\n"))
+                                    }
+                                } finally {
+                                    if (enhanced !== source) enhanced.recycle()
+                                }
                             } finally {
-                                bitmap.recycle()
+                                source.recycle()
                             }
                         } finally {
                             page.close()
                         }
                     }
-                    result.toString()
-                } finally {
-                    recognizer.close()
+                    result.toString().trim()
                 }
             }
         }
+        if (text.replace(Regex("""\s+"""), "").length < 12) {
+            throw IOException(
+                "The multilingual OCR engine found too little readable text in this scan. Try a higher-resolution PDF or clearer pages; no unreliable questions were generated."
+            )
+        }
+        onProgress("Multilingual OCR complete. Review the recognized text before creating questions.")
+        return text
+    } finally {
+        ocr.release()
     }
+}
+
+private fun enhanceForOcr(source: Bitmap): Bitmap {
+    val enhanced = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+    val contrast = ColorMatrix(
+        floatArrayOf(
+            1.14f, 0f, 0f, 0f, -12f,
+            0f, 1.14f, 0f, 0f, -12f,
+            0f, 0f, 1.14f, 0f, -12f,
+            0f, 0f, 0f, 1f, 0f,
+        )
+    )
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+        colorFilter = ColorMatrixColorFilter(contrast)
+    }
+    Canvas(enhanced).drawBitmap(source, 0f, 0f, paint)
+    paint.colorFilter = null
+    return enhanced
+}
+
+/** Paddle boxes are returned in left-to-right order; reverse the word-box order for RTL scripts. */
+private fun arrangeOcrLines(results: List<OCRResult>, rightToLeft: Boolean): List<String> {
+    data class Positioned(
+        val result: OCRResult,
+        val centerX: Float,
+        val centerY: Float,
+        val height: Float,
+        val top: Float,
+    )
+    data class Row(var centerY: Float, var height: Float, val items: MutableList<Positioned>)
+
+    val positioned = results.mapNotNull { item ->
+        val points = item.box.points
+        if (points.isEmpty() || item.text.isBlank()) null
+        else {
+            val xs = points.map { it.x }
+            val ys = points.map { it.y }
+            Positioned(
+                result = item,
+                centerX = (xs.minOrNull()!! + xs.maxOrNull()!!) / 2f,
+                centerY = (ys.minOrNull()!! + ys.maxOrNull()!!) / 2f,
+                height = (ys.maxOrNull()!! - ys.minOrNull()!!).coerceAtLeast(1f),
+                top = ys.minOrNull()!!,
+            )
+        }
+    }.sortedBy { it.centerY }
+
+    val rows = mutableListOf<Row>()
+    for (item in positioned) {
+        val target = rows.lastOrNull {
+            abs(item.centerY - it.centerY) <= max(item.height, it.height) * 0.62f
+        }
+        if (target == null) {
+            rows.add(Row(item.centerY, item.height, mutableListOf(item)))
+        } else {
+            target.items.add(item)
+            target.centerY = target.items.map { it.centerY }.average().toFloat()
+            target.height = max(target.height, item.height)
+        }
+    }
+    return rows.sortedBy { it.centerY }.map { row ->
+        val ordered = if (rightToLeft) row.items.sortedByDescending { it.centerX }
+        else row.items.sortedBy { it.centerX }
+        ordered.joinToString(" ") { it.result.text.trim() }.trim()
+    }.filter { it.isNotBlank() }
+}
+
+private fun isRightToLeftOcrLanguage(languageCode: String): Boolean {
+    val code = languageCode.lowercase(Locale.ROOT)
+    return code in setOf("ar", "ur", "sd", "fa", "ps", "ckb", "ug", "ku", "bal") ||
+        code.startsWith("ar-") || code.startsWith("ur-") || code.startsWith("sd-") ||
+        code.startsWith("fa-") || code.startsWith("ps-")
 }
 
 private fun detectPdfQuestions(rawText: String, language: String): List<PdfQuestionDraft> {
