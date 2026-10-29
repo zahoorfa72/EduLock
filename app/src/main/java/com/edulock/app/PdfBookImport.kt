@@ -636,11 +636,16 @@ private fun looksLikePdfUrl(url: String): Boolean {
 private suspend fun copyUriToCache(context: Context, uri: Uri): File = withContext(Dispatchers.IO) {
     val folder = File(context.cacheDir, "pdf-book-import").apply { mkdirs() }
     val out = File(folder, "picked-" + System.currentTimeMillis() + ".pdf")
-    val input = context.contentResolver.openInputStream(uri)
-        ?: throw IllegalArgumentException("Could not open the selected PDF.")
-    input.use { source -> out.outputStream().use { target -> source.copyTo(target) } }
-    validatePdfFile(out)
-    out
+    try {
+        val input = context.contentResolver.openInputStream(uri)
+            ?: throw IllegalArgumentException("Could not open the selected PDF.")
+        input.use { source -> out.outputStream().use { target -> source.copyTo(target) } }
+        validatePdfFile(out)
+        out
+    } catch (e: Exception) {
+        out.delete()
+        throw e
+    }
 }
 
 private suspend fun downloadPdfToCache(context: Context, url: String): File = withContext(Dispatchers.IO) {
@@ -649,31 +654,34 @@ private suspend fun downloadPdfToCache(context: Context, url: String): File = wi
     bookHttpClient.newCall(request).execute().use { response ->
         if (!response.isSuccessful) throw IllegalStateException("The book website returned HTTP " + response.code + ".")
         val body = response.body ?: throw IllegalStateException("The book website returned an empty file.")
-        val type = body.contentType()?.toString().orEmpty()
         val length = body.contentLength()
         require(length <= 120L * 1024L * 1024L || length < 0L) { "PDF exceeds the 120 MB import limit." }
         val folder = File(context.cacheDir, "pdf-book-import").apply { mkdirs() }
         val out = File(folder, "download-" + System.currentTimeMillis() + ".pdf")
-        body.byteStream().use { input -> out.outputStream().use { output ->
-            val prefix = ByteArray(5)
-            val firstCount = input.read(prefix)
-            if (firstCount < 5 || String(prefix, 0, 5, Charsets.US_ASCII) != "%PDF-") {
-                out.delete()
-                throw IllegalStateException("This website link did not return a direct PDF file. Select the book’s PDF download link.")
-            }
-            output.write(prefix)
-            val buffer = ByteArray(64 * 1024)
-            var copied = prefix.size.toLong()
-            while (true) {
-                val count = input.read(buffer)
-                if (count <= 0) break
-                copied += count
-                require(copied <= 120L * 1024L * 1024L) { "PDF exceeds the 120 MB import limit." }
-                output.write(buffer, 0, count)
-            }
-        } }
-        validatePdfFile(out)
-        out
+        try {
+            body.byteStream().use { input -> out.outputStream().use { output ->
+                val prefix = ByteArray(5)
+                val firstCount = input.read(prefix)
+                if (firstCount < 5 || String(prefix, 0, 5, Charsets.US_ASCII) != "%PDF-") {
+                    throw IllegalStateException("This website link did not return a direct PDF file. Select the book’s PDF download link.")
+                }
+                output.write(prefix)
+                val buffer = ByteArray(64 * 1024)
+                var copied = prefix.size.toLong()
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count <= 0) break
+                    copied += count
+                    require(copied <= 120L * 1024L * 1024L) { "PDF exceeds the 120 MB import limit." }
+                    output.write(buffer, 0, count)
+                }
+            } }
+            validatePdfFile(out)
+            out
+        } catch (e: Exception) {
+            out.delete()
+            throw e
+        }
     }
 }
 
