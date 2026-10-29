@@ -15,6 +15,7 @@
 package com.paddle.ocr.model
 
 import android.content.Context
+import java.io.File
 import com.paddle.ocr.util.YamlUtils
 
 data class ModelConfig(
@@ -23,7 +24,12 @@ data class ModelConfig(
     companion object {
         fun parse(context: Context, assetPath: String): ModelConfig {
             val content = try {
-                context.assets.open(assetPath).bufferedReader().use { it.readText() }
+                val local = File(assetPath)
+                if (local.isAbsolute && local.isFile) {
+                    local.bufferedReader().use { it.readText() }
+                } else {
+                    context.assets.open(assetPath).bufferedReader().use { it.readText() }
+                }
             } catch (t: Throwable) {
                 throw OCRError.ConfigParseFailed(assetPath, t)
             }
