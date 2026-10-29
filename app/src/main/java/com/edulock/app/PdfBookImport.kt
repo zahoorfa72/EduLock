@@ -1649,9 +1649,11 @@ private fun detectPdfQuestions(rawText: String, language: String): List<PdfQuest
             .replace(Regex("""\s+"""), " ").trim()
         if (prompt.length !in 8..1000) continue
         if (prompt.count { it.isLetterOrDigit() } < 6) continue
+        // Never label mixed-script OCR output as the selected question language.
+        if (!isTextInSelectedLanguage(prompt, language)) continue
         val type = if (options.size >= 2) "multiple_choice" else "short_answer"
         var answer = ""
-        if (answerLine.isNotBlank()) {
+        if (answerLine.isNotBlank() && isTextInSelectedLanguage(answerLine, language)) {
             answer = if (options.size >= 2) {
                 val letter = answerLine.trim().trimEnd('.', ')', ' ').uppercase(Locale.ROOT)
                 when {
@@ -1676,96 +1678,133 @@ private fun detectPdfQuestions(rawText: String, language: String): List<PdfQuest
 }
 
 private fun generateQuestionsFromSummary(rawText: String, language: String): List<PdfQuestionDraft> {
+    val lang = language.lowercase(Locale.ROOT)
     val normalized = rawText
         .replace("\r\n", "\n")
         .replace('\r', '\n')
         .replace('\u0000', ' ')
+        .replace('\uFFFD', ' ')
+        .replace('\u25A1', ' ')
+        .replace('\u25AF', ' ')
         .replace(Regex("""(?i)\b(?:question|ques)\s+(?:[A-Z]|\d{1,3})\b"""), "\n")
-    val paragraphs = normalized
-        .split(Regex("""\n\s*\n+|\u000c+"""))
-        .map { paragraph -> paragraph.replace(Regex("""[ \t]*\n[ \t]*"""), " ").trim() }
+
+    // Work with individual source lines first. Collapsing the whole OCR page into one
+    // paragraph made unrelated languages/headers become a single fabricated answer.
+    val sourceLines = normalized
+        .split(Regex("""[\n\u000c]+"""))
+        .map { it.replace(Regex("""\s+"""), " ").trim().trim('•', '-', '–', '—', ' ', '\t') }
         .filter { it.isNotBlank() }
-    val sentences = paragraphs.flatMap { paragraph ->
-        paragraph.split(Regex("""(?<=[.!?؟۔])\s+|(?<=;)\s+"""))
-    }.map { it.trim().trim('•', '-', '–', '—', ' ', '\t', '\n') }
-        .filter { sentence ->
-            val letters = sentence.count { it.isLetterOrDigit() }
-            sentence.length in 22..320 &&
-                letters >= 12 &&
-                !sentence.contains('?') &&
-                !sentence.contains('؟') &&
-                !Regex("""(?i)^\s*(?:page\s*\d+|chapter\s+\d+|exercise\s+\d+|answer\s+key|contents|www\.|https?://)""").containsMatchIn(sentence) &&
-                !Regex("""(?i)\b\d+(?:st|nd|rd|th)?\s+image\s*=""").containsMatchIn(sentence) &&
-                sentence.count { it == '=' } <= 1
-        }.distinctBy { it.lowercase(Locale.ROOT).replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim() }
 
-    val definitionPattern = Regex("""(?i)^(.{2,80}?)\s+(means|refers to|is called|are called)\s+(.{3,220})$""")
-    val copulaPattern = Regex("""(?i)^(.{2,80}?)\s+(is|are|was|were)\s+(.{3,220})$""")
-    val containsPattern = Regex("""(?i)^(.{2,80}?)\s+(has|have|contains|include|includes|consists of|comprises)\s+(.{3,220})$""")
+    val facts = sourceLines.flatMap { line ->
+        val sentenceParts = line.split(Regex("""(?<=[.!?؟۔])\s+|(?<=;)\s+"""))
+        sentenceParts.map { it.trim().trimEnd('.', '!', '?', '؟', '۔', ';', ':').trim() }
+    }.filter { fact ->
+        fact.length in 22..320 &&
+            fact.count { it.isLetterOrDigit() } >= 12 &&
+            !fact.contains('\uFFFD') &&
+            !fact.contains('\u25A1') &&
+            !Regex("""(?i)^\s*(?:page\s*\d+|chapter\s+\d+|exercise\s+\d+|answer\s+key|contents|www\.|https?://|so\s*\(?b)""").containsMatchIn(fact) &&
+            !Regex("""(?i)\b\d+(?:st|nd|rd|th)?\s+image\s*=""").containsMatchIn(fact) &&
+            fact.count { it == '=' } == 0 &&
+            isTextInSelectedLanguage(fact, lang)
+    }.distinctBy { it.lowercase(Locale.ROOT).replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim() }
+
+    // If we cannot phrase a question in the selected language, do not fall back to
+    // an English prompt or attach an entire mixed-language page as the answer.
     val unique = linkedMapOf<String, PdfQuestionDraft>()
-
-    for (rawSentence in sentences) {
-        val fact = rawSentence.trim().trimEnd('.', '!', '?', '؟', '۔', ';', ':').trim()
-        if (fact.length !in 20..320) continue
-        val definition = definitionPattern.matchEntire(fact)
-        val copula = copulaPattern.matchEntire(fact)
-        val contains = containsPattern.matchEntire(fact)
-        val prompt: String
-        val answer: String
-
-        when {
-            language.equals("en", true) && definition != null -> {
-                prompt = "What does " + definition.groupValues[1].trim() + " mean?"
-                answer = definition.groupValues[3].trim()
-            }
-            language.equals("en", true) && copula != null -> {
-                val subject = copula.groupValues[1].trim()
-                val verb = copula.groupValues[2].lowercase(Locale.ROOT)
-                prompt = "What " + (if (verb == "are" || verb == "were") "are" else "is") + " " + subject + "?"
-                answer = copula.groupValues[3].trim()
-            }
-            language.equals("en", true) && contains != null -> {
-                val subject = contains.groupValues[1].trim()
-                val verb = contains.groupValues[2].lowercase(Locale.ROOT)
-                prompt = when (verb) {
-                    "has", "have" -> "What does " + subject + " have?"
-                    "contains", "include", "includes", "consists of", "comprises" -> "What does " + subject + " contain?"
-                    else -> "What is stated about " + subject + "?"
+    for (fact in facts) {
+        val words = fact.split(Regex("""\s+""")).filter { it.length > 2 }
+        val topic = words.take(4).joinToString(" ")
+        val prompt = when (lang) {
+            "en" -> {
+                val definition = Regex("""(?i)^(.{2,80}?)\s+(means|refers to|is called|are called)\s+(.{3,220})$""").matchEntire(fact)
+                val copula = Regex("""(?i)^(.{2,80}?)\s+(is|are|was|were)\s+(.{3,220})$""").matchEntire(fact)
+                val contains = Regex("""(?i)^(.{2,80}?)\s+(has|have|contains|include|includes|consists of|comprises)\s+(.{3,220})$""").matchEntire(fact)
+                when {
+                    definition != null -> "What does " + definition.groupValues[1].trim() + " mean?"
+                    copula != null -> "What " + (if (copula.groupValues[2].lowercase(Locale.ROOT) in setOf("are", "were")) "are" else "is") + " " + copula.groupValues[1].trim() + "?"
+                    contains != null -> "What does " + contains.groupValues[1].trim() + " contain?"
+                    else -> "According to the text, what is stated about " + topic + "?"
                 }
-                answer = contains.groupValues[3].trim()
             }
-            else -> {
-                val words = fact.split(Regex("""\s+""")).filter { it.length > 2 }
-                val stopWords = setOf("the", "and", "for", "with", "from", "that", "this", "are", "was", "were", "have", "has", "can", "will", "should", "would", "their", "there", "into", "your", "you", "our", "they", "about", "which", "when", "where", "what", "who")
-                val topicWords = words.filterNot { it.lowercase(Locale.ROOT) in stopWords }.take(4)
-                val topic = topicWords.joinToString(" ").ifBlank { words.take(4).joinToString(" ") }
-                prompt = when (language.lowercase(Locale.ROOT)) {
-                    "ur" -> "متن کے مطابق، \"" + topic + "\" کے بارے میں ایک اہم حقیقت کیا ہے؟"
-                    "sd" -> "متن موجب، \"" + topic + "\" بابت هڪ اهم حقيقت ڪهڙي آهي؟"
-                    "ar" -> "وفقًا للنص، ما حقيقة مهمة عن \"" + topic + "\"؟"
-                    "hi" -> "पाठ के अनुसार, \"" + topic + "\" के बारे में एक महत्वपूर्ण तथ्य क्या है?"
-                    "es" -> "Según el texto, ¿qué dato importante se indica sobre \"" + topic + "\"?"
-                    "fr" -> "Selon le texte, quel fait important est indiqué sur « " + topic + " » ?"
-                    "bn" -> "পাঠ্য অনুযায়ী, \"" + topic + "\" সম্পর্কে একটি গুরুত্বপূর্ণ তথ্য কী?"
-                    else -> "According to the text, what important fact is stated about \"" + topic + "\"?"
-                }
-                answer = fact
-            }
+            "sd" -> "متن موجب، \"" + topic + "\" بابت ڪهڙي اهم ڳالهه ٻڌائي وئي آهي؟"
+            "ur" -> "متن کے مطابق، \"" + topic + "\" کے بارے میں کون سی اہم بات بتائی گئی ہے؟"
+            "ar" -> "وفقًا للنص، ما المعلومة المهمة عن \"" + topic + "\"؟"
+            "fa" -> "طبق متن، چه نکته مهمی درباره «" + topic + "» بیان شده است؟"
+            "ps" -> "د متن له مخې، د \"" + topic + "\" په اړه کوم مهم ټکی بیان شوی؟"
+            "hi" -> "पाठ के अनुसार, \"" + topic + "\" के बारे में कौन-सी महत्वपूर्ण बात बताई गई है?"
+            "bn" -> "পাঠ্য অনুযায়ী, \"" + topic + "\" সম্পর্কে কোন গুরুত্বপূর্ণ তথ্য দেওয়া হয়েছে?"
+            "es" -> "Según el texto, ¿qué dato importante se indica sobre " + topic + "?"
+            "fr" -> "Selon le texte, quel fait important est indiqué sur « " + topic + " » ?"
+            "de" -> "Welche wichtige Information nennt der Text über " + topic + "?"
+            "it" -> "Quale informazione importante fornisce il testo su " + topic + "?"
+            "pt" -> "Segundo o texto, que informação importante é apresentada sobre " + topic + "?"
+            "tr" -> "Metne göre " + topic + " hakkında hangi önemli bilgi veriliyor?"
+            "id" -> "Menurut teks, informasi penting apa yang disampaikan tentang " + topic + "?"
+            "ms" -> "Menurut teks, apakah maklumat penting tentang " + topic + "?"
+            "sw" -> "Kulingana na maandishi, ni taarifa gani muhimu kuhusu " + topic + "?"
+            "ru" -> "Согласно тексту, какая важная информация приведена о теме «" + topic + "»?"
+            "uk" -> "Яку важливу інформацію про тему «" + topic + "» наведено в тексті?"
+            "el" -> "Σύμφωνα με το κείμενο, ποια σημαντική πληροφορία δίνεται για το θέμα «" + topic + "»;"
+            "he" -> "לפי הטקסט, איזה מידע חשוב נמסר על " + topic + "?"
+            else -> continue
         }
 
-        if (prompt.length !in 8..350 || answer.length !in 2..320) continue
+        if (!isTextInSelectedLanguage(prompt, lang)) continue
+        if (prompt.length !in 8..350 || fact.length !in 22..320) continue
         val key = prompt.lowercase(Locale.ROOT).replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim()
-        if (key.length >= 8 && !unique.containsKey(key)) {
+        if (key.isNotBlank() && !unique.containsKey(key)) {
             unique[key] = PdfQuestionDraft(
                 prompt = prompt,
-                answer = answer,
-                solution = "Source text: " + fact + ". Review the source and answer before saving.",
+                answer = fact,
+                // Keep the explanation in the source/selected language; don't append English
+                // instructions to a Sindhi/Urdu answer.
+                solution = fact,
                 questionType = "short_answer",
-                languageCode = language,
+                languageCode = lang,
                 include = true
             )
         }
         if (unique.size >= 40) break
     }
     return unique.values.toList()
+}
+
+private fun isTextInSelectedLanguage(text: String, language: String): Boolean {
+    val letters = text.filter { it.isLetter() }
+    if (letters.length < 5) return false
+    if (text.any { it == '\uFFFD' || it == '\u25A1' || it == '\u25AF' || it in '\uE000'..'\uF8FF' }) return false
+
+    fun countIn(range: (Char) -> Boolean): Int = letters.count(range)
+    val code = language.lowercase(Locale.ROOT)
+    val expectedCount = when {
+        code in setOf("sd", "ur", "ar", "fa", "ps", "ckb") ->
+            countIn { it in '\u0600'..'\u06FF' || it in '\u0750'..'\u077F' || it in '\u08A0'..'\u08FF' }
+        code in setOf("hi", "mr", "ne", "sa", "mai") -> countIn { it in '\u0900'..'\u097F' }
+        code in setOf("bn", "as") -> countIn { it in '\u0980'..'\u09FF' }
+        code == "pa" -> countIn { it in '\u0A00'..'\u0A7F' }
+        code == "gu" -> countIn { it in '\u0A80'..'\u0AFF' }
+        code == "or" -> countIn { it in '\u0B00'..'\u0B7F' }
+        code == "ta" -> countIn { it in '\u0B80'..'\u0BFF' }
+        code == "te" -> countIn { it in '\u0C00'..'\u0C7F' }
+        code == "kn" -> countIn { it in '\u0C80'..'\u0CFF' }
+        code == "ml" -> countIn { it in '\u0D00'..'\u0D7F' }
+        code == "si" -> countIn { it in '\u0D80'..'\u0DFF' }
+        code == "th" -> countIn { it in '\u0E00'..'\u0E7F' }
+        code == "lo" -> countIn { it in '\u0E80'..'\u0EFF' }
+        code == "my" -> countIn { it in '\u1000'..'\u109F' }
+        code == "el" -> countIn { it in '\u0370'..'\u03FF' }
+        code == "he" -> countIn { it in '\u0590'..'\u05FF' }
+        code in setOf("ru", "uk", "bg", "sr", "mk", "mn", "kk", "ky", "tg") ->
+            countIn { it in '\u0400'..'\u052F' }
+        code == "ka" -> countIn { it in '\u10A0'..'\u10FF' }
+        code == "hy" -> countIn { it in '\u0530'..'\u058F' }
+        code == "ko" -> countIn { it in '\uAC00'..'\uD7AF' || it in '\u1100'..'\u11FF' }
+        code == "ja" -> countIn { it in '\u3040'..'\u30FF' || it in '\u4E00'..'\u9FFF' }
+        code == "zh" -> countIn { it in '\u4E00'..'\u9FFF' }
+        else -> countIn { it in 'A'..'Z' || it in 'a'..'z' || it in '\u00C0'..'\u024F' }
+    }
+    val score = expectedCount.toDouble() / letters.length.toDouble()
+    // Reject language-mixed OCR rather than making a misleading question/answer.
+    return score >= 0.55
 }
