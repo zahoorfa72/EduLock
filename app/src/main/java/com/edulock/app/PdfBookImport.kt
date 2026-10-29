@@ -109,6 +109,10 @@ internal fun PdfBookImportScreen(
     var countryCode by remember { mutableStateOf(defaultCountryCode.uppercase(Locale.ROOT).ifBlank { "PK" }) }
     var board by remember { mutableStateOf(defaultBoard(defaultCountryCode)) }
     var languageCode by remember { mutableStateOf(initialSubject?.languageCode ?: defaultLanguageCode.ifBlank { "en" }) }
+    var languageMenu by remember { mutableStateOf(false) }
+    var customLanguage by remember {
+        mutableStateOf((initialSubject?.languageCode ?: defaultLanguageCode) !in pdfBookLanguages.map { it.first })
+    }
     var grade by remember { mutableStateOf((initialSubject?.gradeLevel ?: 1).toString()) }
     var bookSubject by remember { mutableStateOf(initialSubject?.title ?: "") }
     var bookTitle by remember { mutableStateOf("") }
@@ -266,13 +270,36 @@ internal fun PdfBookImportScreen(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = languageCode,
-                onValueChange = { languageCode = it.filter { c -> c.isLetter() || c == '-' }.take(16) },
-                modifier = Modifier.weight(1f),
-                label = { Text("Book language code") },
-                singleLine = true
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                OutlinedButton(onClick = { languageMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(pdfBookLanguages.firstOrNull { it.first == languageCode }?.second ?: "Other (" + languageCode + ")")
+                }
+                DropdownMenu(expanded = languageMenu, onDismissRequest = { languageMenu = false }) {
+                    pdfBookLanguages.forEach { (code, label) ->
+                        DropdownMenuItem(text = { Text(label + " (" + code + ")") }, onClick = {
+                            languageCode = code
+                            customLanguage = false
+                            languageMenu = false
+                            activePortal = null
+                        })
+                    }
+                    DropdownMenuItem(text = { Text("Other language code…") }, onClick = {
+                        languageCode = ""
+                        customLanguage = true
+                        languageMenu = false
+                        activePortal = null
+                    })
+                }
+                if (customLanguage) {
+                    OutlinedTextField(
+                        value = languageCode,
+                        onValueChange = { languageCode = it.filter { c -> c.isLetter() || c == '-' }.take(16) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Language code") },
+                        singleLine = true
+                    )
+                }
+            }
             OutlinedTextField(
                 value = grade,
                 onValueChange = { grade = it.filter(Char::isDigit).take(2) },
@@ -580,6 +607,21 @@ internal fun PdfBookImportScreen(
         }
     }
 }
+
+private val pdfBookLanguages = listOf(
+    "en" to "English",
+    "ur" to "Urdu",
+    "sd" to "Sindhi",
+    "hi" to "Hindi",
+    "bn" to "Bangla",
+    "ar" to "Arabic",
+    "pa" to "Punjabi",
+    "ps" to "Pashto",
+    "ta" to "Tamil",
+    "te" to "Telugu",
+    "fr" to "French",
+    "es" to "Spanish"
+)
 
 private fun defaultBoard(country: String): String = when (country.uppercase(Locale.ROOT)) {
     "PK" -> "Punjab (PECTAA)"
