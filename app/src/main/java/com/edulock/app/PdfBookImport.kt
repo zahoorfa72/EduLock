@@ -133,8 +133,8 @@ internal fun PdfBookImportScreen(
     }
 
     val selectedSubject = subjects.firstOrNull { it.id == selectedSubjectId }
-    val portalOptions = remember(countryCode, board, bookSubject, grade, languageCode) {
-        portalsFor(countryCode, board, bookSubject, grade, languageCode)
+    val portalOptions = remember(countryCode, board, bookSubject, bookTitle, grade, languageCode) {
+        portalsFor(countryCode, board, bookSubject, bookTitle, grade, languageCode)
     }
 
     suspend fun startExtraction(file: File, displayName: String) {
@@ -594,7 +594,7 @@ private fun boardsFor(country: String): List<String> = when (country.uppercase(L
     else -> listOf("Official board", "Other board")
 }
 
-private fun portalsFor(country: String, board: String, subject: String, grade: String, language: String): List<BookPortal> {
+private fun portalsFor(country: String, board: String, subject: String, title: String, grade: String, language: String): List<BookPortal> {
     val cc = country.uppercase(Locale.ROOT)
     val b = board.lowercase(Locale.ROOT)
     val curated = when {
@@ -616,7 +616,7 @@ private fun portalsFor(country: String, board: String, subject: String, grade: S
         )
         else -> emptyList()
     }
-    val query = Uri.encode("\"" + subject + "\" class " + grade + " " + language + " textbook PDF official " + country + " " + board + " government book download")
+    val query = Uri.encode("\"" + title + "\" \"" + subject + "\" class " + grade + " " + language + " textbook PDF official " + country + " " + board + " government book download")
     val exactSearch = BookPortal(
         "Search for this exact book selection",
         "Matches country, board, class, subject and language; results stay inside EduLock",
