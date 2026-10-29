@@ -806,6 +806,7 @@ private fun EduLockApp(repository: EduLockRepository) {
                     val securityPrefs = context.getSharedPreferences("edulock_parent_security_ui", Context.MODE_PRIVATE)
                     val backgroundedAt = securityPrefs.getLong("backgrounded_at", 0L)
                     val elapsed = if (backgroundedAt > 0L) System.currentTimeMillis() - backgroundedAt else 0L
+                    // The persistent timestamp also covers Android process recreation.
                     if (backgroundedAt > 0L && elapsed >= PARENT_APP_RELOCK_DELAY_MS) parentAppLocked = true
                     securityPrefs.edit().remove("backgrounded_at").apply()
                 }
@@ -7984,10 +7985,27 @@ private fun isAccessibilityServiceOperational(context: Context): Boolean {
 class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
+        // A fresh launch requires parent authentication whenever a PIN has been set.
+        // Persisted background timestamps also preserve the normal 30-second rule on return.
+        if (savedInstanceState == null && ParentSecurity.isPinSet(applicationContext)) {
+            getSharedPreferences("edulock_parent_security_ui", Context.MODE_PRIVATE).edit()
+                .putLong("backgrounded_at", System.currentTimeMillis() - PARENT_APP_RELOCK_DELAY_MS)
+                .apply()
+        }
         applyManagedDeviceProtection(applicationContext)
         val repository = EduLockRepository(applicationContext)
         setContent {
             EduLockApp(repository)
         }
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Swiping EduLock out of Recents locks it immediately on the next launch.
+        if (ParentSecurity.isPinSet(applicationContext)) {
+            getSharedPreferences("edulock_parent_security_ui", Context.MODE_PRIVATE).edit()
+                .putLong("backgrounded_at", System.currentTimeMillis() - PARENT_APP_RELOCK_DELAY_MS)
+                .apply()
+        }
+        super.onTaskRemoved(rootIntent)
     }
 }
