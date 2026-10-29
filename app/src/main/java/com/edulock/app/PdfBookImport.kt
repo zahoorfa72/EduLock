@@ -792,7 +792,7 @@ internal fun PdfBookImportScreen(
             }, enabled = !working, modifier = Modifier.weight(1f)) { Text("Clear import") }
         }
         if (bookTitle.isNotBlank()) {
-            Text("Book: " + bookTitle + " • " + countryCode + " • " + board + " • class " + grade + " • " + languageCode)
+            Text("Book: " + bookTitle + " • " + countryCode + " • " + effectiveBoard + " • class " + grade + " • " + languageCode)
         } else {
             Text("Selected curriculum: " + countryCode + " • " + board + " • class " + grade + " • " + languageCode, style = MaterialTheme.typography.bodySmall)
         }
@@ -896,18 +896,18 @@ private fun suggestedBookSubjects(country: String, board: String, grade: Int, la
         "Career Education", "Life Skills", "Civic and Citizenship Education"
     )
     val gradeSpecific = when {
-        grade <= 2 -> primaryLanguages + foundational + primary.filter {
+        grade <= 2 -> (foundational + primary.filter {
             it in setOf("Science", "Geography", "History", "Computer Studies", "Coding",
                 "Design and Technology", "Financial Literacy", "Environmental Education", "Sustainability")
-        }
-        grade <= 5 -> primaryLanguages + foundational + primary
-        grade <= 8 -> primaryLanguages + foundational + primary + secondary.filter {
+        } + primaryLanguages)
+        grade <= 5 -> foundational + primary + primaryLanguages
+        grade <= 8 -> foundational + primary + secondary.filter {
             it in setOf("Mathematics", "General Mathematics", "Physics", "Chemistry", "Biology",
                 "Computer Science", "Information Technology", "Geography", "History", "Civics",
                 "Economics", "Accounting", "Agricultural Science", "Programming", "Robotics",
                 "Environmental Science", "Statistics", "Fine Arts", "Health Science", "Religious Studies")
-        }
-        else -> primaryLanguages + primary + secondary
+        } + primaryLanguages
+        else -> primary + secondary + primaryLanguages
     }
     val regional = when (cc) {
         "PK" -> listOf("Pakistan Studies", "Islamiat", "Ethics", "Sindhi Compulsory", "Urdu Compulsory",
