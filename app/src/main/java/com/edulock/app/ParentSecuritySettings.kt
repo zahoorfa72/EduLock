@@ -35,6 +35,7 @@ internal fun ParentSecuritySettingsDialog(
     var pin by remember { mutableStateOf("") }
     var confirmPin by remember { mutableStateOf("") }
     var existingPin by remember { mutableStateOf("") }
+    var changePinMode by remember { mutableStateOf(!ParentSecurity.isPinSet(context)) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val pinSet = ParentSecurity.isPinSet(context)
@@ -64,11 +65,20 @@ internal fun ParentSecuritySettingsDialog(
                         onValueChange = { existingPin = it.filter(Char::isDigit).take(12); error = null },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Current parent PIN") },
+                        placeholder = { Text("Enter your existing 4–12 digit PIN here") },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword)
                     )
+                    if (!changePinMode && !biometricEnabled) {
+                        Text(
+                            "To enable fingerprint: enter your current parent PIN in the field above, then tap Enable fingerprint. You do not need to create a new PIN.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
+                if (changePinMode) {
                 OutlinedTextField(
                     value = pin,
                     onValueChange = { pin = it.filter(Char::isDigit).take(12); error = null },
@@ -82,11 +92,12 @@ internal fun ParentSecuritySettingsDialog(
                     value = confirmPin,
                     onValueChange = { confirmPin = it.filter(Char::isDigit).take(12); error = null },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Confirm PIN") },
+                    label = { Text("Confirm new PIN") },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword)
                 )
+                } // changePinMode
                 Spacer(Modifier.height(10.dp))
                 Button(
                     onClick = {
@@ -168,22 +179,33 @@ internal fun ParentSecuritySettingsDialog(
             }
         },
         confirmButton = {
-            Button(
-                enabled = !busy && pin.length in 4..12 && pin == confirmPin && (!pinSet || existingPin.isNotBlank()),
-                onClick = {
-                    if (pinSet && !ParentSecurity.verifyPin(context, existingPin.toCharArray())) {
-                        error = "Current PIN is incorrect."
-                        return@Button
+            if (!pinSet || changePinMode) {
+                Button(
+                    enabled = !busy && pin.length in 4..12 && pin == confirmPin &&
+                        (!pinSet || existingPin.length in 4..12),
+                    onClick = {
+                        if (pinSet && !ParentSecurity.verifyPin(context, existingPin.toCharArray())) {
+                            existingPin = ""
+                            error = "Current parent PIN is incorrect. Enter it again."
+                            return@Button
+                        }
+                        try {
+                            ParentSecurity.setPin(context, pin.toCharArray())
+                            onSaved("Parent PIN saved.")
+                            onDismiss()
+                        } catch (e: Exception) {
+                            error = e.message ?: "Could not save PIN."
+                        }
                     }
-                    try {
-                        ParentSecurity.setPin(context, pin.toCharArray())
-                        onSaved("Parent PIN saved.")
-                        onDismiss()
-                    } catch (e: Exception) {
-                        error = e.message ?: "Could not save PIN."
-                    }
-                }
-            ) { Text(if (pinSet) "Change PIN" else "Save PIN") }
+                ) { Text(if (pinSet) "Save new PIN" else "Save PIN") }
+            } else {
+                TextButton(onClick = {
+                    changePinMode = true
+                    pin = ""
+                    confirmPin = ""
+                    error = null
+                }) { Text("Change PIN") }
+            }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Close") }
