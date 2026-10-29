@@ -121,6 +121,8 @@ internal object PaddleOcrModelManager {
         // PaddleOCR's dedicated model is preferred for the supported Arabic, Devanagari,
         // Latin, Cyrillic, CJK, Tamil, Telugu, Thai, Greek and Korean model families.
         return when (base) {
+            // Urdu has its own Tesseract model and often benefits from it over a generic Arabic-script model.
+            "ur" -> "urd"
             "bn" -> "ben"
             "as" -> "asm"
             "gu" -> "guj"
@@ -160,6 +162,8 @@ internal object PaddleOcrModelManager {
             code.startsWith("sr-latn") -> "srp_latn"
             code.startsWith("az-cyrl") -> "aze_cyrl"
             code.startsWith("uz-cyrl") -> "uzb_cyrl"
+            // Use a valid Arabic-script fallback when the specialized model is unavailable.
+            code.substringBefore('-') in setOf("sd", "ckb", "bal", "pnb", "ks") -> "ara"
             else -> when (code.substringBefore('-')) {
                 "af" -> "afr"
                 "am" -> "amh"
@@ -227,7 +231,7 @@ internal object PaddleOcrModelManager {
                 "ro" -> "ron"
                 "ru" -> "rus"
                 "sa" -> "san"
-                "sd" -> "snd"
+                // Tesseract's official tessdata_fast set has no Sindhi traineddata; keep Sindhi on Paddle's Arabic-script model.
                 "si" -> "sin"
                 "sk" -> "slk"
                 "sl" -> "slv"
