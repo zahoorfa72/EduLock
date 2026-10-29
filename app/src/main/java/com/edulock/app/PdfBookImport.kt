@@ -444,31 +444,44 @@ internal fun PdfBookImportScreen(
             modifier = Modifier.fillMaxWidth()
         ) { Text("Choose PDF from device") }
 
-        OutlinedTextField(
-            value = directPdfUrl,
-            onValueChange = { directPdfUrl = it.trim().take(2048) },
+        Card(
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Direct HTTPS PDF link") },
-            placeholder = { Text("https://…/textbook.pdf") },
-            singleLine = true
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = { scope.launch { downloadForDevice(directPdfUrl.trim()) } },
-                enabled = !working && directPdfUrl.trim().startsWith("https://", true),
-                modifier = Modifier.weight(1f)
-            ) { Text("Download PDF") }
-            OutlinedButton(
-                onClick = { scope.launch { downloadForImport(directPdfUrl.trim()) } },
-                enabled = !working && directPdfUrl.trim().startsWith("https://", true),
-                modifier = Modifier.weight(1f)
-            ) { Text("Extract questions") }
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("Get a textbook PDF", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "1. Paste the actual PDF download link below, or 2. open an official textbook website further down and tap a book's PDF/download link. EduLock will save the PDF instead of sending you to another browser app.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                OutlinedTextField(
+                    value = directPdfUrl,
+                    onValueChange = { directPdfUrl = it.trim().take(2048) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Direct PDF download link (HTTPS)") },
+                    placeholder = { Text("https://website.gov/textbook.pdf") },
+                    singleLine = true
+                )
+                Button(
+                    onClick = { scope.launch { downloadForDevice(directPdfUrl.trim()) } },
+                    enabled = !working && directPdfUrl.trim().startsWith("https://", true),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Download PDF to device") }
+                OutlinedButton(
+                    onClick = { scope.launch { downloadForImport(directPdfUrl.trim()) } },
+                    enabled = !working && directPdfUrl.trim().startsWith("https://", true),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Extract questions from PDF") }
+                Text(
+                    "Saved PDFs go to Downloads/EduLock Books. EduLock keeps an in-app copy until you delete it manually. Use a direct PDF file/download URL, not just a textbook website homepage.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
-        Text(
-            "These buttons download a direct PDF link without opening another browser app. For a book page, open it below and tap its own PDF/download link; EduLock will offer download or extraction.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
 
         if (countryCode.equals("PK", true) && effectiveBoard.contains("sindh", ignoreCase = true)) {
             Button(
