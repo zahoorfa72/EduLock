@@ -238,6 +238,36 @@ internal fun PdfBookImportScreen(
         }
     }
 
+    suspend fun findPdfDownloads() {
+        if (pdfSearchLoading || working) return
+        pdfSearchLoading = true
+        pdfSearchResults = emptyList()
+        error = null
+        status = "Searching for direct PDF files for this curriculum…"
+        try {
+            val terms = listOf(
+                bookTitle.trim(),
+                bookSubject.trim(),
+                "class " + grade,
+                languageCode.ifBlank { "en" },
+                effectiveBoard,
+                countryCode,
+                "textbook filetype:pdf"
+            ).filter { it.isNotBlank() }.joinToString(" ")
+            pdfSearchResults = searchDirectPdfResults(terms)
+            status = if (pdfSearchResults.isEmpty()) {
+                "No direct PDF files were found in this search. Try a shorter book/subject name or choose a PDF from your device."
+            } else {
+                "Found " + pdfSearchResults.size + " candidate PDF download(s). Tap Download beside a book; EduLock verifies the file is actually a PDF before saving it."
+            }
+        } catch (e: Exception) {
+            error = e.message ?: "Could not search for direct PDF downloads. You can still choose a PDF from your device."
+            status = null
+        } finally {
+            pdfSearchLoading = false
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
