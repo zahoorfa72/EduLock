@@ -131,34 +131,31 @@ internal fun PdfBookImportScreen(
         portalsFor(countryCode, board, bookSubject, grade, languageCode)
     }
 
-    fun startExtraction(file: File, displayName: String) {
-        scope.launch {
-            working = true
-            error = null
-            status = "Reading PDF on this device. No PDF is uploaded to Supabase."
-            try {
-                val extracted = extractPdfText(context, file)
-                val parsed = detectPdfQuestions(extracted, languageCode)
-                extractedText = extracted
-                pickedFileName = displayName
-                temporaryPdf = file
-                candidates = parsed
-                if (parsed.isNotEmpty()) {
-                    // Once text/questions are safely in app memory, discard the app-owned temporary PDF.
-                    file.delete()
-                    temporaryPdf = null
-                    status = "Extracted " + parsed.size + " candidate questions. Review every prompt and answer before saving."
-                } else {
-                    status = "Text was extracted, but no clear question boundaries were found. You can review the extracted text and try parsing again."
-                }
-            } catch (e: Exception) {
-                error = e.message ?: "Could not read this PDF. Try a text-based PDF or a smaller file."
-                status = null
-                // Retain an app-owned copy only when extraction failed, so the parent can retry.
-                temporaryPdf = file
-            } finally {
-                working = false
+    suspend fun startExtraction(file: File, displayName: String) {
+        working = true
+        error = null
+        status = "Reading PDF on this device. No PDF is uploaded to Supabase."
+        try {
+            val extracted = extractPdfText(context, file)
+            val parsed = detectPdfQuestions(extracted, languageCode)
+            extractedText = extracted
+            pickedFileName = displayName
+            temporaryPdf = file
+            candidates = parsed
+            if (parsed.isNotEmpty()) {
+                // Delete the app-owned temporary PDF as soon as questions are safely in memory.
+                file.delete()
+                temporaryPdf = null
+                status = "Extracted " + parsed.size + " candidate questions. Review every prompt and answer before saving."
+            } else {
+                status = "Text was extracted, but no clear question boundaries were found. Review the text and try parsing again."
             }
+        } catch (e: Exception) {
+            error = e.message ?: "Could not read this PDF. Try a text-based PDF or a smaller file."
+            status = null
+            temporaryPdf = file
+        } finally {
+            working = false
         }
     }
 
