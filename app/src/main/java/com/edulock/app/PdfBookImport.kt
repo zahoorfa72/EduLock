@@ -203,7 +203,8 @@ internal fun PdfBookImportScreen(
         status = "Downloading the book to your device’s Downloads folder…"
         try {
             val file = downloadPdfToCache(context, url)
-            val savedLocation = savePdfToDownloads(context, file, file.name)
+            val suggestedName = bookTitle.ifBlank { bookSubject + " - " + board + " class " + grade }
+            val savedLocation = savePdfToDownloads(context, file, suggestedName)
             file.delete()
             status = "PDF downloaded to device storage. It was not uploaded to Supabase."
             error = null
