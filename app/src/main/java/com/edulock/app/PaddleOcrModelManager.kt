@@ -17,7 +17,7 @@ import kotlinx.coroutines.withContext
 /**
  * Downloads the shared detector and only the recognition model needed for the selected language.
  * Models are stored in private app storage and reused offline after the first download.
- * Model files are from PaddlePaddle's official PP-OCRv5 Android inference archives.
+ * Model files are downloaded from PaddlePaddle's official PP-OCRv5 ONNX model repositories.
  */
 internal object PaddleOcrModelManager {
     data class ModelFiles(
@@ -117,6 +117,9 @@ internal object PaddleOcrModelManager {
     fun tesseractFallbackLanguage(languageCode: String): String? {
         val code = languageCode.lowercase(Locale.ROOT).replace('_', '-')
         val base = code.substringBefore('-')
+        // Codes are mapped only to traineddata files that exist in tessdata_fast.
+        // PaddleOCR's dedicated model is preferred for the supported Arabic, Devanagari,
+        // Latin, Cyrillic, CJK, Tamil, Telugu, Thai, Greek and Korean model families.
         return when (base) {
             "bn" -> "ben"
             "as" -> "asm"
@@ -130,7 +133,8 @@ internal object PaddleOcrModelManager {
             "km" -> "khm"
             "lo" -> "lao"
             "am" -> "amh"
-            "he", "yi" -> if (base == "he") "heb" else "yid"
+            "he" -> "heb"
+            "yi" -> "yid"
             "hy" -> "hye"
             "ka" -> "kat"
             "bo" -> "bod"
