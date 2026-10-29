@@ -1756,34 +1756,23 @@ class EduLockRepository(context: Context) {
         answers: Map<String, String>,
         answerLanguages: Map<String, String>
     ): TaskResult {
-        // Find this task in the cached task-list responses. This avoids relying on a
-        // different URL/query than the one the child screen loaded before going offline.
-        val task = offlineReadCache.all.values.asSequence()
-            .filterIsInstance<String>()
-            .mapNotNull { raw -> try { JSONArray(raw) } catch (_: Exception) { null } }
-            .flatMap { array -> (0 until array.length()).asSequence().mapNotNull { array.optJSONObject(it) } }
-            .firstOrNull { it.optString("id") == taskId }
-            ?: throw IOException("This task was not cached. Open the task list while online before going offline.")
-        val links = restArray("task_questions?select=question_id,sort_order&task_id=eq.$taskId&order=sort_order.asc")
-        val ids = (0 until links.length()).mapNotNull { i ->
-            links.optJSONObject(i)?.optString("question_id")?.takeIf { it.matches(Regex("[0-9a-fA-F-]{36}")) }
-        }.take(500)
-        if (ids.isEmpty()) throw IOException("This task's question list is not available offline. Open the task while online first.")
+        val packageJson = try {
+            JSONObject(offlineReadCache.getString(offlineTaskPackageKey(taskId), null)
+                ?: throw IOException("Offline task package is missing. Open this task online first."))
+        } catch (e: Exception) {
+            throw IOException("Offline grading data is not available. Open this task online first.", e)
+        }
+        val task = packageJson.optJSONObject("task") ?: throw IOException("Offline task settings are missing.")
+        val questionsArray = packageJson.optJSONArray("questions") ?: JSONArray()
+        val questions = linkedMapOf<String, JSONObject>()
+        for (i in 0 until questionsArray.length()) {
+            val row = questionsArray.optJSONObject(i) ?: continue
+            questions[row.optString("id")] = row
+        }
+        val ids = questions.keys.toList()
+        if (ids.isEmpty()) throw IOException("No saved questions are available for offline use.")
         val expectedIds = ids.toSet()
         if (answers.keys != expectedIds) throw IOException("Offline task data is incomplete. Reconnect before submitting.")
-        val questions = linkedMapOf<String, JSONObject>()
-        ids.chunked(50).forEach { chunk ->
-            val rows = restArray(
-                "questions?select=id,subject_id,prompt,question_type,options,language_code,concept_key,picture_path,grade_level,age_min,age_max,reward_minutes,answer_key,created_at&id=in.(" + chunk.joinToString(",") + ")&limit=50"
-            )
-            for (i in 0 until rows.length()) {
-                val row = rows.optJSONObject(i) ?: continue
-                questions[row.optString("id")] = row
-            }
-        }
-        if (questions.keys != expectedIds || questions.values.any {
-            it.optJSONObject("answer_key")?.optString("answer").isNullOrBlank()
-        }) throw IOException("Offline grading data is not available. Open and prepare this task while online.")
         var correct = 0
         answers.forEach { (questionId, actual) ->
             val row = questions[questionId] ?: return@forEach
@@ -2274,7 +2263,17 @@ class EduLockRepository(context: Context) {
                 if (matchesChildScope(question)) byId[question.id] = question
             }
         }
-        return ids.mapNotNull { byId[it] }.take(safeLimit)
+        val result = ids.mapNotNull { byId[it] }.take(safeLimit)
+        try {
+            val packageJson = requestFunction("offline-task-package", JSONObject().put("task_id", taskId))
+            offlineReadCache.edit().putString(offlineTaskPackageKey(taskId), packageJson.toString()).commit()
+        } catch (_: Exception) { /* task view still works if prefetch is temporarily unavailable */ }
+        result
+    }
+
+    private fun offlineTaskPackageKey(taskId: String): String {
+        val userId = sessionStore.read()?.userId ?: "signed-out"
+        return "offline_task_package_${userId}_${taskId}"
     }
 
     suspend fun loadChildLocationSnapshot(childId: String): ChildLocationSnapshot {
