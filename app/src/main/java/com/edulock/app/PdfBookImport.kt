@@ -2068,6 +2068,7 @@ private fun isTextInSelectedLanguage(text: String, language: String): Boolean {
         code == "chr" -> countIn { it in '\u13A0'..'\u13FF' || it in '\uAB70'..'\uABBF' }
         code == "iu" -> countIn { it in '\u1400'..'\u167F' }
         code == "syr" -> countIn { it in '\u0700'..'\u074F' }
+        code == "km" -> countIn { it in '\u1780'..'\u17FF' }
         code == "ko" -> countIn { it in '\uAC00'..'\uD7AF' || it in '\u1100'..'\u11FF' }
         code == "ja" -> countIn { it in '\u3040'..'\u30FF' || it in '\u4E00'..'\u9FFF' }
         code == "zh" -> countIn { it in '\u4E00'..'\u9FFF' }
