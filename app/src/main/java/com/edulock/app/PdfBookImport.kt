@@ -125,6 +125,9 @@ internal fun PdfBookImportScreen(
     var countryMenu by remember { mutableStateOf(false) }
     var boardMenu by remember { mutableStateOf(false) }
     var subjectMenu by remember { mutableStateOf(false) }
+    var customBoardName by remember { mutableStateOf("") }
+    var subjectSearchQuery by remember { mutableStateOf("") }
+    var directPdfUrl by remember { mutableStateOf("") }
     var activePortal by remember { mutableStateOf<BookPortal?>(null) }
     var pendingPdfUrl by remember { mutableStateOf<String?>(null) }
     var showPdfActions by remember { mutableStateOf(false) }
@@ -140,8 +143,9 @@ internal fun PdfBookImportScreen(
     var stbbBooksLoading by remember { mutableStateOf(false) }
 
     val selectedSubject = destinationSubjects.firstOrNull { it.id == selectedSubjectId }
-    val portalOptions = remember(countryCode, board, bookSubject, bookTitle, grade, languageCode) {
-        portalsFor(countryCode, board, bookSubject, bookTitle, grade, languageCode)
+    val effectiveBoard = if (board.equals("Custom board", true)) customBoardName.trim().ifBlank { "Custom board" } else board
+    val portalOptions = remember(countryCode, board, customBoardName, bookSubject, bookTitle, grade, languageCode) {
+        portalsFor(countryCode, effectiveBoard, bookSubject, bookTitle, grade, languageCode)
     }
 
     suspend fun startExtraction(file: File, displayName: String) {
@@ -242,19 +246,28 @@ internal fun PdfBookImportScreen(
                     Text("Country: " + countryCode)
                 }
                 DropdownMenu(expanded = countryMenu, onDismissRequest = { countryMenu = false }) {
-                    listOf("PK" to "Pakistan", "IN" to "India", "BD" to "Bangladesh", "GB" to "United Kingdom", "US" to "United States", "AE" to "United Arab Emirates", "OTHER" to "Other country").forEach { (code, label) ->
+                    allCountryOptions().forEach { (code, label) ->
                         DropdownMenuItem(text = { Text(label) }, onClick = {
                             countryCode = code
                             board = defaultBoard(code)
+                            customBoardName = ""
                             countryMenu = false
                             activePortal = null
+                            stbbBooks = emptyList()
                         })
                     }
+                    DropdownMenuItem(text = { Text("Other / territory not listed") }, onClick = {
+                        countryCode = "OTHER"
+                        board = "Custom board"
+                        customBoardName = ""
+                        countryMenu = false
+                        activePortal = null
+                    })
                 }
             }
             Column(modifier = Modifier.weight(1f)) {
                 OutlinedButton(onClick = { boardMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text(board)
+                    Text(effectiveBoard)
                 }
                 DropdownMenu(expanded = boardMenu, onDismissRequest = { boardMenu = false }) {
                     boardsFor(countryCode).forEach { option ->
@@ -264,6 +277,15 @@ internal fun PdfBookImportScreen(
                             activePortal = null
                         })
                     }
+                }
+                if (board.equals("Custom board", true)) {
+                    OutlinedTextField(
+                        value = customBoardName,
+                        onValueChange = { customBoardName = it.take(120); activePortal = null },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Enter any school board / curriculum") },
+                        singleLine = true
+                    )
                 }
             }
         }
@@ -313,12 +335,33 @@ internal fun PdfBookImportScreen(
             label = { Text("Subject / book topic") },
             singleLine = true
         )
-        val curriculumSubjects = remember(countryCode, board, grade, languageCode) {
-            suggestedBookSubjects(countryCode, board, grade.toIntOrNull() ?: 1, languageCode)
+        val curriculumSubjects = remember(countryCode, effectiveBoard, grade, languageCode) {
+            suggestedBookSubjects(countryCode, effectiveBoard, grade.toIntOrNull() ?: 1, languageCode)
         }
-        Text("Suggested subjects for this curriculum", style = MaterialTheme.typography.titleSmall)
+        Text("All-board subject catalogue", style = MaterialTheme.typography.titleSmall)
+        OutlinedTextField(
+            value = subjectSearchQuery,
+            onValueChange = { subjectSearchQuery = it.take(100) },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Search subjects across countries and boards") },
+            placeholder = { Text("Biology, robotics, music, accounting…") },
+            singleLine = true
+        )
+        val matchingSubjects = remember(curriculumSubjects, subjectSearchQuery) {
+            if (subjectSearchQuery.isBlank()) curriculumSubjects else curriculumSubjects.filter {
+                it.contains(subjectSearchQuery.trim(), ignoreCase = true)
+            }
+        }
+        val visibleSubjects = if (subjectSearchQuery.isBlank()) matchingSubjects.take(24) else matchingSubjects.take(48)
+        Text(
+            if (subjectSearchQuery.isBlank() && matchingSubjects.size > visibleSubjects.size)
+                "Showing " + visibleSubjects.size + " of " + matchingSubjects.size + " subjects. Search above to find more."
+            else visibleSubjects.size.toString() + " matching subject(s). You can also type any unlisted subject in the field below.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            curriculumSubjects.chunked(3).forEach { subjectRow ->
+            visibleSubjects.chunked(3).forEach { subjectRow ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -327,9 +370,7 @@ internal fun PdfBookImportScreen(
                         OutlinedButton(
                             onClick = { bookSubject = suggestion },
                             modifier = Modifier.weight(1f)
-                        ) {
-                            Text(suggestion, maxLines = 2)
-                        }
+                        ) { Text(suggestion, maxLines = 2) }
                     }
                     repeat((3 - subjectRow.size).coerceAtLeast(0)) {
                         Spacer(modifier = Modifier.weight(1f))
@@ -403,7 +444,33 @@ internal fun PdfBookImportScreen(
             modifier = Modifier.fillMaxWidth()
         ) { Text("Choose PDF from device") }
 
-        if (countryCode.equals("PK", true) && board.contains("sindh", ignoreCase = true)) {
+        OutlinedTextField(
+            value = directPdfUrl,
+            onValueChange = { directPdfUrl = it.trim().take(2048) },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Direct HTTPS PDF link") },
+            placeholder = { Text("https://…/textbook.pdf") },
+            singleLine = true
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { scope.launch { downloadForDevice(directPdfUrl.trim()) } },
+                enabled = !working && directPdfUrl.trim().startsWith("https://", true),
+                modifier = Modifier.weight(1f)
+            ) { Text("Download PDF") }
+            OutlinedButton(
+                onClick = { scope.launch { downloadForImport(directPdfUrl.trim()) } },
+                enabled = !working && directPdfUrl.trim().startsWith("https://", true),
+                modifier = Modifier.weight(1f)
+            ) { Text("Extract questions") }
+        }
+        Text(
+            "These buttons download a direct PDF link without opening another browser app. For a book page, open it below and tap its own PDF/download link; EduLock will offer download or extraction.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        if (countryCode.equals("PK", true) && effectiveBoard.contains("sindh", ignoreCase = true)) {
             Button(
                 onClick = {
                     scope.launch {
@@ -733,63 +800,178 @@ internal fun PdfBookImportScreen(
 }
 
 private val pdfBookLanguages = listOf(
-    "en" to "English",
-    "ur" to "Urdu",
-    "sd" to "Sindhi",
-    "hi" to "Hindi",
-    "bn" to "Bangla",
-    "ar" to "Arabic",
-    "pa" to "Punjabi",
-    "ps" to "Pashto",
-    "ta" to "Tamil",
-    "te" to "Telugu",
-    "fr" to "French",
-    "es" to "Spanish"
+    "en" to "English", "ur" to "Urdu", "sd" to "Sindhi", "hi" to "Hindi",
+    "bn" to "Bangla", "ar" to "Arabic", "pa" to "Punjabi", "ps" to "Pashto",
+    "ta" to "Tamil", "te" to "Telugu", "fr" to "French", "es" to "Spanish",
+    "de" to "German", "it" to "Italian", "pt" to "Portuguese", "ru" to "Russian",
+    "zh" to "Chinese", "ja" to "Japanese", "ko" to "Korean", "tr" to "Turkish",
+    "fa" to "Persian", "he" to "Hebrew", "id" to "Indonesian", "ms" to "Malay",
+    "th" to "Thai", "vi" to "Vietnamese", "sw" to "Swahili", "ha" to "Hausa",
+    "yo" to "Yoruba", "ig" to "Igbo", "am" to "Amharic", "so" to "Somali",
+    "ne" to "Nepali", "si" to "Sinhala", "mr" to "Marathi", "gu" to "Gujarati",
+    "kn" to "Kannada", "ml" to "Malayalam", "or" to "Odia", "as" to "Assamese",
+    "sa" to "Sanskrit", "mai" to "Maithili", "kok" to "Konkani", "ks" to "Kashmiri",
+    "doi" to "Dogri", "brx" to "Bodo", "mni" to "Meitei", "uz" to "Uzbek",
+    "kk" to "Kazakh", "ky" to "Kyrgyz", "tg" to "Tajik", "tk" to "Turkmen",
+    "az" to "Azerbaijani", "hy" to "Armenian", "ka" to "Georgian", "el" to "Greek",
+    "nl" to "Dutch", "pl" to "Polish", "uk" to "Ukrainian", "ro" to "Romanian",
+    "hu" to "Hungarian", "cs" to "Czech", "sk" to "Slovak", "sv" to "Swedish",
+    "no" to "Norwegian", "da" to "Danish", "fi" to "Finnish", "sq" to "Albanian",
+    "sr" to "Serbian", "hr" to "Croatian", "bs" to "Bosnian", "bg" to "Bulgarian",
+    "rw" to "Kinyarwanda", "ki" to "Kikuyu", "zu" to "Zulu", "xh" to "Xhosa",
+    "af" to "Afrikaans", "st" to "Sesotho", "tn" to "Setswana", "mg" to "Malagasy",
+    "my" to "Burmese", "km" to "Khmer", "lo" to "Lao", "mn" to "Mongolian"
 )
 
 private fun suggestedBookSubjects(country: String, board: String, grade: Int, language: String): List<String> {
     val cc = country.uppercase(Locale.ROOT)
     val b = board.lowercase(Locale.ROOT)
-    return when {
-        cc == "PK" && b.contains("sindh") -> {
-            val languages = listOf("Sindhi", "Urdu", "English", "Arabic")
-            val primary = listOf(
-                "Mathematics", "General Knowledge", "General Science", "Social Studies",
-                "Islamiat / Islamic Studies", "Ethics", "Drawing / Art", "Physical Education",
-                "Computer Studies", "Environmental Studies", "Quran / Religious Education"
-            )
-            val middle = listOf(
-                "Science", "Computer Education", "Pakistan Studies", "Mazhabi Taleemat",
-                "Asan Sindhi", "Geography", "History", "Civics", "Agriculture",
-                "Health Education", "Home Economics"
-            )
-            val secondary = listOf(
-                "General Mathematics", "Physics", "Chemistry", "Biology", "Computer Science",
-                "Information Technology", "Economics", "Statistics", "Education",
-                "Principles of Accounting", "Principles of Commerce", "Business Studies",
-                "Sindhi Compulsory", "Urdu Compulsory", "English Compulsory",
-                "Pakistan Studies", "Islamiat", "Ethics", "Civics", "Geography", "History",
-                "Fine Arts", "Home Economics", "Agriculture"
-            )
-            when {
-                grade <= 2 -> (languages + primary).distinct()
-                grade <= 5 -> (languages + primary + middle).distinct()
-                grade <= 8 -> (languages + primary + middle + listOf(
-                    "General Mathematics", "Islamic Studies", "Science and Technology",
-                    "Information Technology", "Environmental Studies"
-                )).distinct()
-                else -> (languages + secondary + listOf(
-                    "Mathematics", "General Science", "Social Studies", "Computer Studies",
-                    "Physical Education", "Drawing / Art"
-                )).distinct()
-            }
+    val primaryLanguages = listOf(
+        "English", "Urdu", "Sindhi", "Punjabi", "Pashto", "Balochi", "Arabic", "Persian",
+        "Hindi", "Bangla", "Tamil", "Telugu", "Marathi", "Gujarati", "Kannada", "Malayalam",
+        "Odia", "Assamese", "Nepali", "Sinhala", "Chinese", "Japanese", "Korean", "French",
+        "Spanish", "Portuguese", "German", "Russian", "Turkish", "Swahili", "Hausa", "Yoruba",
+        "Indonesian", "Malay", "Thai", "Vietnamese", "Italian", "Dutch", "Greek", "Hebrew",
+        "Local / heritage language", "Second language", "Foreign language"
+    )
+    val foundational = listOf(
+        "Early Childhood Education", "Pre-literacy", "Reading", "Writing", "Phonics",
+        "Numeracy", "Mathematics", "General Knowledge", "Environmental Studies",
+        "General Science", "Social Studies", "Creative Arts", "Drawing / Art",
+        "Music", "Dance", "Drama", "Physical Education", "Health Education",
+        "Moral Education", "Civic Education", "Digital Literacy", "Computer Basics",
+        "Life Skills", "Safety Education", "Nature Study", "Storytelling",
+        "Religious Studies", "Islamic Studies", "Quran / Quranic Studies", "Ethics"
+    )
+    val primary = listOf(
+        "Science", "Science and Technology", "Integrated Studies", "Humanities",
+        "Geography", "History", "Civics", "Citizenship Education", "World Studies",
+        "Local Studies", "Community Studies", "Pakistan Studies", "Bangladesh and Global Studies",
+        "Indian Knowledge Systems", "Social and Political Life", "Computer Studies",
+        "Computer Science", "Information and Communication Technology", "Coding",
+        "Programming", "Robotics", "Engineering Design", "Design and Technology",
+        "Technology Education", "Media Literacy", "Digital Citizenship", "Cyber Safety",
+        "Financial Literacy", "Entrepreneurship", "Business Studies", "Economics",
+        "Agriculture", "Food and Nutrition", "Home Economics", "Textiles",
+        "Crafts and Handicrafts", "Visual Arts", "Performing Arts", "Photography",
+        "Physical Wellbeing", "Sports", "Yoga", "Mindfulness", "Personal Development",
+        "Social Emotional Learning", "Values Education", "Comparative Religion",
+        "Environmental Education", "Climate Education", "Sustainability",
+        "Disaster Risk Reduction", "First Aid", "Library Skills", "Research Skills"
+    )
+    val secondary = listOf(
+        "General Mathematics", "Additional Mathematics", "Advanced Mathematics",
+        "Further Mathematics", "Statistics", "Applied Mathematics", "Pure Mathematics",
+        "Physics", "Chemistry", "Biology", "General Science", "Earth Science",
+        "Environmental Science", "Marine Science", "Astronomy", "Space Science",
+        "Computer Science", "Information Technology", "Software Development",
+        "Artificial Intelligence", "Data Science", "Cybersecurity", "Web Development",
+        "Electronics", "Engineering", "Engineering Science", "Biotechnology",
+        "Anatomy and Physiology", "Health Science", "Agricultural Science",
+        "Animal Husbandry", "Crop Science", "Forestry", "Geology", "Geography",
+        "Human Geography", "Physical Geography", "World History", "National History",
+        "Modern History", "Ancient History", "Political Science", "Government",
+        "Civics", "Sociology", "Psychology", "Philosophy", "Anthropology",
+        "Economics", "Macroeconomics", "Microeconomics", "Accounting",
+        "Principles of Accounting", "Bookkeeping", "Commerce", "Business Studies",
+        "Business Management", "Marketing", "Entrepreneurship", "Finance",
+        "Banking", "Insurance", "Law", "Legal Studies", "International Relations",
+        "Religious Studies", "Islamic Studies", "Islamiat", "Ethics", "Moral Philosophy",
+        "Quran Studies", "Arabic Studies", "Bible Studies", "Theology",
+        "Education", "Child Development", "Early Childhood Development",
+        "Home Economics", "Family and Consumer Science", "Food Science",
+        "Nutrition", "Hospitality", "Tourism", "Culinary Arts", "Fashion Design",
+        "Textile Design", "Graphic Design", "Fine Arts", "Visual Arts",
+        "Applied Arts", "Music", "Music Theory", "Theatre Studies", "Drama",
+        "Film Studies", "Media Studies", "Journalism", "Communication Studies",
+        "Creative Writing", "Literature", "World Literature", "Linguistics",
+        "Translation Studies", "Classical Studies", "Latin", "Sanskrit",
+        "Technical Drawing", "Technical Education", "Vocational Education",
+        "Woodwork", "Metalwork", "Construction", "Automotive Technology",
+        "Electrical Installation", "Renewable Energy", "Plumbing", "Welding",
+        "Agricultural Technology", "Business Computing", "Office Administration",
+        "Physical Education", "Sports Science", "Human Biology", "Public Health",
+        "First Aid", "Environmental Management", "Climate Change", "Geospatial Science",
+        "Geographic Information Systems", "Research Methods", "Statistics and Probability",
+        "Career Education", "Life Skills", "Civic and Citizenship Education"
+    )
+    val gradeSpecific = when {
+        grade <= 2 -> primaryLanguages + foundational + primary.filter {
+            it in setOf("Science", "Geography", "History", "Computer Studies", "Coding",
+                "Design and Technology", "Financial Literacy", "Environmental Education", "Sustainability")
         }
-        cc == "PK" -> listOf("English", "Urdu", "Mathematics", "General Science", "Islamiat", "Pakistan Studies", "Social Studies", "Computer Science", "Physics", "Chemistry", "Biology", "Sindhi", "Pashto", "Arabic", "Economics", "Geography", "History", "Drawing")
-        cc == "IN" -> listOf("English", "Hindi", "Mathematics", "Environmental Studies", "Science", "Social Science", "Computer Science", "Physics", "Chemistry", "Biology", "History", "Geography", "Civics", "Sanskrit")
-        cc == "BD" -> listOf("Bangla", "English", "Mathematics", "Science", "Bangladesh and Global Studies", "Religion", "Information and Communication Technology", "Physics", "Chemistry", "Biology", "History")
-        else -> listOf("English", "Mathematics", "Science", "Social Studies", "Computer Studies", "Languages", "History", "Geography", "Art", "Physical Education")
-    }.distinct()
+        grade <= 5 -> primaryLanguages + foundational + primary
+        grade <= 8 -> primaryLanguages + foundational + primary + secondary.filter {
+            it in setOf("Mathematics", "General Mathematics", "Physics", "Chemistry", "Biology",
+                "Computer Science", "Information Technology", "Geography", "History", "Civics",
+                "Economics", "Accounting", "Agricultural Science", "Programming", "Robotics",
+                "Environmental Science", "Statistics", "Fine Arts", "Health Science", "Religious Studies")
+        }
+        else -> primaryLanguages + primary + secondary
+    }
+    val regional = when (cc) {
+        "PK" -> listOf("Pakistan Studies", "Islamiat", "Ethics", "Sindhi Compulsory", "Urdu Compulsory",
+            "English Compulsory", "Mazhabi Taleemat", "Asan Sindhi", "Tarjuma-tul-Quran",
+            "Khyber Pakhtunkhwa Studies", "Balochistan Studies", "Computer Applications")
+        "IN" -> listOf("Environmental Studies (EVS)", "Social Science", "Indian Knowledge Systems",
+            "Constitution of India", "Work Education", "Art Education", "Health and Physical Education",
+            "Vocational Education", "Sanskrit", "Hindi")
+        "BD" -> listOf("Bangladesh and Global Studies", "Bangla", "Religion and Moral Education",
+            "Digital Technology", "Agricultural Studies", "Career Education")
+        "GB" -> listOf("English Language", "English Literature", "Combined Science", "Design and Technology",
+            "Religious Education", "Personal, Social, Health and Economic Education", "Welsh")
+        "US" -> listOf("English Language Arts", "Common Core Mathematics", "US History", "Civics",
+            "Health and Wellness", "Career and Technical Education", "Advanced Placement")
+        "CA" -> listOf("French Immersion", "Indigenous Studies", "Canadian History", "Canadian Geography")
+        "AU" -> listOf("Humanities and Social Sciences (HASS)", "Aboriginal and Torres Strait Islander Histories",
+            "Civics and Citizenship", "Health and Physical Education")
+        "NZ" -> listOf("Te Reo Māori", "Aotearoa New Zealand Histories", "Technology")
+        "ZA" -> listOf("Life Orientation", "Economic and Management Sciences", "Creative Arts",
+            "Technology", "Life Sciences", "Natural Sciences")
+        "NG" -> listOf("Civic Education", "Basic Science and Technology", "Social Studies",
+            "Christian Religious Studies", "Islamic Religious Studies", "National Values Education")
+        "KE" -> listOf("Integrated Science", "Social Studies", "Indigenous Language", "Pre-Technical Studies",
+            "Agriculture and Nutrition", "Christian Religious Education", "Islamic Religious Education")
+        "GH" -> listOf("Our World Our People", "Career Technology", "Creative Arts and Design",
+            "Religious and Moral Education", "Ghanaian Language")
+        "PH" -> listOf("Araling Panlipunan", "Edukasyon sa Pagpapakatao", "Filipino",
+            "Edukasyong Pantahanan at Pangkabuhayan", "Mother Tongue", "MAPEH", "Makabansa")
+        "MY" -> listOf("Bahasa Melayu", "Pendidikan Islam", "Pendidikan Moral", "Sejarah", "Reka Bentuk dan Teknologi")
+        "ID" -> listOf("Bahasa Indonesia", "Pendidikan Pancasila", "Pendidikan Agama", "Prakarya", "Muatan Lokal")
+        "SG" -> listOf("Character and Citizenship Education", "Mother Tongue Language", "Project Work")
+        "LK" -> listOf("Sinhala", "Tamil", "Buddhism", "Hinduism", "Christianity", "Civic Education")
+        "NP" -> listOf("Nepali", "Social Studies and Human Values Education", "Occupation, Business and Technology")
+        "AE", "SA", "QA", "KW", "BH", "OM", "JO", "EG" -> listOf("Arabic", "Islamic Education",
+            "Moral Education", "Social Studies", "National Education")
+        "FR" -> listOf("Philosophy", "Enseignement moral et civique", "Sciences de la vie et de la Terre")
+        "DE" -> listOf("Deutsch", "Politik", "Wirtschaft", "Naturwissenschaften")
+        "ES" -> listOf("Lengua Castellana", "Conocimiento del Medio", "Educación en Valores Cívicos y Éticos")
+        "BR" -> listOf("Língua Portuguesa", "História do Brasil", "Geografia do Brasil")
+        "MX" -> listOf("Formación Cívica y Ética", "Lengua Materna", "Saberes y Pensamiento Científico")
+        "CN" -> listOf("Chinese Language", "Morality and Rule of Law", "Labor Education")
+        "JP" -> listOf("Japanese Language", "Moral Education", "生活科", "総合的な学習の時間")
+        "KR" -> listOf("Korean Language", "Moral Education", "Practical Arts")
+        else -> emptyList()
+    }
+    val boardSpecific = when {
+        b.contains("cambridge") || b.contains("caie") || b.contains("igcse") ->
+            listOf("Cambridge Global Perspectives", "Global Perspectives", "Environmental Management", "Enterprise")
+        b.contains("pearson") || b.contains("edexcel") -> listOf("Global Citizenship", "Statistics")
+        b.contains("baccalaureate") || b == "ib" || b.contains("(ib)") ->
+            listOf("Theory of Knowledge", "Creativity Activity Service", "Extended Essay", "Global Politics")
+        b.contains("common core") || b.contains("american") ->
+            listOf("English Language Arts", "US History", "US Government", "Personal Finance", "AP Capstone")
+        else -> emptyList()
+    }
+    return (gradeSpecific + regional + boardSpecific).distinct()
 }
+
+private fun allCountryOptions(): List<Pair<String, String>> =
+    Locale.getISOCountries().map { code ->
+        code to Locale("", code).getDisplayCountry(Locale.ENGLISH).ifBlank { code }
+    }.filter { it.second.isNotBlank() }
+        .distinctBy { it.first }
+        .sortedBy { it.second.lowercase(Locale.ROOT) }
 
 private fun defaultBoard(country: String): String = when (country.uppercase(Locale.ROOT)) {
     "PK" -> "Punjab (PECTAA)"
@@ -797,16 +979,70 @@ private fun defaultBoard(country: String): String = when (country.uppercase(Loca
     "BD" -> "NCTB"
     "GB" -> "National Curriculum"
     "US" -> "State / District"
-    else -> "Official board"
+    "CA" -> "Provincial curriculum"
+    "AU" -> "Australian Curriculum"
+    "NZ" -> "New Zealand Curriculum"
+    "ZA" -> "CAPS / DBE"
+    "NG" -> "National curriculum"
+    "KE" -> "CBC / KICD"
+    "GH" -> "NaCCA curriculum"
+    "PH" -> "DepEd K–12"
+    "MY" -> "KSSR / KSSM"
+    "SG" -> "MOE Singapore"
+    else -> "National curriculum"
 }
 
-private fun boardsFor(country: String): List<String> = when (country.uppercase(Locale.ROOT)) {
-    "PK" -> listOf("Punjab (PECTAA)", "Punjab eLearn", "Sindh (STBB)", "Federal (FBISE)", "Khyber Pakhtunkhwa", "Balochistan", "Other board")
-    "IN" -> listOf("NCERT", "CBSE", "State Board", "Other board")
-    "BD" -> listOf("NCTB", "Other board")
-    "GB" -> listOf("National Curriculum", "England exam board", "Scotland curriculum", "Other board")
-    "US" -> listOf("Common Core", "State / District", "Other board")
-    else -> listOf("Official board", "Other board")
+private fun boardsFor(country: String): List<String> {
+    val global = listOf(
+        "National curriculum", "Public school / regional board",
+        "Cambridge International (CAIE)", "Pearson Edexcel", "International Baccalaureate (IB)",
+        "American curriculum", "French curriculum", "Australian curriculum",
+        "Oxford International Curriculum", "Montessori curriculum", "Other international curriculum",
+        "Custom board"
+    )
+    val regional = when (country.uppercase(Locale.ROOT)) {
+        "PK" -> listOf("Punjab (PECTAA)", "Punjab eLearn", "Sindh (STBB)", "Federal (FBISE)",
+            "Khyber Pakhtunkhwa (KPTBB)", "Balochistan (BBISE)", "Azad Jammu & Kashmir", "Gilgit-Baltistan",
+            "Cambridge International (CAIE)", "Pearson Edexcel", "Other provincial / private board")
+        "IN" -> listOf("NCERT", "CBSE", "CISCE / ICSE / ISC", "NIOS", "IB", "Cambridge International (CAIE)",
+            "Maharashtra State Board", "Tamil Nadu State Board", "Karnataka State Board", "Kerala State Board",
+            "West Bengal Board", "UP Board", "Bihar Board", "Rajasthan Board", "Gujarat Board",
+            "Madhya Pradesh Board", "Andhra Pradesh Board", "Telangana Board", "Punjab School Education Board",
+            "Haryana Board", "Assam Board", "Odisha Board", "Other State Board")
+        "BD" -> listOf("NCTB", "Madrasah Education Board", "English Version", "English Medium / Cambridge", "Other board")
+        "GB" -> listOf("National Curriculum", "England", "Wales", "Scotland", "Northern Ireland",
+            "AQA", "OCR", "Pearson Edexcel", "WJEC / Eduqas", "SQA", "CCEA")
+        "US" -> listOf("Common Core", "State / District", "AP / College Board", "IB", "Texas TEKS",
+            "California Curriculum", "New York State", "Florida Standards", "Other state / district")
+        "CA" -> listOf("Provincial curriculum", "Ontario Curriculum", "British Columbia Curriculum", "Alberta Curriculum",
+            "Quebec Curriculum", "Saskatchewan Curriculum", "Manitoba Curriculum", "Atlantic Provinces", "Other province / territory")
+        "AU" -> listOf("Australian Curriculum (ACARA)", "NSW syllabus", "Victorian Curriculum", "Queensland Curriculum",
+            "Western Australia Curriculum", "South Australia Curriculum", "Tasmania Curriculum", "ACT Curriculum", "NT Curriculum")
+        "NZ" -> listOf("New Zealand Curriculum", "Te Marautanga o Aotearoa", "NCEA", "Cambridge International (CAIE)")
+        "ZA" -> listOf("CAPS / DBE", "IEB", "South African National Curriculum", "Cambridge International (CAIE)")
+        "NG" -> listOf("NERDC", "WAEC / WASSCE", "NECO", "Lagos State scheme", "Other state scheme")
+        "KE" -> listOf("CBC / KICD", "KCSE / KICD", "Cambridge International (CAIE)")
+        "GH" -> listOf("NaCCA curriculum", "WAEC", "Cambridge International (CAIE)")
+        "PH" -> listOf("DepEd K–12", "MATATAG Curriculum", "CHED", "Cambridge International (CAIE)")
+        "MY" -> listOf("KSSR / KSSM", "MOE Malaysia", "Cambridge International (CAIE)")
+        "SG" -> listOf("MOE Singapore", "Singapore-Cambridge", "IB")
+        "ID" -> listOf("Kurikulum Merdeka", "Kurikulum 2013", "Cambridge International (CAIE)")
+        "LK" -> listOf("National curriculum / NIE", "GCE O/L and A/L")
+        "NP" -> listOf("CDC Nepal", "National Curriculum Development Centre")
+        "AE", "SA", "QA", "KW", "BH", "OM", "JO", "EG" ->
+            listOf("National curriculum / Ministry of Education", "International Baccalaureate (IB)",
+                "Cambridge International (CAIE)", "Pearson Edexcel")
+        "FR" -> listOf("Programme national", "Baccalauréat", "Cambridge International (CAIE)")
+        "DE" -> listOf("Landeslehrplan / State curriculum", "Abitur", "IB")
+        "ES" -> listOf("Currículo nacional / autónomo", "Bachillerato", "IB")
+        "BR" -> listOf("BNCC", "ENEM", "State curriculum")
+        "MX" -> listOf("SEP / Plan de Estudios", "State curriculum")
+        "CN" -> listOf("National curriculum / Ministry of Education", "International curriculum")
+        "JP" -> listOf("MEXT Course of Study", "IB")
+        "KR" -> listOf("National Curriculum / MOE", "CSAT curriculum")
+        else -> emptyList()
+    }
+    return (regional + global).distinct()
 }
 
 private fun portalsFor(country: String, board: String, subject: String, title: String, grade: String, language: String): List<BookPortal> {
@@ -831,10 +1067,10 @@ private fun portalsFor(country: String, board: String, subject: String, title: S
         )
         else -> emptyList()
     }
-    val query = Uri.encode("\"" + title + "\" \"" + subject + "\" class " + grade + " " + language + " textbook PDF official " + country + " " + board + " government book download")
+    val query = Uri.encode("\"" + title + "\" \"" + subject + "\" class " + grade + " " + language + " textbook filetype:pdf official " + country + " " + board + " government book download")
     val exactSearch = BookPortal(
-        "Search for this exact book selection",
-        "Matches country, board, class, subject and language; results stay inside EduLock",
+        "Search direct PDF results for this book",
+        "Prioritizes PDF files for the selected country, board, class, subject and language inside EduLock",
         "https://www.google.com/search?q=" + query
     )
     // The dedicated STBB in-app downloader is available above, so avoid sending Sindh-board users to a generic Google results page.
