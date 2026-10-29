@@ -1175,7 +1175,11 @@ private fun looksLikePdfUrl(url: String): Boolean {
         lower.contains("format=pdf") ||
         lower.contains("/download/") ||
         lower.contains("pdf_proxy.php") ||
-        lower.contains("attachment=1")
+        lower.contains("attachment=1") ||
+        lower.contains("filetype=pdf") ||
+        lower.contains("type=pdf") ||
+        lower.contains("export=download") ||
+        lower.contains("disposition=attachment")
 }
 
 private suspend fun copyUriToCache(context: Context, uri: Uri): File = withContext(Dispatchers.IO) {
