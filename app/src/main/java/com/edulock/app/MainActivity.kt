@@ -445,7 +445,7 @@ private suspend fun compressChallengeVideo(context: Context, source: Uri): ByteA
 
 private enum class AppScreen {
     DEVICE_SETUP, AUTH, VERIFY_OTP, PAIR_CHILD, PARENT_HOME, CHILD_HOME, CHILDREN, ADD_CHILD, CURRICULUM_LIBRARY, LEARNING_TEMPLATES, SOLAR_SYSTEM_QUIZ, KIDS_GAMES, LEARNING_3D_LAB, DRAWING_STUDIO,
-    SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, ASSIGN_TASK, PHYSICAL_CHALLENGES, PRACTICAL_TASKS, LEARNING_FEEDBACK,
+    SUBJECTS, ADD_SUBJECT, QUESTIONS, ADD_QUESTION, ADD_TRANSLATION, PDF_BOOK_IMPORT, ASSIGN_TASK, PHYSICAL_CHALLENGES, PRACTICAL_TASKS, LEARNING_FEEDBACK,
     REPORTS, ALLOWED_APPS, PROTECTION_STATUS, CHILD_LOCATIONS, APP_USAGE_REPORT, APP_SETTINGS, CHILD_SECURITY, PLAY_TASK, TASK_RESULT
 }
 
@@ -2939,6 +2939,28 @@ private fun EduLockApp(repository: EduLockRepository) {
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             DashboardIconTile(
+                                icon = "📄", title = "PDF book import", subtitle = "Extract and review questions from textbooks",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF178A83),
+                                onClick = {
+                                    execute {
+                                        subjects = repository.loadSubjects(familyId)
+                                        screen = AppScreen.PDF_BOOK_IMPORT
+                                    }
+                                }
+                            )
+                            DashboardIconTile(
+                                icon = "📖", title = "Book question bank", subtitle = "Build questions from your books",
+                                modifier = Modifier.weight(1f), accent = Color(0xFF3B82B2),
+                                onClick = {
+                                    execute {
+                                        subjects = repository.loadSubjects(familyId)
+                                        screen = AppScreen.PDF_BOOK_IMPORT
+                                    }
+                                }
+                            )
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashboardIconTile(
                                 icon = "🌌", title = "4D Learning Lab", subtitle = "Explore interactive models in every subject",
                                 modifier = Modifier.weight(1f), accent = Color(0xFF7759D7),
                                 onClick = { selected3DModel = "solar-system"; screen = AppScreen.LEARNING_3D_LAB }
@@ -3766,6 +3788,11 @@ private fun EduLockApp(repository: EduLockRepository) {
                         subjectGradeLevel = (selectedChild?.schoolGrade ?: children.firstOrNull()?.schoolGrade ?: 1).toString()
                         screen = AppScreen.ADD_SUBJECT
                     }, modifier = Modifier.fillMaxWidth()) { AppUiText("Create subject") }
+                    OutlinedButton(
+                        onClick = { screen = AppScreen.PDF_BOOK_IMPORT },
+                        enabled = !busy && subjects.isNotEmpty(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { AppUiText("📄 Import questions from a PDF book") }
 
                     AppUiText("Your selected subjects", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     AppUiText(if (selectedChild != null) "Subjects for " + selectedChild!!.displayName + ". Each subject has its own questions." else "Open a subject to view its questions and translations.")
@@ -4860,6 +4887,66 @@ private fun EduLockApp(repository: EduLockRepository) {
                             }
                         }
                     }
+                }
+
+                AppScreen.PDF_BOOK_IMPORT -> ScreenFrame(
+                    "PDF book import",
+                    onBack = { screen = AppScreen.SUBJECTS },
+                    notice = notice,
+                    busy = busy
+                ) {
+                    PdfBookImportScreen(
+                        subjects = subjects,
+                        initialSubject = selectedSubject,
+                        defaultCountryCode = parentCountryCode,
+                        defaultLanguageCode = parentLearningLanguageCode,
+                        onBack = { screen = AppScreen.SUBJECTS },
+                        onSaveQuestions = { destinationSubject, drafts ->
+                            require(drafts.isNotEmpty()) { "Select at least one reviewed question." }
+                            val existingRows = repository.loadQuestions(destinationSubject.id)
+                            val existingPromptKeys = existingRows.map {
+                                it.prompt.lowercase(Locale.ROOT).replace(Regex("\\W+"), " ").trim()
+                            }.toMutableSet()
+                            var imported = 0
+                            var duplicates = 0
+                            for (draft in drafts) {
+                                val promptKey = draft.prompt.lowercase(Locale.ROOT).replace(Regex("\\W+"), " ").trim()
+                                if (!existingPromptKeys.add(promptKey)) {
+                                    duplicates += 1
+                                    continue
+                                }
+                                val options = draft.optionsText.lines().map { it.trim() }.filter { it.isNotBlank() }
+                                val type = if (draft.questionType == "multiple_choice" && options.size >= 2) "multiple_choice" else "short_answer"
+                                if (type == "multiple_choice") {
+                                    require(options.any { it.equals(draft.answer.trim(), ignoreCase = true) }) {
+                                        "Correct answer for '" + draft.prompt.take(70) + "' must match one of its options."
+                                    }
+                                }
+                                val concept = "pdf-import-" + Integer.toHexString(promptKey.hashCode())
+                                val id = repository.addQuestion(
+                                    destinationSubject.id,
+                                    draft.prompt.trim(),
+                                    type,
+                                    if (type == "multiple_choice") options else emptyList(),
+                                    draft.answer.trim(),
+                                    draft.languageCode,
+                                    concept,
+                                    draft.solution.trim()
+                                )
+                                if (draft.solution.isNotBlank()) repository.saveQuestionSolution(id, draft.solution)
+                                imported += 1
+                            }
+                            val refreshedSubjects = repository.loadSubjects(familyId)
+                            subjects = refreshedSubjects
+                            selectedSubject = refreshedSubjects.firstOrNull { it.id == destinationSubject.id } ?: destinationSubject
+                            val refreshedQuestions = repository.loadQuestions(destinationSubject.id)
+                            questions = refreshedQuestions
+                            questionTranslations = repository.loadQuestionTranslations(refreshedQuestions.map { it.id })
+                            questionSolutions = repository.loadQuestionSolutions(refreshedQuestions.map { it.id })
+                            screen = AppScreen.QUESTIONS
+                            notice = "PDF import complete: " + imported + " question(s) saved; " + duplicates + " duplicate(s) skipped. The PDF itself was not uploaded to Supabase."
+                        }
+                    )
                 }
 
                 AppScreen.ADD_QUESTION -> ScreenFrame("Add question", onBack = { screen = AppScreen.QUESTIONS }, notice = notice, busy = busy) {
