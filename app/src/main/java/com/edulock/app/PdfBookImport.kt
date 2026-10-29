@@ -597,7 +597,7 @@ internal fun PdfBookImportScreen(
                         OutlinedButton(
                             onClick = {
                                 val query = Uri.encode(
-                                    "\"$bookTitle\" \"$subjectName\" class $grade $languageCode textbook filetype:pdf \"$effectiveBoard\" \"$countryCode\""
+                                    "\"$bookTitle\" \"$bookSubject\" class $grade $languageCode textbook filetype:pdf \"$effectiveBoard\" \"$countryCode\""
                                 )
                                 activePortal = BookPortal(
                                     "Search downloadable PDF copies",
