@@ -40,24 +40,24 @@ internal object PaddleOcrModelManager {
 
     fun modelForLanguage(languageCode: String): String {
         val code = languageCode.lowercase(Locale.ROOT).replace('_', '-')
+        val base = code.substringBefore('-')
         return when {
-            code in setOf("sd", "ur", "ar", "fa", "ps", "ckb", "ug", "ku", "bal") ||
-                code.startsWith("ar-") || code.startsWith("ur-") || code.startsWith("sd-") ||
-                code.startsWith("ps-") -> "arabic_PP-OCRv5_mobile_rec"
-            code in setOf("hi", "mr", "ne", "sa", "mai", "bh", "bho", "gom", "new", "sck") ||
-                code.startsWith("hi-") || code.startsWith("ne-") -> "devanagari_PP-OCRv5_mobile_rec"
-            code in setOf("ru", "be", "uk") || code.startsWith("ru-") || code.startsWith("uk-") ->
-                "eslav_PP-OCRv5_mobile_rec"
-            code in setOf("bg", "sr", "mn", "kk", "ky", "tg", "mk", "tt", "ba", "av", "ady", "kbd") ||
-                code.startsWith("sr-cyrl") -> "cyrillic_PP-OCRv5_mobile_rec"
-            code == "th" || code.startsWith("th-") -> "th_PP-OCRv5_mobile_rec"
-            code == "el" || code.startsWith("el-") -> "el_PP-OCRv5_mobile_rec"
-            code == "ta" || code.startsWith("ta-") -> "ta_PP-OCRv5_mobile_rec"
-            code == "te" || code.startsWith("te-") -> "te_PP-OCRv5_mobile_rec"
-            code == "ko" || code.startsWith("ko-") -> "korean_PP-OCRv5_mobile_rec"
-            code == "en" || code.startsWith("en-") -> "en_PP-OCRv5_mobile_rec"
-            code == "zh" || code.startsWith("zh-") || code == "ja" || code.startsWith("ja-") ->
-                "PP-OCRv5_mobile_rec_onnx"
+            code.contains("-cyrl") || code == "az-cyrl" || code == "uz-cyrl" ->
+                "cyrillic_PP-OCRv5_mobile_rec"
+            base in setOf("sd", "ur", "ar", "fa", "ps", "ckb", "ug", "ku", "bal", "pnb", "ks") ->
+                "arabic_PP-OCRv5_mobile_rec"
+            base in setOf("hi", "mr", "ne", "sa", "mai", "bh", "bho", "gom", "new", "sck") ->
+                "devanagari_PP-OCRv5_mobile_rec"
+            base in setOf("ru", "be", "uk") -> "eslav_PP-OCRv5_mobile_rec"
+            base in setOf("bg", "sr", "mn", "kk", "ky", "tg", "mk", "tt", "ba", "av", "ady", "kbd") ->
+                "cyrillic_PP-OCRv5_mobile_rec"
+            base == "th" -> "th_PP-OCRv5_mobile_rec"
+            base == "el" -> "el_PP-OCRv5_mobile_rec"
+            base == "ta" -> "ta_PP-OCRv5_mobile_rec"
+            base == "te" -> "te_PP-OCRv5_mobile_rec"
+            base == "ko" -> "korean_PP-OCRv5_mobile_rec"
+            base == "en" -> "en_PP-OCRv5_mobile_rec"
+            base in setOf("zh", "ja") -> "PP-OCRv5_mobile_rec_onnx"
             else -> "latin_PP-OCRv5_mobile_rec"
         }
     }
