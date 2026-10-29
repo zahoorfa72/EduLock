@@ -11,6 +11,8 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Downloads the shared detector and only the recognition model needed for the selected language.
@@ -64,7 +66,7 @@ internal object PaddleOcrModelManager {
         context: Context,
         languageCode: String,
         onProgress: (String) -> Unit,
-    ): ModelFiles {
+    ): ModelFiles = withContext(Dispatchers.IO) {
         val modelName = modelForLanguage(languageCode.ifBlank { "en" })
         val root = File(context.filesDir, "ocr-models/paddleocr-v5").apply { mkdirs() }
         val detDir = File(root, "detector").apply { mkdirs() }
@@ -105,7 +107,66 @@ internal object PaddleOcrModelManager {
         if (!isReady(detModel, null) || !isReady(recModel, dictionary)) {
             throw IOException("The selected OCR model failed its integrity check. Retry with a reliable internet connection.")
         }
-        return ModelFiles(detModel, recModel, dictionary, modelName)
+        ModelFiles(detModel, recModel, dictionary, modelName)
+    }
+
+    /**
+     * Script families without a dedicated PP-OCRv5 mobile model use local Tesseract models.
+     * This provides an actual script-specific fallback instead of incorrectly running a Latin model.
+     */
+    fun tesseractFallbackLanguage(languageCode: String): String? {
+        val code = languageCode.lowercase(Locale.ROOT).replace('_', '-')
+        val base = code.substringBefore('-')
+        return when (base) {
+            "bn" -> "ben"
+            "as" -> "asm"
+            "gu" -> "guj"
+            "pa" -> "pan"
+            "or", "od" -> "ori"
+            "kn" -> "kan"
+            "ml" -> "mal"
+            "si" -> "sin"
+            "my" -> "mya"
+            "km" -> "khm"
+            "lo" -> "lao"
+            "am" -> "amh"
+            "he", "yi" -> if (base == "he") "heb" else "yid"
+            "hy" -> "hye"
+            "ka" -> "kat"
+            "bo" -> "bod"
+            "dz" -> "dzo"
+            "iu" -> "iku"
+            "ti" -> "tir"
+            "chr" -> "chr"
+            "dv" -> "div"
+            "syr" -> "syr"
+            else -> null
+        }
+    }
+
+    suspend fun ensureTesseractData(
+        context: Context,
+        tessLanguage: String,
+        onProgress: (String) -> Unit,
+    ): File = withContext(Dispatchers.IO) {
+        require(tessLanguage.matches(Regex("[a-z0-9_]{2,12}"))) { "Invalid OCR language model code." }
+        val root = File(context.filesDir, "ocr-models/tesseract").apply { mkdirs() }
+        val tessdata = File(root, "tessdata").apply { mkdirs() }
+        val trainedData = File(tessdata, tessLanguage + ".traineddata")
+        if (!trainedData.isFile || trainedData.length() < 200_000L) {
+            postProgress(onProgress, "Downloading offline " + tessLanguage + " OCR fallback model…")
+            downloadFile(
+                "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/" + tessLanguage + ".traineddata",
+                trainedData,
+                minBytes = 200_000L,
+                onProgress = onProgress,
+                label = tessLanguage + " OCR model"
+            )
+        }
+        if (!trainedData.isFile || trainedData.length() < 200_000L) {
+            throw IOException("The " + tessLanguage + " OCR model could not be verified.")
+        }
+        trainedData
     }
 
     private fun isReady(model: File, dictionary: File?): Boolean =
