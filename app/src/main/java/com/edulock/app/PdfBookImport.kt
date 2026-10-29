@@ -1275,6 +1275,58 @@ private suspend fun fetchStbbBooks(grade: Int, languageCode: String): List<StbbB
         if (mediumBooks.isNotEmpty()) mediumBooks else collectedBooks
     }
 
+/**
+ * Retrieves search results directly over HTTPS and returns them as native app rows.
+ * No browser/WebView is needed for the normal download flow. Each selected result is
+ * validated as a real PDF by downloadPdfToCache before it is saved.
+ */
+private suspend fun searchDirectPdfResults(query: String): List<PdfSearchResult> =
+    withContext(Dispatchers.IO) {
+        val searchUrl = "https://html.duckduckgo.com/html/?q=" + Uri.encode(query)
+        val request = Request.Builder()
+            .url(searchUrl)
+            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/126.0 Mobile Safari/537.36")
+            .header("Accept", "text/html,application/xhtml+xml")
+            .build()
+        val html = bookHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IllegalStateException("PDF search returned HTTP " + response.code + ".")
+            }
+            response.body?.string().orEmpty()
+        }
+        val anchorPattern = Regex("""(?is)<a\\b([^>]*)>(.*?)</a>""")
+        val classPattern = Regex("""(?is)\\bclass\\s*=\\s*["'][^"']*result__a[^"']*["']""")
+        val hrefPattern = Regex("""(?is)\\bhref\\s*=\\s*["']([^"']+)["']""")
+        val results = mutableListOf<PdfSearchResult>()
+        for (match in anchorPattern.findAll(html)) {
+            val attributes = match.groupValues[1]
+            if (!classPattern.containsMatchIn(attributes)) continue
+            val rawHref = hrefPattern.find(attributes)?.groupValues?.get(1) ?: continue
+            val href = Html.fromHtml(rawHref, Html.FROM_HTML_MODE_LEGACY).toString().trim()
+            val absoluteHref = when {
+                href.startsWith("//") -> "https:" + href
+                href.startsWith("http://", true) || href.startsWith("https://", true) -> href
+                else -> continue
+            }
+            val parsedHref = Uri.parse(absoluteHref)
+            val target = parsedHref.getQueryParameter("uddg")
+                ?: parsedHref.getQueryParameter("url")
+                ?: parsedHref.getQueryParameter("target")
+                ?: absoluteHref
+            val cleanTarget = Html.fromHtml(target, Html.FROM_HTML_MODE_LEGACY).toString().trim()
+            if (!cleanTarget.startsWith("https://", true)) continue
+            if (Uri.parse(cleanTarget).host.orEmpty().contains("duckduckgo.com", true)) continue
+            val title = Html.fromHtml(match.groupValues[2], Html.FROM_HTML_MODE_LEGACY)
+                .toString()
+                .replace(Regex("""\\s+"""), " ")
+                .trim()
+            if (title.isBlank()) continue
+            if (results.none { it.url == cleanTarget }) results.add(PdfSearchResult(title, cleanTarget))
+            if (results.size >= 15) break
+        }
+        results
+    }
+
 private fun unwrapPdfRedirect(url: String): String? {
     if (looksLikePdfUrl(url)) return url
     return try {
