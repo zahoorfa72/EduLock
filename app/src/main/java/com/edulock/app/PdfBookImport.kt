@@ -216,7 +216,7 @@ internal fun PdfBookImportScreen(
         }
     }
 
-    suspend fun downloadForDevice(url: String) {
+    suspend fun downloadForDevice(url: String, preferredName: String? = null) {
         working = true
         error = null
         status = "Downloading the book to your device’s Downloads folder…"
@@ -224,7 +224,8 @@ internal fun PdfBookImportScreen(
         try {
             val file = downloadPdfToCache(context, url)
             downloadedFile = file
-            val suggestedName = bookTitle.ifBlank { bookSubject + " - " + board + " class " + grade }
+            val suggestedName = preferredName?.takeIf { it.isNotBlank() }
+                ?: bookTitle.ifBlank { bookSubject + " - " + board + " class " + grade }
             val savedLocation = savePdfToDownloads(context, file, suggestedName)
             savedPdfRefresh++
             status = "PDF downloaded successfully to " + savedLocation + ". The in-app copy is also available until you delete it manually. Nothing was uploaded to Supabase."
@@ -568,7 +569,7 @@ internal fun PdfBookImportScreen(
                                 Button(
                                     onClick = {
                                         val url = stbbPdfDownloadUrl(book.id)
-                                        scope.launch { downloadForDevice(url) }
+                                        scope.launch { downloadForDevice(url, book.title) }
                                     },
                                     enabled = !working,
                                     modifier = Modifier.weight(1f)
@@ -621,7 +622,7 @@ internal fun PdfBookImportScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Button(
-                            onClick = { scope.launch { downloadForDevice(result.url) } },
+                            onClick = { scope.launch { downloadForDevice(result.url, result.title) } },
                             enabled = !working,
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Download PDF") }
