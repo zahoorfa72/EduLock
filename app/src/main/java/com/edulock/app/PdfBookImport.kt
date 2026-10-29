@@ -849,40 +849,59 @@ private suspend fun fetchStbbBooks(grade: Int, languageCode: String): List<StbbB
     withContext(Dispatchers.IO) {
         // STBB uses class id 1 for Class I, 2 for Katchi, and 3 onward for Class II–XII.
         val classId = if (grade <= 1) 1 else grade + 1
-        val url = "https://portal.stbb.edu.pk/ebooks/class.php?id=" + classId
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", "EduLock textbook catalogue")
-            .build()
-        val html = bookHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IllegalStateException("STBB returned HTTP " + response.code + " while listing textbooks.")
-            }
-            response.body?.string() ?: throw IllegalStateException("STBB returned an empty textbook list.")
-        }
+        val baseUrl = "https://portal.stbb.edu.pk/ebooks/class.php?id=" + classId
         val anchorPattern = Regex("""(?is)<a\b[^>]*href=["'](?:\./)?book\.php\?id=(\d+)["'][^>]*>(.*?)</a>""")
-        val allBooks = anchorPattern.findAll(html).mapNotNull { match ->
-            val id = match.groupValues[1]
-            val title = match.groupValues[2]
-                .replace(Regex("""(?is)<[^>]+>"""), " ")
-                .replace("&amp;", "&")
-                .replace("&nbsp;", " ")
-                .replace("&#39;", "'")
-                .replace("&quot;", "\"")
-                .replace(Regex("""\s+"""), " ")
-                .trim()
-            if (title.isBlank()) null else StbbBook(id, title)
-        }.distinctBy { it.id }.toList()
+
+        fun parseBookLinks(html: String): List<StbbBook> =
+            anchorPattern.findAll(html).mapNotNull { match ->
+                val id = match.groupValues[1]
+                val title = match.groupValues[2]
+                    .replace(Regex("""(?is)<[^>]+>"""), " ")
+                    .replace("&amp;", "&")
+                    .replace("&nbsp;", " ")
+                    .replace("&#39;", "'")
+                    .replace("&quot;", "\"")
+                    .replace(Regex("""\s+"""), " ")
+                    .trim()
+                if (title.isBlank()) null else StbbBook(id, title)
+            }.distinctBy { it.id }.toList()
+
+        val collectedBooks = mutableListOf<StbbBook>()
+        // STBB paginates larger classes (for example Class VI has 26 editions); load subsequent pages too.
+        for (page in 1..6) {
+            val pageUrl = if (page == 1) baseUrl else baseUrl + "&page=" + page
+            val request = Request.Builder()
+                .url(pageUrl)
+                .header("User-Agent", "EduLock textbook catalogue")
+                .build()
+            val html = bookHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    if (page > 1) "" else throw IllegalStateException(
+                        "STBB returned HTTP " + response.code + " while listing textbooks."
+                    )
+                } else {
+                    response.body?.string().orEmpty()
+                }
+            }
+            val pageBooks = parseBookLinks(html)
+            if (pageBooks.isEmpty()) break
+            val previousCount = collectedBooks.size
+            pageBooks.forEach { book ->
+                if (collectedBooks.none { it.id == book.id }) collectedBooks.add(book)
+            }
+            if (collectedBooks.size == previousCount || pageBooks.size < 20) break
+        }
+
         val medium = when (languageCode.lowercase(Locale.ROOT)) {
             "sd" -> "sindhi"
             "ur" -> "urdu"
             "en" -> "english"
             else -> ""
         }
-        val mediumBooks = if (medium.isBlank()) allBooks else allBooks.filter {
+        val mediumBooks = if (medium.isBlank()) collectedBooks else collectedBooks.filter {
             it.title.contains(medium, ignoreCase = true)
         }
-        if (mediumBooks.isNotEmpty()) mediumBooks else allBooks
+        if (mediumBooks.isNotEmpty()) mediumBooks else collectedBooks
     }
 
 private fun looksLikePdfUrl(url: String): Boolean {
