@@ -121,11 +121,20 @@ internal fun ParentSecuritySettingsDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword)
                 )
                 Spacer(Modifier.height(10.dp))
-                OutlinedButton(
-                    onClick = { authenticateBiometric() },
+                Button(
+                    onClick = {
+                        if (!pinSet) {
+                            error = "Create a parent PIN before enabling fingerprint protection."
+                        } else if (!ParentSecurity.verifyPin(context, existingPin.toCharArray())) {
+                            error = "Enter the correct current parent PIN before changing fingerprint protection."
+                        } else {
+                            authenticateBiometric()
+                        }
+                    },
+                    enabled = pinSet && existingPin.isNotBlank(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (biometricEnabled) "Disable fingerprint protection" else "Enable fingerprint protection")
+                    Text(if (biometricEnabled) "Turn fingerprint protection OFF" else "Turn fingerprint protection ON")
                 }
                 Text(
                     if (biometricEnabled) "Fingerprint protection is enabled on this device." else "Fingerprint protection is currently off.",
@@ -158,5 +167,78 @@ internal fun ParentSecuritySettingsDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Close") }
         }
+    )
+}
+
+
+@Composable
+internal fun ParentSecurityLockDialog(onUnlocked: () -> Unit) {
+    val context = LocalContext.current
+    var pin by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    fun startBiometric() {
+        val activity = context as? FragmentActivity
+        if (activity == null) {
+            error = "Fingerprint authentication is unavailable."
+            return
+        }
+        val availability = BiometricManager.from(context)
+            .canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+        if (availability != BiometricManager.BIOMETRIC_SUCCESS) {
+            error = "Fingerprint is unavailable. Unlock with your parent PIN."
+            return
+        }
+        val prompt = BiometricPrompt(activity, ContextCompat.getMainExecutor(context),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) { onUnlocked() }
+                override fun onAuthenticationFailed() { error = "Fingerprint not recognized." }
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) { error = errString.toString() }
+            })
+        prompt.authenticate(
+            BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Unlock EduLock")
+                .setSubtitle("Verify it is the parent")
+                .setNegativeButtonText("Use PIN")
+                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                .build()
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("Parent authentication required") },
+        text = {
+            Column {
+                Text("EduLock was left in the background. Enter the parent PIN to continue.")
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { pin = it.filter(Char::isDigit).take(12); error = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Parent PIN") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword)
+                )
+                if (ParentSecurity.isBiometricEnabled(context)) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = { startBiometric() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Unlock with fingerprint")
+                    }
+                }
+                error?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                if (ParentSecurity.verifyPin(context, pin.toCharArray())) onUnlocked()
+                else { pin = ""; error = "Incorrect parent PIN." }
+            }, enabled = pin.isNotEmpty()) { Text("Unlock") }
+        },
+        dismissButton = {}
     )
 }
