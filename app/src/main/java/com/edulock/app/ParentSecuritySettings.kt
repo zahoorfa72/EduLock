@@ -86,7 +86,7 @@ internal fun ParentSecuritySettingsDialog(
                             error = "Create a parent PIN before enabling fingerprint protection."
                         } else if (existingPin.isBlank()) {
                             error = "Enter your current parent PIN to change fingerprint protection."
-                        } else if (!ParentSecurity.verifyPin(context, existingPin.toCharArray()))
+                        } else if (!ParentSecurity.verifyPin(context, existingPin.toCharArray())) {
                             existingPin = ""
                             error = "Incorrect parent PIN. Enter it again."
                         } else if (biometricEnabled) {
