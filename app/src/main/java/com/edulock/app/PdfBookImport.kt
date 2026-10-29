@@ -175,7 +175,7 @@ internal fun PdfBookImportScreen(
             if (parsed.isNotEmpty()) {
                 status = "Extracted " + parsed.size + " candidate questions. The PDF is kept on this device until you delete it manually. Review every prompt and answer before saving."
             } else {
-                status = "Text was extracted, but the page layout did not contain clear question boundaries. Use Generate questions + answers from summary/text below, then review the generated drafts before saving."
+                status = "No clear questions were found in the selected output language (" + languageCode + "). Mixed-script or garbled OCR is skipped to prevent incorrect questions. Review the extracted text or choose a clearer PDF, then generate source-based drafts.";
             }
         } catch (e: Exception) {
             error = e.message ?: "Could not read this PDF. Try a text-based PDF or a smaller file."
