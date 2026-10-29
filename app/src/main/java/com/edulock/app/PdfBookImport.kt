@@ -146,6 +146,7 @@ internal fun PdfBookImportScreen(
 
     suspend fun startExtraction(file: File, displayName: String) {
         working = true
+        savedPdfRefresh++
         error = null
         status = "Reading PDF on this device. No PDF is uploaded to Supabase."
         try {
