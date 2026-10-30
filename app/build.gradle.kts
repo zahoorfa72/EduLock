@@ -47,13 +47,11 @@ android {
     buildTypes {
         getByName("debug") {
             signingConfig = signingConfigs.getByName("debug")
-            // Shrink unused code and resources even in the downloadable CI APKs.
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            // Keep debug builds reliable: R8 currently fails on PDFBox's optional
+            // JPEG2000 decoder class, and debuggable builds do not benefit from R8 shrinking.
+            // ABI splits below still reduce each APK by packaging one CPU architecture.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
     buildFeatures { compose = true; buildConfig = true }
